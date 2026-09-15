@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "lib": ["ES2023"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "declaration": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@ipms/observability": ["libs/observability/src/index.ts"],
+      "@ipms/contracts": ["libs/contracts/src/index.ts"],
+      "@ipms/persistence": ["libs/persistence/src/index.ts"],
+      "@ipms/events": ["libs/events/src/index.ts"],
+      "@ipms/authz": ["libs/authz/src/index.ts"]
+    }
+  }
+}
