@@ -32,4 +32,40 @@ describe('createLogger', () => {
     expect(out.password).toBe('[Redacted]');
     expect(out.token).toBe('[Redacted]');
   });
+
+  it('redacts a secret nested two levels deep', () => {
+    const { sink, lines } = capture();
+    createLogger('iam', sink).info({ user: { password: 'hunter2' } }, 'login');
+    const out = JSON.parse(lines[0]!);
+    expect(out.user.password).toBe('[Redacted]');
+  });
+
+  it('redacts a secret nested three levels deep', () => {
+    const { sink, lines } = capture();
+    createLogger('iam', sink).info(
+      { req: { headers: { authorization: 'Bearer xyz' } } },
+      'incoming request',
+    );
+    const out = JSON.parse(lines[0]!);
+    expect(out.req.headers.authorization).toBe('[Redacted]');
+  });
+
+  it('does not redact non-secret nested fields', () => {
+    const { sink, lines } = capture();
+    createLogger('iam', sink).info({ user: { id: 'u-1', password: 'hunter2' } }, 'login');
+    const out = JSON.parse(lines[0]!);
+    expect(out.user.id).toBe('u-1');
+    expect(out.user.password).toBe('[Redacted]');
+  });
+
+  it('redacts newly added secret key names', () => {
+    const { sink, lines } = capture();
+    createLogger('iam', sink).info(
+      { apiKey: 'ak-live-123', req: { headers: { cookie: 'sid=abc123' } } },
+      'call',
+    );
+    const out = JSON.parse(lines[0]!);
+    expect(out.apiKey).toBe('[Redacted]');
+    expect(out.req.headers.cookie).toBe('[Redacted]');
+  });
 });

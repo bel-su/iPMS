@@ -5,7 +5,7 @@ describe('observability harness smoke test', () => {
     const [major, minor] = process.version
       .slice(1)
       .split('.')
-      .map((part) => Number.parseInt(part, 10));
+      .map((part) => Number.parseInt(part, 10)) as [number, number];
 
     const satisfiesMinimum = major > 22 || (major === 22 && minor >= 13);
 

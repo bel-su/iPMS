@@ -1,7 +1,27 @@
 import pino, { type Logger, type DestinationStream } from 'pino';
 import { getCorrelationId } from './correlation.js';
 
-const REDACTED = ['password', 'token', 'accessToken', 'refreshToken', 'secret', 'authorization'];
+const SECRET_KEYS = [
+  'password',
+  'token',
+  'accessToken',
+  'refreshToken',
+  'secret',
+  'authorization',
+  'apiKey',
+  'refresh_token',
+  'access_token',
+  'passwordHash',
+  'cookie',
+];
+
+// Pino only matches redact.paths against the exact depth given, so a bare key
+// name only catches root-level fields. Combine each key with depth prefixes to
+// also catch it nested inside one or two levels of object (e.g. user.password,
+// req.headers.authorization). Adding a new secret key only requires editing
+// SECRET_KEYS above.
+const DEPTH_PREFIXES = ['', '*.', '*.*.'];
+const REDACTED = DEPTH_PREFIXES.flatMap((prefix) => SECRET_KEYS.map((key) => `${prefix}${key}`));
 
 export function createLogger(service: string, destination?: DestinationStream): Logger {
   return pino(
@@ -19,4 +39,4 @@ export function createLogger(service: string, destination?: DestinationStream): 
   );
 }
 
-export type { Logger };
+export type { Logger, DestinationStream };
