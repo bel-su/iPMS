@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 
 export type ReadinessCheck = () => Promise<boolean>;
 
@@ -26,15 +26,28 @@ export class HealthController {
 
   @Get('ready')
   async ready(): Promise<ReadinessResult> {
+    const outcomes = await Promise.all(
+      Array.from(checks.entries()).map(async ([name, check]): Promise<[string, 'ok' | 'error']> => {
+        try {
+          return [name, (await check()) ? 'ok' : 'error'];
+        } catch {
+          return [name, 'error'];
+        }
+      }),
+    );
+
     const results: Record<string, 'ok' | 'error'> = {};
-    for (const [name, check] of checks) {
-      try {
-        results[name] = (await check()) ? 'ok' : 'error';
-      } catch {
-        results[name] = 'error';
-      }
+    for (const [name, status] of outcomes) {
+      results[name] = status;
     }
+
     const healthy = Object.values(results).every((r) => r === 'ok');
-    return { status: healthy ? 'ok' : 'error', checks: results };
+    const result: ReadinessResult = { status: healthy ? 'ok' : 'error', checks: results };
+
+    if (!healthy) {
+      throw new ServiceUnavailableException(result);
+    }
+
+    return result;
   }
 }
