@@ -27,6 +27,9 @@ Every task's requirements implicitly include this section.
 - **Secrets** come from environment variables only. No secret is ever committed, including in test fixtures.
 - **Commit style:** Conventional Commits (`feat:`, `fix:`, `test:`, `chore:`, `docs:`).
 - **Test commands** always run through Nx: `pnpm nx test <project>`, never bare `vitest`.
+- **Readiness returns a non-2xx status when unhealthy.** `/health/ready` throws `ServiceUnavailableException` (503) if any registered check fails, and `/health/live` always returns 200. Compose and Kubernetes probes read the HTTP status, not the body — a 200 carrying `{status:'error'}` reports healthy. Any health test must assert the status code, not just the returned object.
+- **Every library and app carries its own `tsconfig.json` and a `typecheck` script** (`tsc --noEmit -p tsconfig.json`), extending `tsconfig.base.json`. Without it Nx silently skips the project in `nx run-many -t typecheck` and type errors escape CI. Verify with `pnpm nx typecheck <project>` — a "no target" result means the wiring is wrong.
+- **Secret redaction in logs is depth-independent.** Pino's `redact.paths` supports only single-level `*` wildcards, so any enumerated-prefix list leaks secrets nested deeper than the deepest prefix. `@ipms/observability` instead censors via a `formatters.log` hook that walks the log object recursively and redacts any key matching its `SECRET_KEYS` array, case-insensitively, at any depth — cycle-safe, depth-capped, non-mutating, and passing `Error`/`Date`/`Buffer` values through intact. Add key names to `SECRET_KEYS`; never reintroduce `redact.paths`.
 
 ## Prerequisites
 
@@ -378,7 +381,11 @@ export function getCorrelationId(): string | undefined {
 import pino, { type Logger, type DestinationStream } from 'pino';
 import { getCorrelationId } from './correlation.js';
 
-const REDACTED = ['password', 'token', 'accessToken', 'refreshToken', 'secret', 'authorization'];
+// NOTE: superseded during implementation. `redact.paths` cannot match arbitrary depth,
+// so the shipped logger censors recursively via a `formatters.log` hook instead.
+// libs/observability/src/logger.ts in the repository is the source of truth.
+const SECRET_KEYS = ['password', 'passwordHash', 'token', 'accessToken', 'refreshToken',
+  'access_token', 'refresh_token', 'apiKey', 'secret', 'authorization', 'cookie'];
 
 export function createLogger(service: string, destination?: DestinationStream): Logger {
   return pino(
@@ -511,7 +518,7 @@ Expected: FAIL — `Cannot find module './health.controller.js'`.
 `libs/observability/src/health.controller.ts`:
 
 ```ts
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 
 export type ReadinessCheck = () => Promise<boolean>;
 
@@ -548,7 +555,10 @@ export class HealthController {
       }
     }
     const healthy = Object.values(results).every((r) => r === 'ok');
-    return { status: healthy ? 'ok' : 'error', checks: results };
+    // MUST be non-2xx when unhealthy: Compose/k8s probes key off the HTTP status,
+    // not the body. Returning 200 here makes a dead dependency report healthy.
+    if (!healthy) throw new ServiceUnavailableException({ status: 'error', checks: results });
+    return { status: 'ok', checks: results };
   }
 }
 ```
