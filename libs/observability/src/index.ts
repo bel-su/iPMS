@@ -1,2 +1,2 @@
-// Task 2 will populate this entry point.
-export {};
+export { runWithCorrelation, getCorrelationId } from './correlation.js';
+export { createLogger, type Logger } from './logger.js';

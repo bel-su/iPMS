@@ -6,5 +6,6 @@
   "main": "./src/index.ts",
   "scripts": {
     "test": "vitest run"
-  }
+  },
+  "dependencies": { "pino": "10.3.1" }
 }
