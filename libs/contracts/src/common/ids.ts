@@ -7,15 +7,20 @@ let counter = 0;
 /** UUIDv7: 48-bit big-endian timestamp, 4-bit version, 12-bit counter, 2-bit variant, 62-bit random. */
 export function uuidv7(): string {
   const now = Date.now();
-  if (now === lastMs) {
-    counter = (counter + 1) & 0xfff;
-  } else {
+  if (now > lastMs) {
     lastMs = now;
     counter = 0;
+  } else {
+    // Same millisecond, or the clock went backwards. Either way, stay monotonic.
+    counter += 1;
+    if (counter > 0xfff) {
+      lastMs += 1; // borrow from the next millisecond rather than wrap
+      counter = 0;
+    }
   }
 
   const bytes = randomBytes(16);
-  bytes.writeUIntBE(now, 0, 6);
+  bytes.writeUIntBE(lastMs, 0, 6);
   bytes[6] = 0x70 | ((counter >> 8) & 0x0f);
   bytes[7] = counter & 0xff;
   bytes[8] = 0x80 | (bytes[8]! & 0x3f);
@@ -26,4 +31,4 @@ export function uuidv7(): string {
 
 export const UuidSchema = z
   .string()
-  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i, 'Invalid UUID');
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i, 'Invalid UUID');
