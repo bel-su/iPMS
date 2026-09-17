@@ -1,0 +1,12 @@
+{
+  "name": "@ipms/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": { "zod": "4.6.5" }
+}
