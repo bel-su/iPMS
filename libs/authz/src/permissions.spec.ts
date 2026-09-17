@@ -35,7 +35,7 @@ describe('permission catalog', () => {
 
 describe('expandDependencies', () => {
   it('adds a direct dependency', () => {
-    expect(expandDependencies(['approval.approve'])).toContain('approval.view');
+    expect(expandDependencies(['qc_review.approve'])).toContain('qc_review.view');
   });
 
   it('adds transitive dependencies', () => {
@@ -55,14 +55,14 @@ describe('expandDependencies', () => {
 });
 
 describe('validatePermissionSet', () => {
-  it('rejects a role granting approve without view', () => {
-    const result = validatePermissionSet(['approval.approve']);
+  it('rejects a role granting qc approve without qc review view', () => {
+    const result = validatePermissionSet(['qc_review.approve']);
     expect(result.valid).toBe(false);
-    expect(result.missing).toContain('approval.view');
+    expect(result.missing).toContain('qc_review.view');
   });
 
   it('accepts a dependency-complete set', () => {
-    expect(validatePermissionSet(['approval.view', 'approval.approve']).valid).toBe(true);
+    expect(validatePermissionSet(['qc_submission.view', 'qc_review.view', 'qc_review.approve']).valid).toBe(true);
   });
 
   it('accepts an empty set', () => {

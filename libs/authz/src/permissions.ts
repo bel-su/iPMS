@@ -30,9 +30,6 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   def('override', 'revoke', 'Revoke permission overrides', ['override.view']),
   def('access', 'simulate', 'Use the access simulator', ['user.view', 'permission.view']),
 
-  // Approvals (generic approval workflow used across modules)
-  def('approval', 'view', 'View items awaiting approval'),
-  def('approval', 'approve', 'Approve an item', ['approval.view']),
 
   // Projects
   def('project', 'view', 'View projects'),
