@@ -1,6 +1,9 @@
 import { Controller, Get, Header } from '@nestjs/common';
+import { Public } from '@ipms/authz';
 import { metricsRegistry } from './metrics.js';
 
+// Prometheus scrapes carry no token.
+@Public()
 @Controller()
 export class MetricsController {
   @Get('metrics')

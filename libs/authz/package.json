@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@ipms/contracts": "workspace:*",
     "@nestjs/common": "12.0.3",
     "@nestjs/core": "12.0.3"
   }

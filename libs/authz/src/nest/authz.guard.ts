@@ -1,7 +1,12 @@
 import {
   CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable, UnauthorizedException,
 } from '@nestjs/common';
-import type { Reflector } from '@nestjs/core';
+// A real (not `import type`) binding: Nest resolves this constructor parameter via
+// `design:paramtypes` reflection, which needs the runtime class reference — an
+// `import type` erases it, leaving `Object` in the emitted metadata and breaking DI
+// at real bootstrap even though unit tests (which construct the guard directly) never
+// notice (see apps/audit/src/api/audit.controller.ts for the same trap with PrismaClient).
+import { Reflector } from '@nestjs/core';
 import { check } from '../evaluate.js';
 import type { AuthzScope, AuthzUser } from '../types.js';
 import { PERMISSION_KEY, type PermissionMetadata } from './require-permission.decorator.js';

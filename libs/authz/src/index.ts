@@ -7,3 +7,4 @@ export { check } from './evaluate.js';
 export { scopeWhere, type ScopeWhere } from './scope-filter.js';
 export { RequirePermission, PERMISSION_KEY, type PermissionMetadata } from './nest/require-permission.decorator.js';
 export { AuthzGuard, SCOPE_PROVIDER, type ScopeProvider } from './nest/authz.guard.js';
+export { JwtUserGuard, IS_PUBLIC_KEY, Public } from './nest/jwt-user.guard.js';

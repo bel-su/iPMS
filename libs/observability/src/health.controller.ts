@@ -1,4 +1,5 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
+import { Public } from '@ipms/authz';
 
 export type ReadinessCheck = () => Promise<boolean>;
 
@@ -17,6 +18,8 @@ export interface ReadinessResult {
   checks: Record<string, 'ok' | 'error'>;
 }
 
+// Orchestrator liveness/readiness probes carry no token.
+@Public()
 @Controller('health')
 export class HealthController {
   @Get('live')
