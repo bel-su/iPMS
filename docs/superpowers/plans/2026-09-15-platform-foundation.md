@@ -2929,7 +2929,7 @@ export const RequirePermission = (permission: string, opts?: { requireAssignment
 `libs/authz/src/nest/authz.guard.ts`:
 
 ```ts
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { Reflector } from '@nestjs/core';
 import { check } from '../evaluate.js';
 import type { AuthzScope, AuthzUser } from '../types.js';
@@ -2945,7 +2945,11 @@ export const SCOPE_PROVIDER = Symbol('SCOPE_PROVIDER');
 export class AuthzGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly scopeProvider: ScopeProvider,
+    // ScopeProvider is an interface, which TypeScript erases — emitDecoratorMetadata
+    // records `Object` as the design type, so Nest would try to resolve an `Object`
+    // token at bootstrap and fail. The token is required. Unit tests that construct
+    // the guard directly will not catch this.
+    @Inject(SCOPE_PROVIDER) private readonly scopeProvider: ScopeProvider,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
