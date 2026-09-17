@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { UuidSchema } from '../common/ids.js';
 
+// Convention: every request DTO in this file strips unknown keys rather than
+// rejecting, so an out-of-date offline client cannot be hard-failed by a
+// field it does not know about.
+
 export const RoleCodeSchema = z.string().regex(/^[A-Z][A-Z0-9_]{1,49}$/, 'Code must be UPPER_SNAKE_CASE');
 export const PermissionCodeSchema = z.string().regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/, 'Code must be dot.separated.lowercase');
 
@@ -15,11 +19,11 @@ export type CreateRoleDto = z.infer<typeof CreateRoleSchema>;
 export const UpdateRoleSchema = CreateRoleSchema.partial().omit({ code: true });
 export type UpdateRoleDto = z.infer<typeof UpdateRoleSchema>;
 
-export const CloneRoleSchema = z.strictObject({
+export const CloneRoleSchema = z.object({
   name: z.string().min(1).max(100),
   code: RoleCodeSchema,
   sourceRoleId: UuidSchema,
-});
+}).strip();
 export type CloneRoleDto = z.infer<typeof CloneRoleSchema>;
 
 export const RoleResponseSchema = z.object({

@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { UuidSchema } from '../common/ids.js';
 
+// Convention: every request DTO in this file strips unknown keys rather than
+// rejecting, so an out-of-date offline client cannot be hard-failed by a
+// field it does not know about.
+
 /**
  * Deliberately uses .strip() rather than z.strictObject(): in Zod 4,
  * strictObject() *throws* on unrecognized keys instead of dropping them,
@@ -15,7 +19,11 @@ export const LoginSchema = z.object({
 }).strip();
 export type LoginDto = z.infer<typeof LoginSchema>;
 
-/** Deliberately strict: scope lists are never embedded in the token. */
+/**
+ * Strips unknown keys, same as every DTO in this file. That is enough on its
+ * own: scope lists (e.g. `siteIds`) are never embedded in the token, so any
+ * such key sent in is simply discarded rather than round-tripped.
+ */
 export const TokenPayloadSchema = z.object({
   sub: UuidSchema,
   roles: z.array(z.string()),
@@ -33,5 +41,5 @@ export const TokenPairSchema = z.object({
 });
 export type TokenPair = z.infer<typeof TokenPairSchema>;
 
-export const RefreshSchema = z.strictObject({ refreshToken: z.string().min(1) });
+export const RefreshSchema = z.object({ refreshToken: z.string().min(1) }).strip();
 export type RefreshDto = z.infer<typeof RefreshSchema>;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LoginSchema, TokenPayloadSchema } from './auth.js';
+import { LoginSchema, RefreshSchema, TokenPayloadSchema } from './auth.js';
 import { uuidv7 } from '../common/ids.js';
 
 describe('LoginSchema', () => {
@@ -34,11 +34,22 @@ describe('TokenPayloadSchema', () => {
     expect(TokenPayloadSchema.safeParse(payload).success).toBe(true);
   });
 
-  it('rejects a payload carrying scope lists, which must never be embedded', () => {
+  it('strips scope-list fields, which must never travel in a token', () => {
     const payload = {
       sub: uuidv7(), roles: [], permissions: [], tokenVersion: 1,
       iat: 1, exp: 2, siteIds: ['a', 'b'],
     };
     expect(TokenPayloadSchema.parse(payload)).not.toHaveProperty('siteIds');
+  });
+});
+
+describe('RefreshSchema', () => {
+  it('accepts a valid refresh token', () => {
+    expect(RefreshSchema.safeParse({ refreshToken: 'a-valid-refresh-token' }).success).toBe(true);
+  });
+
+  it('strips unknown fields instead of rejecting, so an out-of-date client is not hard-failed', () => {
+    const parsed = RefreshSchema.parse({ refreshToken: 'a-valid-refresh-token', deviceId: 'unknown-future-field' });
+    expect(parsed).toEqual({ refreshToken: 'a-valid-refresh-token' });
   });
 });
