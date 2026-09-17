@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { UuidSchema } from '@ipms/contracts';
 import { buildOutboxRecord, OUTBOX_MODEL_SQL } from './outbox.js';
 
 describe('buildOutboxRecord', () => {
-  it('assigns a uuid id usable as the event id', () => {
+  it('assigns a uuidv7 id usable as the event id', () => {
     const rec = buildOutboxRecord('iam.scope.granted', { userId: 'u1' }, 'corr-1');
-    expect(rec.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(UuidSchema.safeParse(rec.id).success).toBe(true);
   });
 
   it('records the subject and payload verbatim', () => {
