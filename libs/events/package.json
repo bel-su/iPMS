@@ -1,0 +1,16 @@
+{
+  "name": "@ipms/events",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ipms/contracts": "workspace:*",
+    "@ipms/observability": "workspace:*",
+    "nats": "2.29.3"
+  }
+}

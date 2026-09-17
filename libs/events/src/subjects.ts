@@ -1,0 +1,33 @@
+export const SUBJECTS = {
+  IAM_SCOPE_GRANTED: 'iam.scope.granted',
+  IAM_SCOPE_REVOKED: 'iam.scope.revoked',
+  IAM_ROLE_ASSIGNED: 'iam.role.assigned',
+  IAM_ROLE_REMOVED: 'iam.role.removed',
+  IAM_USER_DEACTIVATED: 'iam.user.deactivated',
+  AUDIT_EVENT: 'audit.event.recorded',
+} as const;
+
+export type Subject = (typeof SUBJECTS)[keyof typeof SUBJECTS];
+
+export interface StreamDefinition {
+  name: string;
+  subjects: string[];
+  maxAgeMs: number;
+  durableConsumers: string[];
+}
+
+export const STREAMS: Record<'IAM' | 'AUDIT', StreamDefinition> = {
+  IAM: {
+    name: 'IAM',
+    subjects: ['iam.>'],
+    maxAgeMs: 7 * 24 * 60 * 60 * 1000,
+    durableConsumers: ['project-scope-cache', 'qc-scope-cache'],
+  },
+  AUDIT: {
+    name: 'AUDIT',
+    subjects: ['audit.event.recorded'],
+    maxAgeMs: 30 * 24 * 60 * 60 * 1000,
+    // Exactly one consumer. The hash chain requires a single serialized writer.
+    durableConsumers: ['audit-ledger-writer'],
+  },
+};
