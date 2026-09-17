@@ -4,3 +4,4 @@ export * from './common/pagination.js';
 export * from './iam/auth.js';
 export * from './iam/role.js';
 export * from './iam/scope.js';
+export * from './audit/query.js';
