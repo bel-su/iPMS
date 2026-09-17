@@ -85,6 +85,21 @@ describe('check — overrides', () => {
     expect(d.reason).toBe('DENIED_BY_OVERRIDE');
   });
 
+  // Outcome-level guard for the deny-first ordering. The two tests above both hold the
+  // permission by some other means, so reordering the DENY gate after the permission gate
+  // leaves their outcomes unchanged. Here the permission is held by neither role nor ALLOW,
+  // so the reported reason differs by gate order: DENIED_BY_OVERRIDE if DENY is evaluated
+  // first, PERMISSION_MISSING if it is not. An admin reading the access simulator needs the
+  // former — "explicitly denied" and "never granted" call for different remediation.
+  it('reports DENIED_BY_OVERRIDE, not PERMISSION_MISSING, when only a DENY exists', () => {
+    const d = check(req({
+      permission: 'qc_review.approve',
+      overrides: [{ permission: 'qc_review.approve', effect: 'DENY', projectId: null, siteId: null, validFrom: null, validUntil: null }],
+    }));
+    expect(d.allowed).toBe(false);
+    expect(d.reason).toBe('DENIED_BY_OVERRIDE');
+  });
+
   it('ignores an expired ALLOW override', () => {
     const d = check(req({
       permission: 'qc_review.approve',

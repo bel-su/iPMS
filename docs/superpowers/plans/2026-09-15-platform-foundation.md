@@ -2462,6 +2462,17 @@ describe('check — overrides', () => {
     expect(d.reason).toBe('DENIED_BY_OVERRIDE');
   });
 
+  // Outcome-level guard for deny-first ordering: the two tests above both hold the permission
+  // by other means, so reordering the DENY gate leaves their outcomes unchanged.
+  it('reports DENIED_BY_OVERRIDE, not PERMISSION_MISSING, when only a DENY exists', () => {
+    const d = check(req({
+      permission: 'qc_review.approve',
+      overrides: [{ permission: 'qc_review.approve', effect: 'DENY', projectId: null, siteId: null, validFrom: null, validUntil: null }],
+    }));
+    expect(d.allowed).toBe(false);
+    expect(d.reason).toBe('DENIED_BY_OVERRIDE');
+  });
+
   it('ignores an expired ALLOW override', () => {
     const d = check(req({
       permission: 'qc_review.approve',
