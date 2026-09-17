@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AuditEvent {
+  id            String   @id @db.Uuid
+  sequence      Int      @unique
+  eventId       String   @unique @db.Uuid
+  actorId       String?  @db.VarChar(100)
+  action        String   @db.VarChar(100)
+  objectType    String   @db.VarChar(100)
+  objectId      String   @db.VarChar(100)
+  previousState Json     @default("{}")
+  newState      Json     @default("{}")
+  details       Json     @default("{}")
+  correlationId String   @db.VarChar(64)
+  previousHash  String   @db.Char(64)
+  chainHash     String   @unique @db.Char(64)
+  timestamp     DateTime @db.Timestamptz(6)
+
+  @@index([actorId, timestamp])
+  @@index([objectType, objectId])
+  @@index([action, timestamp])
+  @@map("audit_event")
+}
