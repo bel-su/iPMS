@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
+// Imported from this app's own generated-client location, not the shared
+// `@prisma/client` package — see the `output` comment in schema.prisma.
+import { PrismaClient } from '.prisma-client-audit';
 import { PrismaBaseService } from '@ipms/persistence';
 
 /**

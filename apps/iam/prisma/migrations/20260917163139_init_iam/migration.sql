@@ -140,7 +140,22 @@ CREATE UNIQUE INDEX "role_code_key" ON "role"("code");
 CREATE INDEX "user_role_userId_idx" ON "user_role"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "user_role_userId_roleId_projectId_siteId_key" ON "user_role"("userId", "roleId", "projectId", "siteId");
+-- Partial unique indexes, one per valid UserRole scope shape. A plain composite
+-- UNIQUE(userId, roleId, projectId, siteId) does not work here: PostgreSQL treats
+-- NULL as never equal to NULL in a unique index, so it would only ever reject
+-- duplicates for the fully site-scoped shape (both projectId and siteId set) and
+-- silently allow unlimited duplicate global (both NULL) or project-scoped
+-- (projectId set, siteId NULL) grants. Prisma's schema DSL cannot express a
+-- WHERE-qualified index, so these are hand-added raw SQL (schema.prisma
+-- deliberately carries no `@@unique` for this column set — see the comment there).
+CREATE UNIQUE INDEX "user_role_global_uidx" ON "user_role"("userId", "roleId")
+  WHERE "projectId" IS NULL AND "siteId" IS NULL;
+
+CREATE UNIQUE INDEX "user_role_project_uidx" ON "user_role"("userId", "roleId", "projectId")
+  WHERE "projectId" IS NOT NULL AND "siteId" IS NULL;
+
+CREATE UNIQUE INDEX "user_role_site_uidx" ON "user_role"("userId", "roleId", "siteId")
+  WHERE "siteId" IS NOT NULL;
 
 -- CreateIndex
 CREATE UNIQUE INDEX "user_project_scope_userId_projectId_key" ON "user_project_scope"("userId", "projectId");

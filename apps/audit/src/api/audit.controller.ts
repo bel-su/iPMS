@@ -3,7 +3,9 @@ import { Controller, Get, Inject, Query } from '@nestjs/common';
 // the runtime class reference, both via the explicit @Inject(PrismaClient) below and
 // via emitDecoratorMetadata's design:paramtypes, neither of which survive an erased
 // type-only import (see apps/audit/src/app.module.ts for the matching provider).
-import { PrismaClient } from '@prisma/client';
+// Imported from this app's own generated-client location, not the shared
+// `@prisma/client` package — see the `output` comment in schema.prisma.
+import { PrismaClient } from '.prisma-client-audit';
 import { RequirePermission } from '@ipms/authz';
 import { AuditQuerySchema, VerifyQuerySchema, type Paginated } from '@ipms/contracts';
 import { ChainService } from '../chain/chain.service.js';

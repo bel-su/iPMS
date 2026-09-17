@@ -93,7 +93,17 @@ model UserRole {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
 
-  @@unique([userId, roleId, projectId, siteId])
+  // No `@@unique` here: in PostgreSQL, NULL is never equal to NULL in a unique
+  // index, so a single composite `@@unique([userId, roleId, projectId, siteId])`
+  // silently fails to reject duplicates whenever projectId or siteId is NULL —
+  // i.e. for global and project-scoped assignments, the two most common shapes.
+  // Prisma's schema DSL cannot express partial (WHERE-qualified) indexes, so the
+  // real constraint is three hand-written partial unique indexes in this model's
+  // migration.sql (user_role_global_uidx, user_role_project_uidx,
+  // user_role_site_uidx) — one per valid scope shape. Declaring a matching
+  // `@@unique` here would misrepresent those to Prisma (which would try to
+  // "correct" the schema by dropping the partial indexes on the next
+  // `migrate dev`), so introspection is intentionally left without one.
   @@index([userId])
   @@map("user_role")
 }

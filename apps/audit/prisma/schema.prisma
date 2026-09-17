@@ -1,5 +1,14 @@
 generator client {
   provider = "prisma-client-js"
+  // Each service must generate into its own location: with no `output`, Prisma 7
+  // writes generated client code into the *installed* @prisma/client package
+  // (see prisma.config.ts), and pnpm's content-addressable store collapses
+  // iam's and audit's identical @prisma/client@7.10.0 dependency into one
+  // physical folder — the second service to run `prisma generate` silently
+  // overwrites the first service's generated models. Scoping output under this
+  // app's own node_modules keeps the two services' generated clients distinct
+  // while staying inside the already-gitignored node_modules/ pattern.
+  output = "../node_modules/.prisma-client-audit"
 }
 
 datasource db {

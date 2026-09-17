@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { PrismaClient } from '@prisma/client';
+// Imported from this app's own generated-client location, not the shared
+// `@prisma/client` package — see the `output` comment in schema.prisma.
+import { PrismaClient } from '.prisma-client-audit';
 import { Redis } from 'ioredis';
 import { EventBus, RedisDedupeStore } from '@ipms/events';
 import { HealthController, MetricsController, registerReadinessCheck } from '@ipms/observability';

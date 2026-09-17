@@ -3,7 +3,9 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testconta
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
+// Imported from this app's own generated-client location, not the shared
+// `@prisma/client` package — see the `output` comment in schema.prisma.
+import { PrismaClient } from '.prisma-client-audit';
 import { ChainService } from './chain.service.js';
 import { GENESIS_HASH } from './hash.js';
 

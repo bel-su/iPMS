@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma, PrismaClient } from '@prisma/client';
+// Imported from this app's own generated-client location, not the shared
+// `@prisma/client` package — see the `output` comment in schema.prisma.
+import type { Prisma, PrismaClient } from '.prisma-client-audit';
 import { uuidv7 } from '@ipms/contracts';
 import { getCorrelationId } from '@ipms/observability';
 import type { AuditEventPayload } from '@ipms/events';
