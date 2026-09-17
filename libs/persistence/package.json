@@ -1,0 +1,17 @@
+{
+  "name": "@ipms/persistence",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ipms/contracts": "workspace:*",
+    "@nestjs/common": "12.0.3",
+    "@prisma/client": "7.10.0"
+  },
+  "devDependencies": { "prisma": "7.10.0" }
+}
