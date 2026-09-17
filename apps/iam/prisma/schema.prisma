@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+  // Each service must generate into its own location: with no `output`, Prisma 7
+  // writes generated client code into the *installed* @prisma/client package
+  // (see prisma.config.ts), and pnpm's content-addressable store collapses
+  // iam's and audit's identical @prisma/client@7.10.0 dependency into one
+  // physical folder — the second service to run `prisma generate` silently
+  // overwrites the first service's generated models. Scoping output under this
+  // app's own node_modules keeps the two services' generated clients distinct
+  // while staying inside the already-gitignored node_modules/ pattern.
+  output = "../node_modules/.prisma-client-iam"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String    @id @db.Uuid
+  username     String    @unique @db.VarChar(150)
+  email        String    @unique @db.VarChar(255)
+  fullName     String    @db.VarChar(200)
+  employeeCode String?   @unique @db.VarChar(50)
+  passwordHash String    @db.VarChar(255)
+  isActive     Boolean   @default(true)
+  tokenVersion Int       @default(0)
+  lastLoginAt  DateTime? @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(6)
+
+  roles         UserRole[]
+  projectScopes UserProjectScope[]
+  siteScopes    UserSiteScope[]
+  overrides     UserPermissionOverride[]
+
+  @@map("user")
+}
+
+model Permission {
+  id          String   @id @db.Uuid
+  code        String   @unique @db.VarChar(100)
+  module      String   @db.VarChar(50)
+  action      String   @db.VarChar(50)
+  description String   @db.VarChar(255)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  roles     RolePermission[]
+  overrides UserPermissionOverride[]
+
+  @@index([module])
+  @@map("permission")
+}
+
+model Role {
+  id           String   @id @db.Uuid
+  name         String   @db.VarChar(100)
+  code         String   @unique @db.VarChar(50)
+  description  String   @default("") @db.Text
+  isSystemRole Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+
+  permissions RolePermission[]
+  assignments UserRole[]
+
+  @@map("role")
+}
+
+model RolePermission {
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permission")
+}
+
+model UserRole {
+  id         String    @id @db.Uuid
+  userId     String    @db.Uuid
+  roleId     String    @db.Uuid
+  projectId  String?   @db.Uuid
+  siteId     String?   @db.Uuid
+  validFrom  DateTime? @db.Timestamptz(6)
+  validUntil DateTime? @db.Timestamptz(6)
+  createdBy  String    @db.Uuid
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, roleId, projectId, siteId])
+  @@index([userId])
+  @@map("user_role")
+}
+
+model UserProjectScope {
+  id        String   @id @db.Uuid
+  userId    String   @db.Uuid
+  projectId String   @db.Uuid
+  createdBy String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@map("user_project_scope")
+}
+
+model UserSiteScope {
+  id        String   @id @db.Uuid
+  userId    String   @db.Uuid
+  siteId    String   @db.Uuid
+  projectId String   @db.Uuid
+  createdBy String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, siteId])
+  @@map("user_site_scope")
+}
+
+model UserPermissionOverride {
+  id           String    @id @db.Uuid
+  userId       String    @db.Uuid
+  permissionId String    @db.Uuid
+  effect       String    @db.VarChar(10)
+  projectId    String?   @db.Uuid
+  siteId       String?   @db.Uuid
+  validFrom    DateTime? @db.Timestamptz(6)
+  validUntil   DateTime? @db.Timestamptz(6)
+  reason       String    @db.Text
+  createdBy    String    @db.Uuid
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, permissionId])
+  @@map("user_permission_override")
+}
+
+model OutboxEvent {
+  id            String    @id @db.Uuid
+  subject       String    @db.VarChar(100)
+  payload       Json
+  correlationId String    @db.VarChar(64)
+  actorId       String?   @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  publishedAt   DateTime? @db.Timestamptz(6)
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_event")
+}

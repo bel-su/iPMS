@@ -1,0 +1,77 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { PrismaPg } from '@prisma/adapter-pg';
+// Imported from this app's own generated-client location, not the shared
+// `@prisma/client` package — see the `output` comment in schema.prisma.
+import { PrismaClient } from '.prisma-client-iam';
+import { PERMISSIONS, validatePermissionSet } from '@ipms/authz';
+import { seedIam } from './seed.js';
+
+let container: StartedPostgreSqlContainer;
+let prisma: PrismaClient;
+
+beforeAll(async () => {
+  container = await new PostgreSqlContainer('postgres:17-alpine').start();
+  const connectionString = container.getConnectionUri();
+  execSync('pnpm prisma migrate deploy', {
+    // `new URL(..., import.meta.url).pathname` can come back percent-encoded on macOS
+    // when the path contains URL-escaped characters; fileURLToPath decodes correctly.
+    cwd: fileURLToPath(new URL('..', import.meta.url)),
+    env: { ...process.env, DATABASE_URL: connectionString },
+  });
+  // Prisma ORM 7 removed `datasources`/`datasourceUrl` from the client constructor;
+  // a driver adapter is required to actually connect. See apps/iam/prisma.config.ts
+  // and apps/iam/src/prisma.service.ts for the same pattern used by the real app.
+  const adapter = new PrismaPg({ connectionString });
+  prisma = new PrismaClient({ adapter });
+  await seedIam(prisma);
+}, 180_000);
+
+afterAll(async () => { await prisma?.$disconnect(); await container?.stop(); });
+
+describe('seedIam', () => {
+  it('inserts the whole permission catalog', async () => {
+    expect(await prisma.permission.count()).toBe(PERMISSIONS.length);
+  });
+
+  it('creates the five system roles', async () => {
+    const roles = await prisma.role.findMany({ where: { isSystemRole: true } });
+    expect(roles.map((r) => r.code).sort()).toEqual(
+      ['FIELD_ENGINEER', 'PROJECT_MANAGER', 'QC_MANAGER', 'SUPER_ADMIN', 'VIEWER'],
+    );
+  });
+
+  it('gives SUPER_ADMIN every permission except ledger mutation', async () => {
+    const role = await prisma.role.findUniqueOrThrow({
+      where: { code: 'SUPER_ADMIN' }, include: { permissions: { include: { permission: true } } },
+    });
+    expect(role.permissions).toHaveLength(PERMISSIONS.length);
+  });
+
+  it('never grants FIELD_ENGINEER approval authority', async () => {
+    const role = await prisma.role.findUniqueOrThrow({
+      where: { code: 'FIELD_ENGINEER' }, include: { permissions: { include: { permission: true } } },
+    });
+    const codes = role.permissions.map((rp) => rp.permission.code);
+    expect(codes).toContain('qc_submission.submit');
+    expect(codes).not.toContain('qc_review.approve');
+    expect(codes).not.toContain('qc_review.reject');
+    expect(codes).not.toContain('task.assign');
+  });
+
+  it('gives every system role a dependency-complete permission set', async () => {
+    const roles = await prisma.role.findMany({ include: { permissions: { include: { permission: true } } } });
+    for (const role of roles) {
+      const result = validatePermissionSet(role.permissions.map((rp) => rp.permission.code));
+      expect(result.valid, `${role.code} is missing ${result.missing.join(', ')}`).toBe(true);
+    }
+  });
+
+  it('is idempotent', async () => {
+    await seedIam(prisma);
+    expect(await prisma.permission.count()).toBe(PERMISSIONS.length);
+    expect(await prisma.role.count()).toBe(5);
+  });
+});
