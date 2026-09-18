@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, Head, NotFoundException, Patch, Post, Put, Req, Res } from '@nestjs/common';
+import { Controller, Delete, Get, NotFoundException, Patch, Post, Put, Req, Res } from '@nestjs/common';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getCorrelationId } from '@ipms/observability';
 import { normalizeTarget, resolveUpstream } from './routes.js';
@@ -49,16 +49,46 @@ export class ProxyController {
    *
    * The pattern is `'*'` rather than `'*path'` or `':path(.*)'`, both of which
    * Fastify's router rejects or matches only within a single path segment.
-   * All three facts were established by booting the service; none is visible
-   * to a unit test, because route registration happens at startup.
+   *
+   * There is no HEAD handler: Fastify derives HEAD from each GET route by
+   * default, and declaring one explicitly kills the app at boot with
+   * FST_ERR_DUPLICATED_ROUTE — the same failure mode as OPTIONS above.
+   *
+   * One handler per method, delegating to `forward`, rather than several decorators
+   * stacked on a single handler: Nest stores the method and path in the same
+   * metadata keys on the handler, so stacking silently keeps only one of them
+   * and every other verb 404s at the edge.
+   *
+   * All of these were established by booting the service and issuing requests;
+   * none is visible to a unit test, because route registration happens at
+   * startup.
    */
   @Get('*')
+  async proxyGet(@Req() req: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
+    return this.forward(req, reply);
+  }
+
   @Post('*')
+  async proxyPost(@Req() req: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
+    return this.forward(req, reply);
+  }
+
   @Put('*')
+  async proxyPut(@Req() req: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
+    return this.forward(req, reply);
+  }
+
   @Patch('*')
+  async proxyPatch(@Req() req: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
+    return this.forward(req, reply);
+  }
+
   @Delete('*')
-  @Head('*')
-  async proxy(@Req() req: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
+  async proxyDelete(@Req() req: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
+    return this.forward(req, reply);
+  }
+
+  private async forward(req: FastifyRequest, reply: FastifyReply): Promise<void> {
     const upstream = resolveUpstream(req.url);
     if (!upstream) {
       // Deliberately the same 404 for "no such route" and "route refused"

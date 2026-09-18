@@ -108,3 +108,29 @@ export function resolveUpstream(rawUrl: string): Upstream | undefined {
     .filter((r) => target.path === r.prefix || target.path.startsWith(`${r.prefix}/`))
     .sort((a, b) => b.prefix.length - a.prefix.length)[0];
 }
+
+/**
+ * The only proxied paths reachable without a token.
+ *
+ * The gateway's proxy is a catch-all behind `JwtGuard`, so without this list
+ * there is no way to ever obtain a token: the login request itself is refused
+ * with 401. `@Public()` cannot express it, because one handler serves every
+ * upstream path.
+ *
+ * Kept deliberately tiny and matched exactly, never by prefix. A prefix rule
+ * on `/api/v1/auth` would expose `logout` and `me`, which must stay
+ * authenticated — `logout` revokes a session and `me` discloses the caller's
+ * roles and permissions. Refresh is here because it is redeemed precisely when
+ * the access token has expired; it authenticates itself by presenting a valid
+ * refresh token in its body, which iam verifies.
+ */
+export const PUBLIC_PATHS: ReadonlySet<string> = new Set([
+  '/api/v1/auth/login',
+  '/api/v1/auth/refresh',
+]);
+
+/** True when the request may proceed to its upstream with no access token. */
+export function isPublicPath(rawUrl: string): boolean {
+  const target = normalizeTarget(rawUrl);
+  return target !== undefined && PUBLIC_PATHS.has(target.path);
+}

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { PrismaPg } from '@prisma/adapter-pg';
 // Imported from this app's own generated-client location, not the shared
 // `@prisma/client` package — see the `output` comment in schema.prisma.
-import { PrismaClient } from '.prisma-client-audit';
+import { PrismaClient } from '@prisma-clients/audit';
 import { ChainService } from './chain.service.js';
 import { GENESIS_HASH } from './hash.js';
 

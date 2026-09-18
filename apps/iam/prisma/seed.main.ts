@@ -6,7 +6,7 @@
  * NODE_ENV and with IAM_DEMO_PASSWORD supplied; see its doc comment.
  */
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '.prisma-client-iam';
+import { PrismaClient } from '@prisma-clients/iam';
 import { seedIam, seedDemoUsers } from './seed.js';
 
 function requireEnv(name: string): string {

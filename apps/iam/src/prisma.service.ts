@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 // Imported from this app's own generated-client location, not the shared
 // `@prisma/client` package — see the `output` comment in schema.prisma.
-import { PrismaClient } from '.prisma-client-iam';
+import { PrismaClient } from '@prisma-clients/iam';
 import { PrismaBaseService } from '@ipms/persistence';
 
 /**

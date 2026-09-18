@@ -5,7 +5,7 @@ import { Controller, Get, Inject, Query } from '@nestjs/common';
 // type-only import (see apps/audit/src/app.module.ts for the matching provider).
 // Imported from this app's own generated-client location, not the shared
 // `@prisma/client` package — see the `output` comment in schema.prisma.
-import { PrismaClient } from '.prisma-client-audit';
+import { PrismaClient } from '@prisma-clients/audit';
 import { RequirePermission } from '@ipms/authz';
 import { AuditQuerySchema, VerifyQuerySchema, type Paginated } from '@ipms/contracts';
 import { ChainService } from '../chain/chain.service.js';

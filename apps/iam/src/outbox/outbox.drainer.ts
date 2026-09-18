@@ -1,7 +1,7 @@
 import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 // This app's own generated client, not the shared @prisma/client package — see
 // the `output` comment in prisma/schema.prisma.
-import type { PrismaClient } from '.prisma-client-iam';
+import type { PrismaClient } from '@prisma-clients/iam';
 import type { EventBus } from '@ipms/events';
 import { createLogger } from '@ipms/observability';
 

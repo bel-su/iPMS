@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeTarget, resolveUpstream, ROUTES } from './routes.js';
+import { isPublicPath, normalizeTarget, resolveUpstream, ROUTES } from './routes.js';
 
 describe('resolveUpstream — allowlist', () => {
   it('routes an exact prefix match', () => {
@@ -135,5 +135,46 @@ describe('normalizeTarget — path cleanup', () => {
 
   it('leaves a clean path unchanged', () => {
     expect(normalizeTarget('/api/v1/auth/login')).toEqual({ path: '/api/v1/auth/login', query: '' });
+  });
+});
+
+describe('isPublicPath — the only unauthenticated proxied routes', () => {
+  it('lets login through, or no caller could ever obtain a token', () => {
+    expect(isPublicPath('/api/v1/auth/login')).toBe(true);
+  });
+
+  it('lets refresh through, since it is redeemed once the access token has expired', () => {
+    expect(isPublicPath('/api/v1/auth/refresh')).toBe(true);
+  });
+
+  /**
+   * Matched exactly, never by prefix. A prefix rule on `/api/v1/auth` would
+   * expose these two: `logout` revokes a session, and `me` discloses the
+   * caller's roles and permissions.
+   */
+  it('keeps logout authenticated', () => {
+    expect(isPublicPath('/api/v1/auth/logout')).toBe(false);
+  });
+
+  it('keeps me authenticated', () => {
+    expect(isPublicPath('/api/v1/auth/me')).toBe(false);
+  });
+
+  it('keeps every other route authenticated', () => {
+    expect(isPublicPath('/api/v1/roles')).toBe(false);
+    expect(isPublicPath('/api/v1/audit/events')).toBe(false);
+  });
+
+  it('is not fooled by a path that merely starts with a public one', () => {
+    expect(isPublicPath('/api/v1/auth/login/../roles')).toBe(false);
+    expect(isPublicPath('/api/v1/auth/loginX')).toBe(false);
+  });
+
+  it('normalizes before matching, so a redundant slash still logs in', () => {
+    expect(isPublicPath('/api/v1//auth/login')).toBe(true);
+  });
+
+  it('allows a query string on a public path', () => {
+    expect(isPublicPath('/api/v1/auth/login?next=/dashboard')).toBe(true);
   });
 });

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { PrismaPg } from '@prisma/adapter-pg';
 // Imported from this app's own generated-client location, not the shared
 // `@prisma/client` package — see the `output` comment in schema.prisma.
-import { PrismaClient } from '.prisma-client-iam';
+import { PrismaClient } from '@prisma-clients/iam';
 import { PERMISSIONS, validatePermissionSet } from '@ipms/authz';
 import { seedIam } from './seed.js';
 

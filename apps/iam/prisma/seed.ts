@@ -1,6 +1,6 @@
 // Imported from this app's own generated-client location, not the shared
 // `@prisma/client` package — see the `output` comment in schema.prisma.
-import type { PrismaClient } from '.prisma-client-iam';
+import type { PrismaClient } from '@prisma-clients/iam';
 import { PERMISSIONS, expandDependencies } from '@ipms/authz';
 import { hashPassword } from '../src/auth/password.js';
 import { uuidv7 } from '@ipms/contracts';

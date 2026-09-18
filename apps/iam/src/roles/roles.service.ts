@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 // This app's own generated client, not the shared @prisma/client package — see
 // the `output` comment in prisma/schema.prisma.
-import type { PrismaClient } from '.prisma-client-iam';
+import type { PrismaClient } from '@prisma-clients/iam';
 import { PERMISSION_CODES, validatePermissionSet } from '@ipms/authz';
 import { uuidv7, type CloneRoleDto, type CreateRoleDto, type UpdateRoleDto } from '@ipms/contracts';
 import { buildOutboxRecord, type JsonObject } from '@ipms/persistence';

@@ -8,7 +8,7 @@ generator client {
   // overwrites the first service's generated models. Scoping output under this
   // app's own node_modules keeps the two services' generated clients distinct
   // while staying inside the already-gitignored node_modules/ pattern.
-  output = "../node_modules/.prisma-client-iam"
+  output = "../node_modules/@prisma-clients/iam"
 }
 
 datasource db {

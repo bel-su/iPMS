@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 // This app's own generated client, not the shared @prisma/client package — see
 // the `output` comment in prisma/schema.prisma.
-import type { PrismaClient } from '.prisma-client-iam';
+import type { PrismaClient } from '@prisma-clients/iam';
 import {
   check, resolvePermissions, type AuthzOverride, type AuthzScope, type AuthzUser,
 } from '@ipms/authz';

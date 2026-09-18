@@ -8,6 +8,7 @@ import {
 } from '@ipms/authz';
 import type { TokenPayload } from '@ipms/contracts';
 import { createLogger } from '@ipms/observability';
+import { isPublicPath } from '../proxy/routes.js';
 
 const log = createLogger('gateway');
 
@@ -82,7 +83,16 @@ export class JwtGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    const request = context.switchToHttp().getRequest<HeaderCarrier & { user?: AuthzUser }>();
+    const request = context.switchToHttp().getRequest<
+      HeaderCarrier & { url?: string; user?: AuthzUser }
+    >();
+
+    // Login and refresh must be reachable without a token, or no caller could
+    // ever obtain one. `@Public()` cannot mark them: a single catch-all handler
+    // serves every proxied path, so the exemption has to be keyed on the URL.
+    // The list is matched exactly, never by prefix — see PUBLIC_PATHS.
+    if (request.url !== undefined && isPublicPath(request.url)) return true;
+
     const token = extractToken(request);
     if (!token) throw new UnauthorizedException(GENERIC);
 
