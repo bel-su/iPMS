@@ -22,6 +22,7 @@ function validPayload(overrides: Record<string, unknown> = {}): Record<string, u
     roles: ['FIELD_ENGINEER'],
     permissions: ['audit.view'],
     tokenVersion: 1,
+    typ: 'access',
     iat,
     exp: iat + 900,
     ...overrides,
@@ -135,5 +136,24 @@ describe('JwtUserGuard', () => {
 
   it('never leaks a specific failure reason — malformed token', async () => {
     await expect(guard().canActivate(ctx(request('not-a-jwt')))).rejects.toThrow('Authentication required');
+  });
+
+  // A refresh token is signed with the same secret as an access token and
+  // lives for 30 days rather than 15 minutes. If this guard accepted one,
+  // every service would honour a stolen refresh token for a month — and the
+  // gateway's revocation check is the only thing that would ever notice.
+  it('rejects a refresh token presented as an access token', async () => {
+    const iat = Math.floor(Date.now() / 1000);
+    const refresh = sign(validPayload({ typ: 'refresh', exp: iat + 2_592_000 }));
+    await expect(guard().canActivate(ctx(request(refresh)))).rejects.toThrow('Authentication required');
+  });
+
+  it('rejects a token with no typ claim at all', async () => {
+    const iat = Math.floor(Date.now() / 1000);
+    const untyped = sign({
+      sub: SUB, roles: ['FIELD_ENGINEER'], permissions: ['audit.view'],
+      tokenVersion: 1, iat, exp: iat + 900,
+    });
+    await expect(guard().canActivate(ctx(request(untyped)))).rejects.toThrow('Authentication required');
   });
 });

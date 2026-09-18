@@ -1,9 +1,9 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   CanActivate, ExecutionContext, Injectable, SetMetadata, UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { TokenPayloadSchema, type TokenPayload } from '@ipms/contracts';
+import type { TokenPayload } from '@ipms/contracts';
+import { verifyToken } from '../token.js';
 import type { AuthzUser } from '../types.js';
 
 export const IS_PUBLIC_KEY = 'ipms:public';
@@ -55,27 +55,6 @@ function requireSecret(): string {
 }
 
 /**
- * Verifies an HS256-signed `header.body.signature` token: recomputes the HMAC
- * over `header.body` and compares it (constant-time) against the supplied
- * signature. Throws on any structural or cryptographic mismatch — malformed
- * token, wrong secret, or a body that was edited after signing.
- */
-function verifySignature(token: string, secret: string): unknown {
-  const parts = token.split('.');
-  if (parts.length !== 3) throw new Error('Malformed token');
-  const [header, body, signature] = parts as [string, string, string];
-
-  const expected = createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url');
-  const provided = Buffer.from(signature);
-  const wanted = Buffer.from(expected);
-  if (provided.length !== wanted.length || !timingSafeEqual(provided, wanted)) {
-    throw new Error('Invalid signature');
-  }
-
-  return JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as unknown;
-}
-
-/**
  * Zero-trust JWT verification, run independently by every service.
  *
  * The gateway authenticates the caller, but it proxies a *new* HTTP request
@@ -114,9 +93,11 @@ export class JwtUserGuard implements CanActivate {
 
     let payload: TokenPayload;
     try {
-      const raw = verifySignature(token, this.secret);
-      payload = TokenPayloadSchema.parse(raw);
-      if (payload.exp <= Math.floor(Date.now() / 1000)) throw new Error('Token expired');
+      // 'access' is passed explicitly: a refresh token carries the same
+      // signature over the same secret and lives 30 days rather than 15
+      // minutes, so accepting one here would hand a stolen refresh token a
+      // month of authorized requests.
+      payload = verifyToken(token, this.secret, 'access');
     } catch {
       throw new UnauthorizedException(GENERIC_MESSAGE);
     }

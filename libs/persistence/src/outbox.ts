@@ -1,9 +1,24 @@
 import { uuidv7 } from '@ipms/contracts';
 
+/**
+ * A payload that survives a JSON round-trip, expressed recursively.
+ *
+ * Deliberately not `Record<string, unknown>`: Prisma's generated `Json` column
+ * input type is `InputJsonObject`, whose values must each be assignable to
+ * `InputJsonValue | null`. `unknown` is not, so a `Record<string, unknown>`
+ * cannot be handed to `tx.outboxEvent.create({ data })` without a cast at the
+ * call site — and that cast would then be copy-pasted into every service that
+ * ever writes an outbox row, silently accepting values (a `Date`, a `Map`, a
+ * `bigint`) that serialize to something the consumer cannot read. Naming the
+ * JSON shape here pushes that check to compile time, once.
+ */
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
+
 export interface OutboxRecord {
   id: string;
   subject: string;
-  payload: Record<string, unknown>;
+  payload: JsonObject;
   correlationId: string;
   actorId: string | null;
   createdAt: Date;
@@ -12,7 +27,7 @@ export interface OutboxRecord {
 
 export function buildOutboxRecord(
   subject: string,
-  payload: Record<string, unknown>,
+  payload: JsonObject,
   correlationId: string,
   actorId?: string,
 ): OutboxRecord {
