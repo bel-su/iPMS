@@ -49,7 +49,16 @@ export type AuthzReason =
   | 'OUT_OF_PROJECT_SCOPE'
   | 'OUT_OF_SITE_SCOPE'
   | 'NOT_ASSIGNED'
-  | 'RESOURCE_STATE_FORBIDS';
+  | 'RESOURCE_STATE_FORBIDS'
+  /**
+   * Not produced by `check()`. The access simulator reports it when a caller
+   * asks about a specific resource that only the owning service can evaluate,
+   * so a consumer switching on this union is told "no answer" rather than
+   * being handed the permissive answer to a different, unscoped question.
+   * Modelled here rather than left as a bare string so that switch is
+   * exhaustive.
+   */
+  | 'RESOURCE_NOT_EVALUATED';
 
 export interface AuthzCheck {
   name: string;

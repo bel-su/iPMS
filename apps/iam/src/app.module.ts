@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { Redis } from 'ioredis';
-import { AuthzGuard, JwtUserGuard, SCOPE_PROVIDER, type AuthzScope, type ScopeProvider } from '@ipms/authz';
+import {
+  AuthzGuard, JwtUserGuard, OVERRIDE_PROVIDER, SCOPE_PROVIDER,
+  type AuthzOverride, type AuthzScope, type OverrideProvider, type ScopeProvider,
+} from '@ipms/authz';
 import { EventBus } from '@ipms/events';
 import { HealthController, MetricsController, registerReadinessCheck } from '@ipms/observability';
 import { PrismaService } from './prisma.service.js';
@@ -46,6 +49,42 @@ const iamScopeProvider: ScopeProvider = {
     return { global: false, projectIds: [], siteIds: [] };
   },
 };
+
+/**
+ * Real override rows, read from the table iam owns.
+ *
+ * Unlike the scope provider above, this one has to do real work: `check()`'s
+ * DENY gate runs *before* the permission gate and before any resource is
+ * consulted, so it fires on every guarded request, resource or not. Returning
+ * an empty list here would put back the exact defect this closes — a DENY
+ * override written, audited and reported, and then not enforced.
+ *
+ * Only unexpired rows are returned, and only for the acting user; `check()`
+ * filters again by permission and resource, so this query is a coarse
+ * pre-filter, not the decision.
+ */
+function iamOverrideProvider(prisma: PrismaService): OverrideProvider {
+  return {
+    async for(userId: string): Promise<AuthzOverride[]> {
+      const now = new Date();
+      const rows = await prisma.db.userPermissionOverride.findMany({
+        where: {
+          userId,
+          OR: [{ validUntil: null }, { validUntil: { gte: now } }],
+        },
+        include: { permission: true },
+      });
+      return rows.map((o) => ({
+        permission: o.permission.code,
+        effect: o.effect === 'DENY' ? 'DENY' : 'ALLOW',
+        projectId: o.projectId,
+        siteId: o.siteId,
+        validFrom: o.validFrom,
+        validUntil: o.validUntil,
+      }));
+    },
+  };
+}
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
@@ -109,6 +148,11 @@ const iamScopeProvider: ScopeProvider = {
     },
     { provide: SCOPE_PROVIDER, useValue: iamScopeProvider },
     {
+      provide: OVERRIDE_PROVIDER,
+      useFactory: iamOverrideProvider,
+      inject: [PrismaService],
+    },
+    {
       provide: APP_GUARD,
       useClass: JwtUserGuard,
     },
@@ -137,9 +181,13 @@ const iamScopeProvider: ScopeProvider = {
       inject: [PrismaService],
     },
     {
+      // `versions` is the same `TokenVersionStore` port `AuthService` writes
+      // through, not a second path to Redis: an override write has to revoke
+      // the target's tokens, because global overrides live in the token claim.
       provide: ScopesService,
-      useFactory: (prisma: PrismaService) => new ScopesService(prisma.db as never),
-      inject: [PrismaService],
+      useFactory: (prisma: PrismaService, versions: TokenVersionStore, tokens: TokenService) =>
+        new ScopesService(prisma.db as never, versions, tokens),
+      inject: [PrismaService, TOKEN_VERSIONS, TokenService],
     },
     {
       provide: EffectiveService,

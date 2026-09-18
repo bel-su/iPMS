@@ -3,6 +3,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 // the `output` comment in prisma/schema.prisma.
 import type { PrismaClient } from '.prisma-client-iam';
 import type { LoginDto, TokenPair } from '@ipms/contracts';
+import { resolvePermissions, type AuthzOverride } from '@ipms/authz';
 import { PasswordService } from './password.service.js';
 import { TokenService } from './token.service.js';
 
@@ -30,6 +31,21 @@ interface RoleAssignment {
   validFrom: Date | null;
   validUntil: Date | null;
 }
+
+interface OverrideRow {
+  permission: { code: string };
+  effect: string;
+  projectId: string | null;
+  siteId: string | null;
+  validFrom: Date | null;
+  validUntil: Date | null;
+}
+
+/** Loaded on both login and refresh, because both mint a `permissions` claim. */
+const USER_INCLUDE = {
+  roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
+  overrides: { include: { permission: true } },
+} as const;
 
 @Injectable()
 export class AuthService {
@@ -62,10 +78,47 @@ export class AuthService {
     return true;
   }
 
+  /**
+   * The `roles` and `permissions` claims for a user, with global overrides
+   * already applied.
+   *
+   * Deriving the permission claim from role assignments alone is what made a
+   * DENY override cosmetic — the row existed, the audit event fired, both read
+   * endpoints reported the suspension, and the token still carried the
+   * permission. `resolvePermissions` is shared with `EffectiveService.forUser`
+   * so the claim and the report cannot disagree; it also drops project- and
+   * site-scoped overrides, which cannot live in a claim that carries no
+   * resource (`AuthzGuard`'s `OVERRIDE_PROVIDER` applies those).
+   *
+   * A change to an override therefore has to bump `tokenVersion` to take effect
+   * inside the access token's TTL — `ScopesService` does that in the same
+   * transaction as the override write.
+   */
+  private claimsFor(
+    user: { roles: unknown; overrides?: unknown },
+    now: Date,
+  ): { roles: string[]; permissions: string[] } {
+    const live = (user.roles as RoleAssignment[]).filter((a) => this.isLive(a, now));
+    const rolePermissions = live.flatMap((a) => a.role.permissions.map((rp) => rp.permission.code));
+    const overrides: AuthzOverride[] = ((user.overrides ?? []) as OverrideRow[]).map((o) => ({
+      permission: o.permission.code,
+      effect: o.effect === 'DENY' ? 'DENY' : 'ALLOW',
+      projectId: o.projectId,
+      siteId: o.siteId,
+      validFrom: o.validFrom,
+      validUntil: o.validUntil,
+    }));
+
+    return {
+      roles: [...new Set(live.map((a) => a.role.code))],
+      permissions: resolvePermissions(rolePermissions, overrides, now),
+    };
+  }
+
   async login(dto: LoginDto): Promise<TokenPair> {
     const user = await this.prisma.user.findUnique({
       where: { username: dto.username },
-      include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } },
+      include: USER_INCLUDE,
     });
 
     // Hash a dummy value when the user is missing so response timing does not leak existence.
@@ -79,9 +132,7 @@ export class AuthService {
     if (!user.isActive) throw new UnauthorizedException(GENERIC_FAILURE);
 
     const now = new Date();
-    const live = (user.roles as unknown as RoleAssignment[]).filter((a) => this.isLive(a, now));
-    const roles = [...new Set(live.map((a) => a.role.code))];
-    const permissions = [...new Set(live.flatMap((a) => a.role.permissions.map((rp) => rp.permission.code)))];
+    const { roles, permissions } = this.claimsFor(user as never, now);
 
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: now } });
     return this.issue(user, roles, permissions);
@@ -100,7 +151,7 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } },
+      include: USER_INCLUDE,
     });
     if (!user || !user.isActive) throw new UnauthorizedException('Invalid refresh token');
 
@@ -108,12 +159,8 @@ export class AuthService {
     if (user.tokenVersion !== payload.tokenVersion) throw new UnauthorizedException('Session revoked');
 
     const now = new Date();
-    const live = (user.roles as unknown as RoleAssignment[]).filter((a) => this.isLive(a, now));
-    return this.issue(
-      user,
-      [...new Set(live.map((a) => a.role.code))],
-      [...new Set(live.flatMap((a) => a.role.permissions.map((rp) => rp.permission.code)))],
-    );
+    const { roles, permissions } = this.claimsFor(user as never, now);
+    return this.issue(user, roles, permissions);
   }
 
   /**

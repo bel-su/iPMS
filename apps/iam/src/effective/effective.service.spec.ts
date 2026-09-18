@@ -69,6 +69,64 @@ describe('EffectiveService.forUser', () => {
   });
 });
 
+/**
+ * This screen is what an operator reads to confirm a suspension took effect, so
+ * it must not give a different answer from `POST /access/check` or from the
+ * guard. `forUser` resolved conflicting overrides last-one-wins: with an ALLOW
+ * and a DENY on one code it reported whichever row Prisma returned last, so the
+ * same user was `granted: true` here and `DENIED_BY_OVERRIDE` there. No existing
+ * test supplied both rows, which is how it survived. Both now route through
+ * `resolvePermissions`, whose DENY pass runs second and unconditionally.
+ */
+describe('EffectiveService.forUser — conflicting overrides', () => {
+  const allow = {
+    permission: { code: 'qc_review.approve' }, effect: 'ALLOW',
+    projectId: null, siteId: null, validFrom: null, validUntil: null, reason: 'cover',
+  };
+  const deny = {
+    permission: { code: 'qc_review.approve' }, effect: 'DENY',
+    projectId: null, siteId: null, validFrom: null, validUntil: null, reason: 'suspended pending review',
+  };
+
+  it('reports DENY over ALLOW when the DENY row sorts first', async () => {
+    const { service } = build([deny, allow]);
+    expect((await service.forUser(USER)).find((p) => p.code === 'qc_review.approve')).toMatchObject({
+      granted: false, source: 'OVERRIDE_DENY',
+    });
+  });
+
+  it('reports DENY over ALLOW when the ALLOW row sorts last', async () => {
+    const { service } = build([allow, deny]);
+    expect((await service.forUser(USER)).find((p) => p.code === 'qc_review.approve')).toMatchObject({
+      granted: false, source: 'OVERRIDE_DENY',
+    });
+  });
+
+  it('reports a global DENY over a project ALLOW, agreeing with POST /access/check', async () => {
+    const overrides = [{ ...allow, projectId: 'p-1' }, deny];
+    const { service } = build(overrides);
+
+    const reported = (await service.forUser(USER)).find((p) => p.code === 'qc_review.approve');
+    const simulated = await service.simulate({ userId: USER, permissionCode: 'qc_review.approve' });
+
+    expect(reported).toMatchObject({ granted: false, source: 'OVERRIDE_DENY' });
+    expect(simulated.reason).toBe('DENIED_BY_OVERRIDE');
+  });
+
+  it('lets a global DENY strip a role-granted permission', async () => {
+    const { service } = build([{ ...deny, permission: { code: 'task.update' } }]);
+    expect((await service.forUser(USER)).find((p) => p.code === 'task.update')).toMatchObject({
+      granted: false, source: 'OVERRIDE_DENY',
+    });
+  });
+
+  it('carries the DENY reason as the source detail, not the ALLOW reason', async () => {
+    const { service } = build([allow, deny]);
+    expect((await service.forUser(USER)).find((p) => p.code === 'qc_review.approve')?.sourceDetail)
+      .toBe('suspended pending review');
+  });
+});
+
 describe('EffectiveService.simulate', () => {
   it('grants when the user holds the permission', async () => {
     const { service } = build();
@@ -106,5 +164,58 @@ describe('EffectiveService.simulate', () => {
     }]);
     const result = await service.simulate({ userId: USER, permissionCode: 'task.update' });
     expect(result.reason).toBe('DENIED_BY_OVERRIDE');
+  });
+});
+
+/**
+ * `simulate` accepted `resourceType`/`resourceId` and silently discarded them,
+ * then answered the unscoped question instead — reporting `allowed: true` for a
+ * resource a real request would refuse with `OUT_OF_PROJECT_SCOPE`, because
+ * project scope, assignment and resource state all live with the owning
+ * service. Answering a narrower question with a broader, permissive result is
+ * worse than refusing to answer.
+ */
+describe('EffectiveService.simulate — resource-scoped requests', () => {
+  it('does not report a resource-scoped check as allowed', async () => {
+    const { service } = build();
+    const result = await service.simulate({
+      userId: USER, permissionCode: 'task.view', resourceType: 'Task', resourceId: uuidv7(),
+    });
+    expect(result.allowed).toBe(false);
+  });
+
+  it('names the resource as the part it could not evaluate', async () => {
+    const { service } = build();
+    const result = await service.simulate({
+      userId: USER, permissionCode: 'task.view', resourceType: 'Task', resourceId: uuidv7(),
+    });
+    expect(result.reason).toBe('RESOURCE_NOT_EVALUATED');
+    const last = result.checks.at(-1);
+    expect(last?.passed).toBe(false);
+    expect(last?.detail).toMatch(/owning service/i);
+  });
+
+  it('still returns the identity and permission chain it could evaluate', async () => {
+    const { service } = build();
+    const result = await service.simulate({
+      userId: USER, permissionCode: 'task.view', resourceType: 'Task', resourceId: uuidv7(),
+    });
+    expect(result.checks.map((c) => c.name)).toContain('permission_held');
+  });
+
+  it('reports a failure that precedes the resource, rather than the resource gap', async () => {
+    const { service } = build();
+    const result = await service.simulate({
+      userId: USER, permissionCode: 'task.delete', resourceType: 'Task', resourceId: uuidv7(),
+    });
+    expect(result.reason).toBe('PERMISSION_MISSING');
+  });
+
+  it('answers a request with a resourceType but no resourceId normally', async () => {
+    const { service } = build();
+    const result = await service.simulate({
+      userId: USER, permissionCode: 'task.view', resourceType: 'Task',
+    });
+    expect(result.allowed).toBe(true);
   });
 });

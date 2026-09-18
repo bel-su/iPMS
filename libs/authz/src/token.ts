@@ -24,6 +24,48 @@ export interface TokenClaims {
   tokenVersion: number;
 }
 
+/** The browser's access-token cookie. Flutter and service callers use the Authorization header. */
+export const ACCESS_COOKIE = 'ipms_access';
+
+export interface HeaderCarrier {
+  headers: Record<string, string | string[] | undefined>;
+}
+
+function firstValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+/**
+ * Header first (mobile and service-to-service callers), then the `ipms_access`
+ * cookie (browser). One token format either way.
+ *
+ * Reads the raw `Cookie` header rather than a parsed `request.cookies`, so it
+ * works in a service that has not registered a cookie plugin — the gateway has
+ * `@fastify/cookie`, the individual services do not. It must stay a single
+ * implementation shared with the guards: if the gateway and a service
+ * disagreed about where a token may come from, a token the gateway rejects
+ * could still be accepted by a service reached directly.
+ */
+export function extractToken(request: HeaderCarrier): string | undefined {
+  const auth = firstValue(request.headers['authorization']);
+  if (auth?.startsWith('Bearer ')) {
+    const value = auth.slice(7).trim();
+    if (value.length > 0) return value;
+  }
+
+  const cookieHeader = firstValue(request.headers['cookie']);
+  if (!cookieHeader) return undefined;
+
+  for (const part of cookieHeader.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() !== ACCESS_COOKIE) continue;
+    const value = part.slice(eq + 1).trim();
+    return value.length > 0 ? value : undefined;
+  }
+  return undefined;
+}
+
 const b64 = (value: string): string => Buffer.from(value).toString('base64url');
 
 /**

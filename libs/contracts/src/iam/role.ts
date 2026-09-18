@@ -53,5 +53,15 @@ export const GrantScopeSchema = z
   })
   .refine((v) => v.level !== 'SITE' || v.siteId !== undefined, {
     message: 'siteId is required when level is SITE', path: ['siteId'],
+  })
+  /**
+   * A site grant needs its project too. Site scope is nested under project
+   * scope — `revokeProject` cascades by filtering on `projectId`, so a site row
+   * without one is unreachable by that cascade and survives as orphaned access
+   * after the project is revoked. Expressed here rather than as a hand-rolled
+   * check in the controller, so every caller of this schema gets it.
+   */
+  .refine((v) => v.level !== 'SITE' || v.projectId !== undefined, {
+    message: 'projectId is required when level is SITE', path: ['projectId'],
   });
 export type GrantScopeDto = z.infer<typeof GrantScopeSchema>;

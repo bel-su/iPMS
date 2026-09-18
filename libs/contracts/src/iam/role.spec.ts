@@ -91,3 +91,25 @@ describe('AccessCheckSchema', () => {
     expect(parsed).not.toHaveProperty('legacyClientHint');
   });
 });
+
+describe('GrantScopeSchema — site grants carry their project', () => {
+  const site = '018f0000-0000-7000-8000-000000000001';
+  const project = '018f0000-0000-7000-8000-000000000002';
+
+  it('accepts a SITE grant that names its project', () => {
+    expect(GrantScopeSchema.safeParse({ level: 'SITE', siteId: site, projectId: project }).success).toBe(true);
+  });
+
+  /**
+   * Site scope is nested under project scope: `revokeProject` cascades by
+   * filtering on `projectId`, so a site row without one survives the revoke as
+   * orphaned access.
+   */
+  it('rejects a SITE grant with no projectId', () => {
+    expect(GrantScopeSchema.safeParse({ level: 'SITE', siteId: site }).success).toBe(false);
+  });
+
+  it('still accepts a PROJECT grant with no siteId', () => {
+    expect(GrantScopeSchema.safeParse({ level: 'PROJECT', projectId: project }).success).toBe(true);
+  });
+});

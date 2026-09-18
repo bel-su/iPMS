@@ -8,7 +8,7 @@ import {
 // notice (see apps/audit/src/api/audit.controller.ts for the same trap with PrismaClient).
 import { Reflector } from '@nestjs/core';
 import { check } from '../evaluate.js';
-import type { AuthzScope, AuthzUser } from '../types.js';
+import type { AuthzOverride, AuthzScope, AuthzUser } from '../types.js';
 import { PERMISSION_KEY, type PermissionMetadata } from './require-permission.decorator.js';
 
 export interface ScopeProvider {
@@ -17,11 +17,51 @@ export interface ScopeProvider {
 
 export const SCOPE_PROVIDER = Symbol('SCOPE_PROVIDER');
 
+/**
+ * Supplies the user's permission overrides so `check()` can evaluate its DENY
+ * gate against real rows.
+ *
+ * Only *scoped* overrides need to travel this way. Global ones
+ * (`projectId === null && siteId === null`) are already folded into the JWT
+ * `permissions` claim by `resolvePermissions` at token issuance, so a provider
+ * that returns only scoped rows — or none at all, in a service that owns no
+ * project/site resources — enforces global suspensions correctly regardless.
+ */
+export interface OverrideProvider {
+  for(userId: string): Promise<AuthzOverride[]>;
+}
+
+export const OVERRIDE_PROVIDER = Symbol('OVERRIDE_PROVIDER');
+
+/**
+ * The default for a service that cannot yet read override rows.
+ *
+ * This is the *least* permissive option available to such a service, not a
+ * permissive stub: global overrides are resolved into the token claim, so
+ * nothing is silently unenforced by returning `[]` — only project/site-scoped
+ * overrides go unapplied, and a service with no project/site resources never
+ * passes a `resource` to `check()` for one to apply to. Cross-service override
+ * replication over NATS is sub-project 2's work.
+ *
+ * Returning a fabricated ALLOW here, or skipping the seam entirely, would be
+ * the unsafe direction.
+ */
+export const emptyOverrideProvider: OverrideProvider = {
+  async for(): Promise<AuthzOverride[]> {
+    return [];
+  },
+};
+
 @Injectable()
 export class AuthzGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     @Inject(SCOPE_PROVIDER) private readonly scopeProvider: ScopeProvider,
+    // `@Inject` is mandatory, not stylistic: `OverrideProvider` is an interface,
+    // TypeScript erases it, `emitDecoratorMetadata` records `Object`, and Nest
+    // fails at bootstrap on an unresolvable token. See the DI test in
+    // authz.guard.spec.ts — a `new AuthzGuard(...)` unit test cannot catch this.
+    @Inject(OVERRIDE_PROVIDER) private readonly overrideProvider: OverrideProvider,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -35,10 +75,18 @@ export class AuthzGuard implements CanActivate {
     const user = request.user;
     if (!user) throw new UnauthorizedException('Authentication required');
 
+    const [scope, overrides] = await Promise.all([
+      this.scopeProvider.for(user.id),
+      this.overrideProvider.for(user.id),
+    ]);
+
     const decision = check({
       user,
       permission: metadata.permission,
-      scope: await this.scopeProvider.for(user.id),
+      scope,
+      // Without this, `check()`'s DENY gate evaluates against `[]` on every real
+      // request and can never fire — the defect this seam exists to close.
+      overrides,
       ...(metadata.requireAssignment === undefined ? {} : { requireAssignment: metadata.requireAssignment }),
     });
 

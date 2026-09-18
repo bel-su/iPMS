@@ -1,9 +1,9 @@
 import {
-  CanActivate, ExecutionContext, Injectable, SetMetadata, UnauthorizedException,
+  CanActivate, ExecutionContext, Inject, Injectable, SetMetadata, UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { TokenPayload } from '@ipms/contracts';
-import { verifyToken } from '../token.js';
+import { extractToken, verifyToken, type HeaderCarrier } from '../token.js';
 import type { AuthzUser } from '../types.js';
 
 export const IS_PUBLIC_KEY = 'ipms:public';
@@ -11,42 +11,8 @@ export const IS_PUBLIC_KEY = 'ipms:public';
 /** Marks a route (or a whole controller) reachable without a token — health probes, metrics scrapes. */
 export const Public = (): ReturnType<typeof SetMetadata> => SetMetadata(IS_PUBLIC_KEY, true);
 
-const ACCESS_COOKIE = 'ipms_access';
-
-/** Never distinguishes "missing" from "expired" from "bad signature" from "tampered" — see class doc. */
+/** Never distinguishes "missing" from "expired" from "bad signature" from "tampered". */
 const GENERIC_MESSAGE = 'Authentication required';
-
-interface HeaderCarrier {
-  headers: Record<string, string | string[] | undefined>;
-}
-
-function firstValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-/** Header first (mobile / service-to-service callers), then the `ipms_access` cookie (browser). */
-function extractToken(request: HeaderCarrier): string | undefined {
-  const auth = firstValue(request.headers['authorization']);
-  if (auth?.startsWith('Bearer ')) {
-    const value = auth.slice(7).trim();
-    if (value.length > 0) return value;
-  }
-
-  const cookieHeader = firstValue(request.headers['cookie']);
-  if (!cookieHeader) return undefined;
-
-  // Parsed by hand rather than requiring a cookie-parser plugin to be registered
-  // in every service: the raw `Cookie` header is present regardless of whether
-  // one is.
-  for (const part of cookieHeader.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq === -1) continue;
-    if (part.slice(0, eq).trim() !== ACCESS_COOKIE) continue;
-    const value = part.slice(eq + 1).trim();
-    return value.length > 0 ? value : undefined;
-  }
-  return undefined;
-}
 
 function requireSecret(): string {
   const secret = process.env['JWT_SECRET'];
@@ -78,7 +44,11 @@ function requireSecret(): string {
 export class JwtUserGuard implements CanActivate {
   private readonly secret = requireSecret();
 
-  constructor(private readonly reflector: Reflector) {}
+  // @Inject is explicit rather than reflected: esbuild does not implement
+  // `emitDecoratorMetadata` (it has no whole-program type information), so
+  // under any esbuild-based runner or bundler a reflected `Reflector` arrives
+  // as `undefined` and every guarded request 500s.
+  constructor(@Inject(Reflector) private readonly reflector: Reflector) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [

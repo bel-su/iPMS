@@ -2,7 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 // This app's own generated client, not the shared @prisma/client package — see
 // the `output` comment in prisma/schema.prisma.
 import type { PrismaClient } from '.prisma-client-iam';
-import { check, type AuthzOverride, type AuthzScope, type AuthzUser } from '@ipms/authz';
+import {
+  check, resolvePermissions, type AuthzOverride, type AuthzScope, type AuthzUser,
+} from '@ipms/authz';
 import type { AccessCheckDto, AccessCheckResult, EffectivePermission } from '@ipms/contracts';
 
 interface LoadedUser {
@@ -78,7 +80,21 @@ export class EffectiveService {
       }));
   }
 
-  /** Every effective permission with the source that produced it. */
+  /**
+   * Every effective permission with the source that produced it.
+   *
+   * An operator reads this to confirm a suspension took effect, so it must
+   * never disagree with `simulate` or with the guard. It resolved conflicting
+   * overrides last-one-wins, which meant an ALLOW and a DENY on one code
+   * produced whichever row the database happened to return last — reported
+   * `granted: true` here while `POST /access/check` said `DENIED_BY_OVERRIDE`.
+   *
+   * Global overrides are now resolved by `resolvePermissions`, the same
+   * function that builds the JWT `permissions` claim, so the report, the token
+   * and `check()` all apply DENY last and unconditionally. Attribution follows
+   * the same rule: a live DENY is the reported source even when an ALLOW exists
+   * for the same code.
+   */
   async forUser(userId: string): Promise<EffectivePermission[]> {
     const now = new Date();
     const user = await this.load(userId);
@@ -88,8 +104,10 @@ export class EffectiveService {
     const result = new Map<string, EffectivePermission>();
 
     const liveRoles = user.roles.filter((a) => a.role.isActive && isLive(a.validFrom, a.validUntil, now));
+    const rolePermissions: string[] = [];
     for (const assignment of liveRoles) {
       for (const rp of assignment.role.permissions) {
+        rolePermissions.push(rp.permission.code);
         result.set(rp.permission.code, {
           code: rp.permission.code, granted: true, source: 'ROLE',
           sourceDetail: assignment.role.code, scopeLevel,
@@ -97,14 +115,48 @@ export class EffectiveService {
       }
     }
 
-    for (const o of user.overrides) {
-      if (!isLive(o.validFrom, o.validUntil, now)) continue;
-      result.set(o.permission.code, {
-        code: o.permission.code,
-        granted: o.effect === 'ALLOW',
-        source: o.effect === 'ALLOW' ? 'OVERRIDE_ALLOW' : 'OVERRIDE_DENY',
-        sourceDetail: o.reason,
-        scopeLevel: o.siteId ? 'SITE' : o.projectId ? 'PROJECT' : scopeLevel,
+    const liveOverrides = user.overrides.filter((o) => isLive(o.validFrom, o.validUntil, now));
+    const globals = liveOverrides.filter((o) => o.projectId === null && o.siteId === null);
+    const scoped = liveOverrides.filter((o) => o.projectId !== null || o.siteId !== null);
+
+    const granted = new Set(resolvePermissions(rolePermissions, this.toOverrides(user, now), now));
+
+    for (const code of new Set(globals.map((o) => o.permission.code))) {
+      // Deny-first attribution: a DENY is what an operator needs to see, and its
+      // `reason` is the text explaining the suspension.
+      const rows = globals.filter((o) => o.permission.code === code);
+      const chosen = rows.find((o) => o.effect === 'DENY') ?? rows[0]!;
+      result.set(code, {
+        code,
+        granted: granted.has(code),
+        source: chosen.effect === 'DENY' ? 'OVERRIDE_DENY' : 'OVERRIDE_ALLOW',
+        sourceDetail: chosen.reason,
+        scopeLevel,
+      });
+    }
+
+    /**
+     * Project- and site-scoped overrides cannot be folded into a flat list of
+     * codes — the answer depends on which resource is being acted on, and this
+     * endpoint names no resource. They are reported, deny-first, at the scope
+     * level they apply to, and only where no global override for the code has
+     * already settled the question (a global DENY outranks a project ALLOW,
+     * which is the case that produced the unsafe `granted: true`). A scoped
+     * row's `granted` is therefore scope-local, not a platform-wide answer;
+     * the resource-level answer comes from the owning service's
+     * `/internal/authz/explain` (sub-project 2).
+     */
+    const settledGlobally = new Set(globals.map((o) => o.permission.code));
+    for (const code of new Set(scoped.map((o) => o.permission.code))) {
+      if (settledGlobally.has(code)) continue;
+      const rows = scoped.filter((o) => o.permission.code === code);
+      const chosen = rows.find((o) => o.effect === 'DENY') ?? rows[0]!;
+      result.set(code, {
+        code,
+        granted: chosen.effect === 'ALLOW',
+        source: chosen.effect === 'DENY' ? 'OVERRIDE_DENY' : 'OVERRIDE_ALLOW',
+        sourceDetail: chosen.reason,
+        scopeLevel: chosen.siteId ? 'SITE' : 'PROJECT',
       });
     }
 
@@ -114,6 +166,26 @@ export class EffectiveService {
   /**
    * Runs the real authorization path. This calls the same `check` used by every
    * guard, so the simulator cannot drift from actual enforcement.
+   *
+   * **Resource-scoped checks are not answered here, by design.** `check()`'s
+   * last four gates — project scope, site scope, assignment and resource state
+   * — need the resource itself, and every resource in this platform is owned by
+   * another service (`project`, `qc`, `task`); iam holds no copy of one. The DTO
+   * has always accepted `resourceType`/`resourceId` and this method used to
+   * discard them and answer the *unscoped* question instead, which reported
+   * `allowed: true` for a resource a real request would refuse with
+   * `OUT_OF_PROJECT_SCOPE`. A permissive answer to a question that was not
+   * asked is the worst of the three options; refusing to answer that part is
+   * the least bad one until the real path exists.
+   *
+   * **Extension point (sub-project 2):** the owning service exposes
+   * `POST /internal/authz/explain`, which loads the resource and runs this same
+   * `check()` with it. Replace the `RESOURCE_NOT_EVALUATED` branch below with a
+   * call to that endpoint — routed by `resourceType` — and return its decision
+   * chain. Nothing else in this method changes: the simulator must keep calling
+   * the shared `check()` rather than reimplementing any gate, which is the
+   * whole reason it cannot drift from enforcement (§6 of the architecture
+   * design).
    */
   async simulate(dto: AccessCheckDto): Promise<AccessCheckResult> {
     const now = new Date();
@@ -126,6 +198,26 @@ export class EffectiveService {
       overrides: this.toOverrides(user, now),
       now,
     });
+
+    // A denial that precedes the resource gates is a complete answer already —
+    // an inactive account or a missing permission denies the resource-scoped
+    // request too. Only an otherwise-allowed check is left undecided.
+    if (dto.resourceId !== undefined && decision.allowed) {
+      return {
+        allowed: false,
+        reason: 'RESOURCE_NOT_EVALUATED',
+        checks: [
+          ...decision.checks,
+          {
+            name: 'resource_scope',
+            passed: false,
+            detail: `Project scope, assignment and resource state for ${dto.resourceType ?? 'this resource'} `
+              + `${dto.resourceId} are held by the owning service and were not evaluated. `
+              + 'The identity and permission checks above passed.',
+          },
+        ],
+      };
+    }
 
     return { allowed: decision.allowed, reason: decision.reason, checks: decision.checks };
   }

@@ -1,12 +1,10 @@
 import type {
   AuthzCheck, AuthzDecision, AuthzOverride, AuthzReason, AuthzRequest, AuthzResource,
 } from './types.js';
-
-function withinValidity(o: AuthzOverride, now: Date): boolean {
-  if (o.validFrom && now < o.validFrom) return false;
-  if (o.validUntil && now > o.validUntil) return false;
-  return true;
-}
+// One validity predicate, shared with `resolvePermissions`. Two copies drifted
+// once already: the token claim and this function disagreeing about whether an
+// override is still in force is the whole class of bug this import removes.
+import { withinValidity } from './permission-resolution.js';
 
 /** An override with a project or site applies only to a resource in that project or site. */
 function appliesToResource(o: AuthzOverride, resource: AuthzResource | undefined): boolean {

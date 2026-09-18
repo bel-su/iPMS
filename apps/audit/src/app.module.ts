@@ -7,7 +7,10 @@ import { PrismaClient } from '.prisma-client-audit';
 import { Redis } from 'ioredis';
 import { EventBus, RedisDedupeStore } from '@ipms/events';
 import { HealthController, MetricsController, registerReadinessCheck } from '@ipms/observability';
-import { AuthzGuard, JwtUserGuard, SCOPE_PROVIDER, type AuthzScope, type ScopeProvider } from '@ipms/authz';
+import {
+  AuthzGuard, JwtUserGuard, OVERRIDE_PROVIDER, SCOPE_PROVIDER, emptyOverrideProvider,
+  type AuthzScope, type ScopeProvider,
+} from '@ipms/authz';
 import { PrismaService } from './prisma.service.js';
 import { ChainService } from './chain/chain.service.js';
 import { AuditConsumer } from './ingest/audit.consumer.js';
@@ -43,6 +46,24 @@ const auditScopeProvider: ScopeProvider = {
     { provide: APP_GUARD, useClass: JwtUserGuard },
     { provide: APP_GUARD, useClass: AuthzGuard },
     { provide: SCOPE_PROVIDER, useValue: auditScopeProvider },
+    /**
+     * `AuthzGuard` now passes overrides to `check()`, so every service must
+     * provide this token or fail at bootstrap.
+     *
+     * audit returns none, and that is the *least* permissive option available
+     * to it rather than a gap. Global overrides (`projectId` and `siteId` both
+     * null) are already resolved into the JWT `permissions` claim at issuance
+     * by `resolvePermissions`, so a DENY suspension is enforced here through
+     * the claim whatever this provider returns — nothing is silently
+     * unenforced. What is left out is only project- and site-scoped overrides,
+     * and `AuditController`'s routes pass no `resource` for one to apply to.
+     *
+     * Reading them properly means replicating override rows from iam over NATS,
+     * which is sub-project 2's work; iam owns the table and audit has no
+     * database access to it. When that lands, replace this with a provider over
+     * the local projection.
+     */
+    { provide: OVERRIDE_PROVIDER, useValue: emptyOverrideProvider },
     PrismaService,
     {
       // ChainService and AuditController take a bare PrismaClient (see Task 13);
