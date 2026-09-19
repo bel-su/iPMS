@@ -47,7 +47,9 @@ leave `NOT_STARTED` by any means other than a direct write.
 **In:** the `project` service, complete — regions, sites, task types with dependencies
 and variant-resolved templates, milestones and requirements, tasks, bulk generation,
 the `SiteMilestone` lifecycle, the replicated scope projection, the QC submission
-consumer, audit emission, and `/internal/authz/explain`.
+consumer, audit emission, and `/internal/authz/explain`. Plus two corrections to
+sub-project 1 that `project` is the first service to need: global scope as a real grant
+in `iam` (§4.3) and the `scopeWhere` alternation fix in `@ipms/authz` (§4.2).
 
 **Out:** `qc`, `media`, `notification`, `docs`, `docs-web`, `mobile`, and the web
 console. The QC *event contract* is declared here (§5.2) because `project` consumes it;
@@ -65,7 +67,9 @@ the QC *service* is sub-project 3.
 | P4 | Dependency blocking is computed, and refuses the `NOT_STARTED → ONGOING` transition | Consistent with D10 — nothing stored, nothing to drift — while still letting a PM pre-assign blocked work |
 | P5 | Declare `qc.submission.*` now and build the consumer now | The producer in sub-project 3 then meets a contract its consumer has already proven, exactly as the foundation pre-declared `project-scope-cache` |
 | P6 | `qc` is quarantined from the gateway and Compose until sub-project 3 | It exposes unfiltered queries; leaving it routed ships a known authorization hole |
-| P7 | The partial unique constraint on planned tasks lives in the database | The spike enforces it with a read-then-write in application code, which two concurrent bulk generations race through |
+| P7 | Writes rely on the existing partial unique index rather than a pre-read | The index is already correct; the spike's read-then-write turns a lost race into an unhandled `P2002` and a `500` |
+| P8 | Global scope becomes a first-class grant in `iam` | Nothing sets `AuthzScope.global` today; the first service to enforce scope at query level locks out `SUPER_ADMIN`. The `IamScopeGranted` payload already declares `level: 'GLOBAL'` — only the producer is missing |
+| P9 | The projection is fed by `iam.scope.*` only, not by role events | `iam`'s authoritative `toScope()` reads the scope tables alone. A scoped role assignment changes *permissions*, which travel in the JWT; mirroring it into scope would invent authority `iam` does not grant |
 
 ---
 
@@ -118,17 +122,23 @@ written only by the event consumer (§5.1) and never by a request handler.
 
 ### 3.2 Corrections to the spike's schema
 
-**The planned-task uniqueness constraint moves into the database.** §7.1 specifies
-`UNIQUE(site_id, task_type_id) WHERE origin = 'PLANNED'`. The spike checks for an
-existing row and then inserts, which two concurrent bulk generations interleave
-through, producing duplicate planned tasks. Prisma cannot express a partial unique
-index, so it is added as raw SQL in the migration:
+**The planned-task constraint already exists; the writes must start trusting it.**
+`20260918000100_init_project/migration.sql` already creates exactly what §7.1
+specifies, and declares no competing `@@unique` in `schema.prisma`:
 
 ```sql
-CREATE UNIQUE INDEX task_planned_site_type_uniq
-  ON task (site_id, task_type_id)
-  WHERE origin = 'PLANNED';
+CREATE UNIQUE INDEX "planned_task_per_site_type"
+  ON "task" ("siteId", "taskTypeId") WHERE "origin" = 'PLANNED';
 ```
+
+So duplicate planned tasks cannot be written — that part of the spike is right. The
+defect is in how the service writes. `createTask` checks for an existing row and then
+inserts, so two concurrent bulk generations both pass the check, one loses the insert,
+and Prisma's `P2002` propagates unhandled as a `500`. Every planned-task write in this
+sub-project inserts against the index instead: `ON CONFLICT DO NOTHING` for generation,
+where a collision means "already generated", and a caught `P2002` mapped to `409` for
+a single explicit create, where a collision means the caller asked for something that
+exists.
 
 **Task status becomes a constrained vocabulary.** `NOT_STARTED`, `ONGOING`,
 `REVIEWING`, `COMPLETED`, `RECTIFYING`, `CANCELLED` — a database `CHECK`, so an event
@@ -191,7 +201,41 @@ This is corrected in `@ipms/authz` as part of this sub-project, to an OR of the 
 grants, with a regression test. It is in scope because `project` is the first service
 whose users hold both grant levels at once — `iam` and `audit` never exercised it.
 
-### 4.3 The access simulator
+### 4.3 Global scope, which does not exist yet
+
+`AuthzScope.global` is never set `true` anywhere in the platform.
+`EffectiveService.toScope()` hardcodes `global: false`, there is no table that grants
+global reach, and the seed creates no scope rows for the `admin` account. Nothing has
+noticed because no service enforces scope at query level — `project` is the first.
+
+Left alone, the first correct `scopeWhere` call locks the `SUPER_ADMIN` out of the
+system it administers, which would read as a bug in this sub-project and be "fixed"
+with a permissive default.
+
+`iam` therefore gains global scope as a first-class grant:
+
+```
+UserGlobalScope   id · user_id · created_by · created_at
+                  UNIQUE (user_id)
+```
+
+Granted to the seeded `admin`, emitted as `iam.scope.granted` with `level: 'GLOBAL'`
+and revoked as `iam.scope.revoked` — a level the `IamScopeGranted` payload already
+declares, so only the producer was missing. `toScope()` becomes
+`global: user.globalScopes.length > 0`, and `project`'s projection maps a `GLOBAL` row
+to `AuthzScope.global`.
+
+This is the one place sub-project 2 reaches back into sub-project 1. It is the right
+place: the alternative — deriving global reach from a role code or a permission — puts
+scope back into the token, which §6 of the parent spec exists to prevent.
+
+The comment in `apps/iam/src/app.module.ts` instructing a later reader not to "fix"
+`iamScopeProvider` into `global: true` stays true and stays in place. `iam`'s own
+controllers still pass no resource to `check()`, so its scope provider is still never
+read; granting global scope in the *tables* is a different thing from fabricating it in
+the *provider*.
+
+### 4.4 The access simulator
 
 `POST /internal/authz/explain` accepts a user id, a permission, and an optional
 resource id. It loads the resource, loads the caller's projected scope, and calls the
@@ -209,12 +253,19 @@ table refuses any path containing `/internal/`.
 |---|---|---|
 | `iam.scope.granted` | `project-scope-cache` | Upsert a `UserScope` row |
 | `iam.scope.revoked` | `project-scope-cache` | Delete the matching `UserScope` row |
-| `iam.role.assigned` | `project-scope-cache` | Upsert the scope implied by a scoped role assignment |
-| `iam.role.removed` | `project-scope-cache` | Delete the rows the assignment implied |
 | `iam.user.deactivated` | `project-scope-cache` | Delete every `UserScope` row for that user |
 | `qc.submission.submitted` | `project-qc-tasks` | Task → `REVIEWING`, record `current_submission_id` |
 | `qc.submission.approved` | `project-qc-tasks` | Task → `COMPLETED`, set `actual_completion_at`, recompute the site's milestones |
 | `qc.submission.rejected` | `project-qc-tasks` | Task → `RECTIFYING` |
+
+**Role events are deliberately absent.** `STREAMS.IAM` lists them, and §6 of the parent
+spec names them as scope-replication events, but `iam`'s authoritative
+`EffectiveService.toScope()` derives scope from `UserProjectScope` and `UserSiteScope`
+alone — a scoped `UserRole` contributes nothing to it. Consuming `iam.role.assigned`
+into the projection would therefore grant reach `iam` itself does not recognise, and
+the two would disagree about the same user. What a role assignment does change is the
+*permission* set, which travels in the JWT and is already handled by token re-issue.
+`project` subscribes to the three subjects above and no others.
 
 Every handler is idempotent on `eventId` through the existing `RedisDedupeStore`, and
 every handler is a no-op when the task it names is already in the target state — a
@@ -420,6 +471,7 @@ Small, and all of it blocking a green build or closing a known hole.
 - [ ] Project milestone progress is computed, with no stored percentage anywhere
 - [ ] An emptied projection denies every non-global user, then rebuilds on restart
 - [ ] Duplicate scope grants are rejected at every level, and the three levels coexist
+- [ ] A `SUPER_ADMIN` holding a global grant sees every project; revoking it takes effect
 - [ ] Every mutation appears in the audit ledger and the chain verifies
 - [ ] The access simulator's verdict matches real enforcement, with its check chain
 - [ ] `qc` is unreachable through the gateway until sub-project 3
