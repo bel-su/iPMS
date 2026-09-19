@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma-clients/project"
+}
+datasource db {
+  provider = "postgresql"
+}
+
+model Project {
+  id String @id @db.Uuid
+  code String @unique @db.VarChar(50)
+  name String @db.VarChar(200)
+  clientName String? @map("client_name") @db.VarChar(200)
+  phase String? @db.VarChar(100)
+  status String @default("DRAFT") @db.VarChar(30)
+  startDate DateTime? @db.Date
+  targetDate DateTime? @db.Date
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  regions Region[]
+  sites Site[]
+  taskTypes TaskType[]
+  milestones Milestone[]
+  tasks Task[]
+  @@map("project")
+}
+model Region {
+  id String @id @db.Uuid
+  projectId String @db.Uuid
+  name String @db.VarChar(150)
+  project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
+  sites Site[]
+  @@unique([projectId,name])
+  @@map("region")
+}
+model Site {
+  id String @id @db.Uuid
+  projectId String @db.Uuid
+  regionId String? @db.Uuid
+  siteCode String @db.VarChar(50)
+  name String @db.VarChar(200)
+  latitude Decimal? @db.Decimal(10,7)
+  longitude Decimal? @db.Decimal(10,7)
+  geofenceRadiusM Int @default(100)
+  address String? @db.VarChar(500)
+  city String? @db.VarChar(100)
+  area String? @db.VarChar(100)
+  scopeVariant String? @db.VarChar(100)
+  status String @default("PLANNED") @db.VarChar(30)
+  project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
+  region Region? @relation(fields:[regionId],references:[id],onDelete:SetNull)
+  tasks Task[]
+  @@unique([projectId,siteCode])
+  @@map("site")
+}
+model TaskType {
+  id String @id @db.Uuid
+  projectId String @db.Uuid
+  code String @db.VarChar(50)
+  name String @db.VarChar(200)
+  category String @db.VarChar(100)
+  templateId String? @db.Uuid
+  order Int @default(0)
+  isActive Boolean @default(true)
+  project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
+  tasks Task[]
+  requirements MilestoneRequirement[]
+  @@unique([projectId,code])
+  @@map("task_type")
+}
+model Milestone {
+  id String @id @db.Uuid
+  projectId String @db.Uuid
+  code String @db.VarChar(50)
+  name String @db.VarChar(200)
+  kind String @db.VarChar(20)
+  sequence Int
+  targetDate DateTime? @db.Date
+  project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
+  requirements MilestoneRequirement[]
+  @@unique([projectId,code])
+  @@map("milestone")
+}
+model MilestoneRequirement {
+  milestoneId String @db.Uuid
+  taskTypeId String @db.Uuid
+  milestone Milestone @relation(fields:[milestoneId],references:[id],onDelete:Cascade)
+  taskType TaskType @relation(fields:[taskTypeId],references:[id],onDelete:Cascade)
+  @@id([milestoneId,taskTypeId])
+  @@map("milestone_requirement")
+}
+model Task {
+  id String @id @db.Uuid
+  projectId String @db.Uuid
+  siteId String @db.Uuid
+  taskTypeId String @db.Uuid
+  templateId String? @db.Uuid
+  title String @db.VarChar(250)
+  status String @default("NOT_STARTED") @db.VarChar(30)
+  assigneeId String? @db.Uuid
+  plannedCompletionAt DateTime? @db.Timestamptz(6)
+  actualCompletionAt DateTime? @db.Timestamptz(6)
+  currentSubmissionId String? @db.Uuid
+  origin String @db.VarChar(20)
+  createdBy String @db.Uuid
+  project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
+  site Site @relation(fields:[siteId],references:[id],onDelete:Cascade)
+  taskType TaskType @relation(fields:[taskTypeId],references:[id],onDelete:Restrict)
+  @@index([projectId,status])
+  @@index([siteId])
+  @@map("task")
+}

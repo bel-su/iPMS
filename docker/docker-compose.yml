@@ -95,6 +95,28 @@ services:
       retries: 5
       start_period: 20s
 
+  project:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      args: { SERVICE: project }
+    environment:
+      <<: *service-env
+      PORT: 3004
+      PROJECT_DATABASE_URL: postgresql://ipms_project:ipms_project@postgres:5432/ipms_project
+
+  qc:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      args: { SERVICE: qc }
+    environment:
+      <<: *service-env
+      PORT: 3005
+      QC_DATABASE_URL: postgresql://ipms_qc:ipms_qc@postgres:5432/ipms_qc
+
   gateway:
     <<: *service-defaults
     build:
@@ -111,6 +133,8 @@ services:
     depends_on:
       iam:   { condition: service_healthy }
       audit: { condition: service_healthy }
+      project: { condition: service_started }
+      qc: { condition: service_started }
 
 volumes:
   postgres-data:

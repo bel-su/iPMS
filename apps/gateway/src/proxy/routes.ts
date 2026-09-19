@@ -24,6 +24,8 @@ function upstreamPort(service: string, fallbackPort: number): number {
 
 const IAM = { host: upstreamHost('iam', 'iam'), port: upstreamPort('iam', 3001) };
 const AUDIT = { host: upstreamHost('audit', 'audit'), port: upstreamPort('audit', 3003) };
+const PROJECT = { host: upstreamHost('project', 'project'), port: upstreamPort('project', 3004) };
+const QC = { host: upstreamHost('qc', 'qc'), port: upstreamPort('qc', 3005) };
 
 /**
  * Only paths listed here are reachable. Anything else 404s at the edge, which
@@ -36,6 +38,10 @@ export const ROUTES: Upstream[] = [
   { prefix: '/api/v1/users', service: 'iam', ...IAM },
   { prefix: '/api/v1/access', service: 'iam', ...IAM },
   { prefix: '/api/v1/audit', service: 'audit', ...AUDIT },
+  { prefix: '/api/v1/dashboard', service: 'project', ...PROJECT },
+  { prefix: '/api/v1/projects', service: 'project', ...PROJECT },
+  { prefix: '/api/v1/tasks', service: 'project', ...PROJECT },
+  { prefix: '/api/v1/qc', service: 'qc', ...QC },
 ];
 
 /**
