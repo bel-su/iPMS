@@ -3238,7 +3238,8 @@ Expected: PASS, 6 tests.
 
 Create `apps/project/src/task-types/task-type.service.integration.spec.ts`, opening with
 the six-line harness preamble from Task 5 Step 6 and
-`const service = new TaskTypeService(h.prisma, new OutboxWriter())`:
+`const service = new TaskTypeService(h.prisma)`. Task 15 adds the outbox
+parameter and updates this line with it:
 
 ```ts
 describe('dependencies', () => {
@@ -4691,7 +4692,8 @@ export class MilestoneService {
 
 Create `apps/project/src/milestones/milestone.service.integration.spec.ts` with the
 harness preamble from Task 5 Step 6 and
-`const service = new MilestoneService(h.prisma, new OutboxWriter())`:
+`const service = new MilestoneService(h.prisma)`. Task 15 adds the outbox
+parameter and updates this line with it:
 
 ```ts
 async function completeAll(siteId: string): Promise<void> {
