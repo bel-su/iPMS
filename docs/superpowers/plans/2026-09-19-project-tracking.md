@@ -73,6 +73,7 @@ Created or modified across the plan. Each file has one responsibility.
 - Create `scope/scope.provider.ts` — reads the projection for `AuthzGuard` (Task 7)
 - Create `scope/scope.consumer.ts` — `iam.scope.*` handlers (Task 7)
 - Create `scope/replay.ts` — cold-start durable recreation (Task 8)
+- Create `scope/project-scope.ts` — the one definition of "visible project" (Task 9)
 - Create `http/scope.decorator.ts` — `@ScopeOf()` (Task 9)
 - Rewrite `project/project.service.ts`, `project/project.controller.ts` — projects and sites (Task 9)
 - Create `task-types/graph.ts` — pure cycle detection (Task 10)
@@ -298,7 +299,27 @@ pnpm install
 pnpm nx run-many -t lint typecheck test build
 ```
 
-Expected: every target passes. `qc:test` no longer runs as part of a red build because `qc` keeps its `test` script but has no tests — if it still fails, remove the `test` script from `apps/qc/package.json` and note in that file's `package.json` that sub-project 3 restores it.
+`qc` has no test files and is being quarantined, so its `test` script cannot pass.
+Remove it from `apps/qc/package.json` — Nx then has no `test` target for `qc` at all,
+which is honest. Do not reach for `passWithNoTests`: a green target that ran zero
+assertions is exactly the signal that hides an untested service. Leave a comment in the
+file so sub-project 3 restores it:
+
+```json
+  "scripts": {
+    "_comment": "test script removed while qc is quarantined; sub-project 3 restores it with the rewrite",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "prisma:generate": "prisma generate"
+  },
+```
+
+Then re-run:
+
+```bash
+pnpm nx run-many -t lint typecheck test build
+```
+
+Expected: every target passes.
 
 - [ ] **Step 11: Commit**
 
@@ -2491,6 +2512,7 @@ built that boundary, so any holder of `project.view` lists every project in the 
 **Files:**
 - Modify: `libs/authz/src/nest/authz.guard.ts` — stash the resolved scope on the request
 - Modify: `libs/authz/src/nest/authz.guard.spec.ts`
+- Create: `apps/project/src/scope/project-scope.ts`
 - Create: `apps/project/src/http/scope.decorator.ts`
 - Rewrite: `apps/project/src/project/project.service.ts`
 - Rewrite: `apps/project/src/project/project.controller.ts`
@@ -2750,25 +2772,26 @@ Expected: FAIL — `service.listProjects` takes a scope argument the current imp
 
 - [ ] **Step 7: Write the implementation**
 
-Replace `apps/project/src/project/project.service.ts`:
+First create `apps/project/src/scope/project-scope.ts`. Three services need this
+predicate; it gets one definition. Copies of an authorization rule drift, and the
+failure mode of a drifted copy is that one of them silently stops enforcing:
 
 ```ts
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma-clients/project';
-import { scopeWhere, type AuthzScope } from '@ipms/authz';
-import {
-  uuidv7,
-  type CreateProjectDto, type CreateSiteDto, type UpdateProjectDto,
-} from '@ipms/contracts';
+import type { AuthzScope } from '@ipms/authz';
 
 /**
- * The Project model scopes on its own id, and has no siteId column. A site
- * grant reaches its project through the `sites` relation instead — project and
- * site grants are alternatives, so a user scoped only to a site in project B
- * must still see project B, or that site is unreachable from every list that
- * starts at a project.
+ * The `where` fragment matching projects this caller may see.
+ *
+ * `scopeWhere` does not fit the Project model: Project scopes on its own `id`
+ * and has no `siteId` column. A site grant reaches its project through the
+ * `sites` relation instead, because project and site grants are alternatives
+ * — a user scoped only to a site in project B must still see project B, or
+ * that site is unreachable from every list that starts at a project.
+ *
+ * Used by ProjectService, TaskTypeService and MilestoneService. Do not inline
+ * a copy: this is the definition of "visible project" for the whole service.
  */
-function projectScope(scope: AuthzScope): Record<string, unknown> {
+export function projectScope(scope: AuthzScope): Record<string, unknown> {
   if (scope.global) return {};
   return {
     OR: [
@@ -2777,6 +2800,24 @@ function projectScope(scope: AuthzScope): Record<string, unknown> {
     ],
   };
 }
+
+/** Projects visible to this caller, further narrowed to one id. */
+export function visibleProject(scope: AuthzScope, id: string): Record<string, unknown> {
+  return { AND: [{ id }, projectScope(scope)] };
+}
+```
+
+Then replace `apps/project/src/project/project.service.ts`:
+
+```ts
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import type { PrismaClient } from '@prisma-clients/project';
+import { scopeWhere, type AuthzScope } from '@ipms/authz';
+import {
+  uuidv7,
+  type CreateProjectDto, type CreateSiteDto, type UpdateProjectDto, type UpdateSiteDto,
+} from '@ipms/contracts';
+import { projectScope, visibleProject } from '../scope/project-scope.js';
 
 @Injectable()
 export class ProjectService {
@@ -2797,7 +2838,7 @@ export class ProjectService {
    */
   async getProject(scope: AuthzScope, id: string) {
     const project = await this.prisma.project.findFirst({
-      where: { AND: [{ id }, projectScope(scope)] },
+      where: visibleProject(scope, id),
       include: {
         sites: { include: { region: true }, orderBy: { siteCode: 'asc' } },
         milestones: { include: { requirements: true }, orderBy: { sequence: 'asc' } },
@@ -2911,8 +2952,7 @@ export class ProjectService {
   /** Throws NotFound when the project does not exist OR is outside scope — indistinguishably. */
   private async requireProject(scope: AuthzScope, id: string): Promise<void> {
     const found = await this.prisma.project.findFirst({
-      where: { AND: [{ id }, projectScope(scope)] },
-      select: { id: true },
+      where: visibleProject(scope, id), select: { id: true },
     });
     if (!found) throw new NotFoundException('Project not found');
   }
@@ -3357,6 +3397,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import type { PrismaClient } from '@prisma-clients/project';
 import type { AuthzScope } from '@ipms/authz';
 import { uuidv7, type AddDependencyDto, type CreateTaskTypeDto, type MapTemplateDto } from '@ipms/contracts';
+import { visibleProject } from '../scope/project-scope.js';
 import { wouldCreateCycle } from './graph.js';
 
 @Injectable()
@@ -3479,11 +3520,13 @@ export class TaskTypeService {
     return required.filter((id) => !done.has(id));
   }
 
+  // visibleProject, not a local copy. This predicate is the definition of
+  // "project you may see"; a second copy here would drift from the one in
+  // scope/project-scope.ts, and a drifted authorization rule fails open.
   private async requireProject(scope: AuthzScope, id: string): Promise<void> {
-    const where = scope.global
-      ? { id }
-      : { AND: [{ id }, { OR: [{ id: { in: scope.projectIds } }, { sites: { some: { id: { in: scope.siteIds } } } }] }] };
-    const found = await this.prisma.project.findFirst({ where, select: { id: true } });
+    const found = await this.prisma.project.findFirst({
+      where: visibleProject(scope, id), select: { id: true },
+    });
     if (!found) throw new NotFoundException('Project not found');
   }
 
@@ -4529,6 +4572,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import type { PrismaClient } from '@prisma-clients/project';
 import { scopeWhere, type AuthzScope } from '@ipms/authz';
 import { uuidv7, type CreateMilestoneDto, type DeclareMilestoneDto } from '@ipms/contracts';
+import { visibleProject } from '../scope/project-scope.js';
 import { recomputeStatus, type SiteMilestoneStatus } from './recompute.js';
 
 export interface MilestoneTransition {
@@ -4677,11 +4721,9 @@ export class MilestoneService {
     };
   }
 
+  // visibleProject, not a local copy — see the note in TaskTypeService.
   private async requireProject(scope: AuthzScope, id: string): Promise<void> {
-    const where = scope.global
-      ? { id }
-      : { AND: [{ id }, { OR: [{ id: { in: scope.projectIds } }, { sites: { some: { id: { in: scope.siteIds } } } }] }] };
-    if (!await this.prisma.project.findFirst({ where, select: { id: true } })) {
+    if (!await this.prisma.project.findFirst({ where: visibleProject(scope, id), select: { id: true } })) {
       throw new NotFoundException('Project not found');
     }
   }
