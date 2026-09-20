@@ -7,7 +7,7 @@ import {
   type ProjectStatus, type SiteStatus, type TaskStatus,
 } from '../lib/project-api';
 import { type FormState } from './form-state';
-import { optional, settle } from './settle';
+import { clearable, optional, settle } from './settle';
 
 /**
  * One Server Action per mutation.
@@ -57,8 +57,15 @@ const page = (projectId: string) => `/projects/${projectId}`;
  * form directly. The lone-coordinate check is repeated here rather than left
  * to the service: a round trip to be told the obvious is a worse answer than
  * an immediate one.
+ *
+ * `blank` is what two empty coordinate inputs mean. On a create there is
+ * nothing to remove, so they mean nothing; on an update they are the only way
+ * to say that a wrong coordinate should go.
  */
-function siteGeofenceFields(form: FormData): { fields: Record<string, unknown> } | { error: string } {
+function siteGeofenceFields(
+  form: FormData,
+  blank: 'ignore' | 'clear',
+): { fields: Record<string, unknown> } | { error: string } {
   const latitude = optional(form, 'latitude');
   const longitude = optional(form, 'longitude');
   if ((latitude === undefined) !== (longitude === undefined)) {
@@ -67,10 +74,12 @@ function siteGeofenceFields(form: FormData): { fields: Record<string, unknown> }
   const mode = optional(form, 'geofenceMode') ?? 'INHERIT';
   const radius = optional(form, 'geofenceRadiusM');
   if (mode === 'CUSTOM' && radius === undefined) return { error: 'A custom geofence needs a radius in metres.' };
+  const coordinates = latitude !== undefined && longitude !== undefined
+    ? { latitude: Number(latitude), longitude: Number(longitude) }
+    : blank === 'clear' ? { latitude: null, longitude: null } : {};
   return {
     fields: {
-      ...(latitude === undefined ? {} : { latitude: Number(latitude) }),
-      ...(longitude === undefined ? {} : { longitude: Number(longitude) }),
+      ...coordinates,
       geofenceMode: mode,
       ...(mode === 'CUSTOM' && radius !== undefined ? { geofenceRadiusM: Number(radius) } : {}),
     },
@@ -82,7 +91,7 @@ export async function createSiteAction(_previous: FormState, form: FormData): Pr
   const siteCode = optional(form, 'siteCode');
   const name = optional(form, 'name');
   if (!siteCode || !name) return { error: 'A site code and a name are required.' };
-  const geofence = siteGeofenceFields(form);
+  const geofence = siteGeofenceFields(form, 'ignore');
   if ('error' in geofence) return { error: geofence.error };
   const regionName = optional(form, 'regionName');
   const city = optional(form, 'city');
@@ -94,17 +103,29 @@ export async function createSiteAction(_previous: FormState, form: FormData): Pr
   }), page(projectId));
 }
 
+/**
+ * Unlike the create form, every field here arrives on every submit, so an
+ * empty one is a deliberate clear rather than a field the user skipped —
+ * hence `clearable` and `'clear'`. On success it returns to the project page
+ * rather than staying put: `FormState` carries an error and nothing else, so
+ * the updated row is the only acknowledgement a save can give.
+ */
 export async function updateSiteAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
   const name = optional(form, 'name');
-  const status = optional(form, 'status');
-  const geofence = siteGeofenceFields(form);
+  if (!name) return { error: 'A name is required.' };
+  const geofence = siteGeofenceFields(form, 'clear');
   if ('error' in geofence) return { error: geofence.error };
-  return settle(await updateSite(String(form.get('siteId')), {
-    ...(name === undefined ? {} : { name }),
+  const status = optional(form, 'status');
+  const state = await settle(await updateSite(String(form.get('siteId')), {
+    name,
     ...(status === undefined ? {} : { status: status as SiteStatus }),
+    ...clearable(form, 'regionName'),
+    ...clearable(form, 'city'),
     ...geofence.fields,
   }), page(projectId));
+  if (state.error) return state;
+  redirect(`/projects/${projectId}#sites`);
 }
 
 export async function deleteSiteAction(_previous: FormState, form: FormData): Promise<FormState> {
