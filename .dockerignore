@@ -1,0 +1,16 @@
+# Host-installed dependencies carry platform-specific binaries (argon2, prisma
+# engines) built for the developer's machine, not for the Alpine image. They
+# must be installed inside the build, never copied in.
+node_modules
+**/node_modules
+
+# Build output, regenerated inside the image.
+dist
+**/dist
+apps/web/.next
+
+.git
+.github
+e2e
+docs
+**/*.log

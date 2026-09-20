@@ -16,8 +16,22 @@ describe('resolveUpstream — allowlist', () => {
     expect(upstream?.port).toBe(3003);
   });
 
+  it('routes the project prefixes to the project service', () => {
+    for (const path of ['/api/v1/dashboard', '/api/v1/projects', '/api/v1/projects/x/sites', '/api/v1/tasks/x/assign']) {
+      const upstream = resolveUpstream(path);
+      expect(upstream?.service).toBe('project');
+      expect(upstream?.port).toBe(3004);
+    }
+  });
+
+  it('routes the qc prefix to the qc service', () => {
+    const upstream = resolveUpstream('/api/v1/qc/submissions');
+    expect(upstream?.service).toBe('qc');
+    expect(upstream?.port).toBe(3005);
+  });
+
   it('refuses a path on no declared prefix', () => {
-    expect(resolveUpstream('/api/v1/projects')).toBeUndefined();
+    expect(resolveUpstream('/api/v1/media')).toBeUndefined();
   });
 
   it('refuses a prefix that only shares a string prefix with a route', () => {
