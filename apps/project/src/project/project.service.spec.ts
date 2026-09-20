@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma-clients/project';
 import { ProjectService } from './project.service.js';
 
@@ -139,5 +139,95 @@ describe('updateMilestone', () => {
     prisma.taskType.count.mockResolvedValue(1);
     await expect(service(prisma).updateMilestone('m-1', { taskTypeIds: ['tt-1', 'other'] }))
       .rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('archiveProject', () => {
+  it('sets the status to CANCELLED without touching anything else', async () => {
+    const prisma = makePrisma();
+    prisma.project.update.mockResolvedValue({ id: 'p-1', status: 'CANCELLED' });
+    await service(prisma).archiveProject('p-1');
+    expect(prisma.project.update).toHaveBeenCalledWith({ where: { id: 'p-1' }, data: { status: 'CANCELLED' } });
+  });
+});
+
+describe('deleteProject', () => {
+  let prisma: Prisma;
+  beforeEach(() => { prisma = makePrisma(); });
+
+  it('deletes a project that has no tasks', async () => {
+    prisma.task.count.mockResolvedValue(0);
+    await service(prisma).deleteProject('p-1');
+    expect(prisma.project.delete).toHaveBeenCalledWith({ where: { id: 'p-1' } });
+  });
+
+  it('refuses while any task remains, because the cascade would take them all', async () => {
+    prisma.task.count.mockResolvedValue(3);
+    await expect(service(prisma).deleteProject('p-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.project.delete).not.toHaveBeenCalled();
+  });
+
+  it('says how many tasks are in the way, so the message is actionable', async () => {
+    prisma.task.count.mockResolvedValue(3);
+    await expect(service(prisma).deleteProject('p-1')).rejects.toThrow(/3 task/);
+  });
+
+  it('refuses a project that does not exist', async () => {
+    prisma.project.findUnique.mockResolvedValue(null);
+    await expect(service(prisma).deleteProject('missing')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('deleteSite', () => {
+  let prisma: Prisma;
+  beforeEach(() => {
+    prisma = makePrisma();
+    prisma.site.findUnique.mockResolvedValue({ id: 's-1', projectId: 'p-1' });
+  });
+
+  it('refuses while a task references the site', async () => {
+    prisma.task.count.mockResolvedValue(1);
+    await expect(service(prisma).deleteSite('s-1')).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('deletes a site with no tasks', async () => {
+    prisma.task.count.mockResolvedValue(0);
+    await service(prisma).deleteSite('s-1');
+    expect(prisma.site.delete).toHaveBeenCalledWith({ where: { id: 's-1' } });
+  });
+});
+
+describe('deleteTaskType', () => {
+  it('refuses while a task uses it, rather than letting Prisma raise a restrict error', async () => {
+    const prisma = makePrisma();
+    prisma.taskType.findUnique.mockResolvedValue({ id: 'tt-1', projectId: 'p-1' });
+    prisma.task.count.mockResolvedValue(2);
+    await expect(service(prisma).deleteTaskType('tt-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.taskType.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleteMilestone', () => {
+  it('deletes, letting the requirements cascade', async () => {
+    const prisma = makePrisma();
+    prisma.milestone.findUnique.mockResolvedValue({ id: 'm-1', projectId: 'p-1' });
+    await service(prisma).deleteMilestone('m-1');
+    expect(prisma.milestone.delete).toHaveBeenCalledWith({ where: { id: 'm-1' } });
+  });
+});
+
+describe('deleteTask', () => {
+  let prisma: Prisma;
+  beforeEach(() => { prisma = makePrisma(); });
+
+  it('refuses a task that carries QC evidence', async () => {
+    prisma.task.findUnique.mockResolvedValue({ id: 't-1', currentSubmissionId: 'sub-1' });
+    await expect(service(prisma).deleteTask('t-1')).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('deletes a task with no submission', async () => {
+    prisma.task.findUnique.mockResolvedValue({ id: 't-1', currentSubmissionId: null });
+    await service(prisma).deleteTask('t-1');
+    expect(prisma.task.delete).toHaveBeenCalledWith({ where: { id: 't-1' } });
   });
 });
