@@ -28,11 +28,25 @@
           "async": false,
           "exportedName": "archiveProjectAction",
           "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/[id]/sites/import/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/[id]/sites/import/actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "archiveProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/new/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/new/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "archiveProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
         }
       },
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
-        "app/projects/[id]/page": "action-browser"
+        "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
+        "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
       "exportedName": "archiveProjectAction"
@@ -110,11 +124,25 @@
           "async": false,
           "exportedName": "createSiteAction",
           "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/[id]/sites/import/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/[id]/sites/import/actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "createSiteAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/new/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/new/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "createSiteAction",
+          "filename": "apps/web/app/projects/actions.ts"
         }
       },
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
-        "app/projects/[id]/page": "action-browser"
+        "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
+        "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
       "exportedName": "createSiteAction"
@@ -132,11 +160,25 @@
           "async": false,
           "exportedName": "createMilestoneAction",
           "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/[id]/sites/import/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/[id]/sites/import/actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "createMilestoneAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/new/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/new/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "createMilestoneAction",
+          "filename": "apps/web/app/projects/actions.ts"
         }
       },
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
-        "app/projects/[id]/page": "action-browser"
+        "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
+        "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
       "exportedName": "createMilestoneAction"
@@ -154,11 +196,25 @@
           "async": false,
           "exportedName": "deleteProjectAction",
           "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/[id]/sites/import/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/[id]/sites/import/actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "deleteProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/new/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/new/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "deleteProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
         }
       },
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
-        "app/projects/[id]/page": "action-browser"
+        "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
+        "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
       "exportedName": "deleteProjectAction"
@@ -176,11 +232,25 @@
           "async": false,
           "exportedName": "createTaskTypeAction",
           "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/[id]/sites/import/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/[id]/sites/import/actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "createTaskTypeAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/new/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/new/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "createTaskTypeAction",
+          "filename": "apps/web/app/projects/actions.ts"
         }
       },
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
-        "app/projects/[id]/page": "action-browser"
+        "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
+        "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
       "exportedName": "createTaskTypeAction"
@@ -198,11 +268,25 @@
           "async": false,
           "exportedName": "updateProjectAction",
           "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/[id]/sites/import/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/[id]/sites/import/actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "updateProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/new/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/new/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "updateProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
         }
       },
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
-        "app/projects/[id]/page": "action-browser"
+        "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
+        "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
       "exportedName": "updateProjectAction"
@@ -220,11 +304,25 @@
           "async": false,
           "exportedName": "createTaskAction",
           "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/[id]/sites/import/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/[id]/sites/import/actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "createTaskAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/new/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/new/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "createTaskAction",
+          "filename": "apps/web/app/projects/actions.ts"
         }
       },
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
-        "app/projects/[id]/page": "action-browser"
+        "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
+        "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
       "exportedName": "createTaskAction"
@@ -287,14 +385,58 @@
           "async": false,
           "exportedName": "createProjectAction",
           "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/[id]/sites/import/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/[id]/sites/import/actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "createProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
+        "app/projects/new/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/new/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "createProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
         }
       },
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
-        "app/projects/[id]/page": "action-browser"
+        "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
+        "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
       "exportedName": "createProjectAction"
+    },
+    "6052c7a0af490cc651cd4b04fc36218902eaec741e": {
+      "workers": {
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/[id]/sites/import/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/[id]/sites/import/actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "commitImportAction",
+          "filename": "apps/web/app/projects/[id]/sites/import/actions.ts"
+        }
+      },
+      "layer": {
+        "app/projects/[id]/sites/import/page": "action-browser"
+      },
+      "filename": "apps/web/app/projects/[id]/sites/import/actions.ts",
+      "exportedName": "commitImportAction"
+    },
+    "60f3fc9d04c5e8eecd009d294a124b24d9f3919f00": {
+      "workers": {
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": "[project]/apps/web/.next-internal/server/app/projects/[id]/sites/import/page/actions.js { ACTIONS_MODULE0 => \"[project]/apps/web/app/projects/[id]/sites/import/actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/apps/web/app/projects/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "previewImportAction",
+          "filename": "apps/web/app/projects/[id]/sites/import/actions.ts"
+        }
+      },
+      "layer": {
+        "app/projects/[id]/sites/import/page": "action-browser"
+      },
+      "filename": "apps/web/app/projects/[id]/sites/import/actions.ts",
+      "exportedName": "previewImportAction"
     }
   },
   "edge": {},

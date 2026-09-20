@@ -22,7 +22,7 @@ export default async function SiteImportPage({ params }: { params: Promise<{ id:
                 <h2>Import sites</h2>
                 <p>Upload a spreadsheet to create or update many sites at once.</p>
               </div>
-              <a className="button" href={`/api/v1/projects/${id}/sites/import/template`}>Download template</a>
+              <a className="button" href={`/api/projects/${id}/sites/import/template`}>Download template</a>
             </div>
             <p className="form-note">
               <code>site_code</code> and <code>name</code> are required. A column you leave out of the

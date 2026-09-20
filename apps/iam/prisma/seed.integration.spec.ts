@@ -69,15 +69,18 @@ describe('seedIam', () => {
     }
   });
 
-  it('gives PROJECT_MANAGER site.import but not QC_MANAGER', async () => {
+  it('gives site.import to SUPER_ADMIN and PROJECT_MANAGER only', async () => {
     const roles = await prisma.role.findMany({
-      where: { code: { in: ['PROJECT_MANAGER', 'QC_MANAGER'] } },
       include: { permissions: { include: { permission: true } } },
     });
     const codes = (code: string): string[] =>
       roles.find((role) => role.code === code)?.permissions.map((entry) => entry.permission.code) ?? [];
+    expect(codes('SUPER_ADMIN')).toContain('site.import');
     expect(codes('PROJECT_MANAGER')).toContain('site.import');
-    expect(codes('QC_MANAGER')).not.toContain('site.import');
+    // QC managers hold site.view only and do not provision sites.
+    for (const role of ['QC_MANAGER', 'FIELD_ENGINEER', 'VIEWER']) {
+      expect(codes(role), `${role} must not hold site.import`).not.toContain('site.import');
+    }
   });
 
   it('is idempotent', async () => {

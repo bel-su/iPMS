@@ -205,9 +205,11 @@ async function authFetch(path, request = {}) {
                     'content-type': 'application/json'
                 }
             },
-            ...request.json === undefined ? {} : {
+            ...request.json !== undefined ? {
                 body: JSON.stringify(request.json)
-            },
+            } : request.body !== undefined ? {
+                body: request.body
+            } : {},
             cache: 'no-store'
         });
     } catch  {
@@ -282,6 +284,8 @@ __turbopack_context__.s([
     ()=>archiveProject,
     "assignTask",
     ()=>assignTask,
+    "commitSiteImport",
+    ()=>commitSiteImport,
     "createMilestone",
     ()=>createMilestone,
     "createProject",
@@ -310,6 +314,8 @@ __turbopack_context__.s([
     ()=>listProjects,
     "listTasks",
     ()=>listTasks,
+    "previewSiteImport",
+    ()=>previewSiteImport,
     "updateMilestone",
     ()=>updateMilestone,
     "updateProject",
@@ -433,6 +439,20 @@ async function deleteMilestone(id) {
 async function deleteTask(id) {
     return (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$lib$2f$api$2d$client$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["authFetch"])(`/api/v1/tasks/${id}`, {
         method: 'DELETE'
+    });
+}
+async function previewSiteImport(projectId, file) {
+    const body = new FormData();
+    body.set('file', file, file.name);
+    return (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$lib$2f$api$2d$client$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["authFetch"])(`/api/v1/projects/${projectId}/sites/import/preview`, {
+        method: 'POST',
+        body
+    });
+}
+async function commitSiteImport(projectId, payload) {
+    return (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$lib$2f$api$2d$client$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["authFetch"])(`/api/v1/projects/${projectId}/sites/import/commit`, {
+        method: 'POST',
+        json: payload
     });
 }
 }),

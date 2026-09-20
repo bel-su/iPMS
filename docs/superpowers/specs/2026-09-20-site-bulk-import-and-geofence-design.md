@@ -326,12 +326,13 @@ It depends on `site.update`, not just `site.create`, **because the import can ov
 existing sites** (§4.4). Nobody gains bulk-overwrite authority they do not already hold
 one site at a time.
 
-In `apps/iam/prisma/seed.ts` this is added to `SUPER_ADMIN` (which takes `ALL`
-automatically) and to `PROJECT_MANAGER`.
+In `apps/iam/prisma/seed.ts` this is held by `SUPER_ADMIN` (through that role's `ALL`)
+and by `PROJECT_MANAGER`. Site provisioning is a project-management concern, and a
+manager already holds `site.create` and `site.update` one site at a time.
 
 `QC_MANAGER` does **not** receive it. That role holds `site.view` only and does not
 create or edit sites; giving it bulk import would be the single largest expansion of
-its authority in the catalogue, and site provisioning is a project-management concern.
+its authority in the catalogue.
 
 ---
 
