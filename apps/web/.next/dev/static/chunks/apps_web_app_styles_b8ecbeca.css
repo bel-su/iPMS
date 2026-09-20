@@ -1005,4 +1005,160 @@ a {
   }
 }
 
+.toolbar {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  display: flex;
+}
+
+.data-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+
+.data-table th {
+  text-align: left;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  opacity: .6;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.data-table td {
+  vertical-align: middle;
+  border-top: 1px solid #94a3b82e;
+  padding: 12px;
+}
+
+.data-table tr:hover td {
+  background: #94a3b80f;
+}
+
+.data-table .row-actions {
+  justify-content: flex-end;
+  gap: 8px;
+  display: flex;
+}
+
+.form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  display: grid;
+}
+
+.field {
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+}
+
+.field input, .field select, .field textarea {
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: 1px solid #94a3b859;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible {
+  outline-offset: 1px;
+  outline: 2px solid #3b82f6;
+}
+
+.field .hint {
+  opacity: .6;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.inline-form {
+  border-top: 1px solid #94a3b82e;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 16px;
+  display: flex;
+}
+
+.inline-form .field {
+  flex: 180px;
+}
+
+.ghost-button, .danger-button {
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+  background: none;
+  border: 1px solid #94a3b859;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ghost-button:hover {
+  background: #94a3b81f;
+}
+
+.danger-button {
+  color: #dc2626;
+  border-color: #dc262673;
+}
+
+.danger-button:hover {
+  background: #dc26261a;
+}
+
+.ghost-button:disabled, .danger-button:disabled, .primary-button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.confirm-card {
+  border: 1px solid #dc262659;
+  border-radius: 12px;
+  gap: 12px;
+  padding: 20px;
+  display: grid;
+}
+
+.confirm-card h2 {
+  color: #dc2626;
+  margin: 0;
+  font-size: 16px;
+}
+
+.form-note {
+  opacity: .7;
+  margin: 0;
+  font-size: 13px;
+}
+
+.tab-row {
+  border-bottom: 1px solid #94a3b833;
+  gap: 4px;
+  margin-bottom: 16px;
+  display: flex;
+}
+
+.tab-row a {
+  border-bottom: 2px solid #0000;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+.tab-row a[aria-current="true"] {
+  border-bottom-color: #3b82f6;
+  font-weight: 600;
+}
+
 /*# sourceMappingURL=apps_web_app_styles_b8ecbeca.css.map*/

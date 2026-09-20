@@ -88,9 +88,10 @@ export interface Task {
 /** `listProjects` counts sites and tasks rather than returning them. */
 export type ProjectListEntry = Project & { _count: { sites: number; tasks: number } };
 
-/** `getProject` returns the project with its sites and milestones expanded. */
+/** `getProject` returns the project with its sites, task types and milestones expanded. */
 export type ProjectDetail = Project & {
   sites: (Site & { region: Region | null })[];
+  taskTypes: TaskType[];
   milestones: (Milestone & { requirements: MilestoneRequirement[] })[];
   _count: { tasks: number };
 };

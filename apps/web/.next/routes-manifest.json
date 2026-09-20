@@ -19,7 +19,24 @@
     "afterFiles": [],
     "fallback": []
   },
-  "dynamicRoutes": [],
+  "dynamicRoutes": [
+    {
+      "page": "/projects/[id]",
+      "regex": "^/projects/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/projects/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/projects/[id]/edit",
+      "regex": "^/projects/([^/]+?)/edit(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/projects/(?<nxtPid>[^/]+?)/edit(?:/)?$"
+    }
+  ],
   "staticRoutes": [
     {
       "page": "/",
@@ -46,10 +63,28 @@
       "namedRegex": "^/api/auth/login(?:/)?$"
     },
     {
+      "page": "/api/auth/logout",
+      "regex": "^/api/auth/logout(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/logout(?:/)?$"
+    },
+    {
       "page": "/login",
       "regex": "^/login(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/projects",
+      "regex": "^/projects(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/projects(?:/)?$"
+    },
+    {
+      "page": "/projects/new",
+      "regex": "^/projects/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/projects/new(?:/)?$"
     }
   ],
   "dataRoutes": [],
