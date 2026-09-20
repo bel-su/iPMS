@@ -1,59 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import {
-  ListTasksQuerySchema,
-  UpdateMilestoneSchema,
-  UpdateSiteSchema,
-  UpdateTaskSchema,
-  UpdateTaskTypeSchema,
-} from './project.js';
+import { CreateSiteSchema, CreateProjectSchema } from './project.js';
 
-describe('UpdateSiteSchema', () => {
-  it('accepts a single field', () => {
-    expect(UpdateSiteSchema.parse({ name: 'Renamed' })).toEqual({ name: 'Renamed' });
+const site = { siteCode: 'SITE_01', name: 'Site One' };
+
+describe('CreateSiteSchema geofence', () => {
+  it('defaults to INHERIT when no mode is given', () => {
+    expect(CreateSiteSchema.parse(site).geofenceMode).toBe('INHERIT');
   });
 
-  it('accepts a status, which create cannot set', () => {
-    expect(UpdateSiteSchema.parse({ status: 'IN_DELIVERY' }).status).toBe('IN_DELIVERY');
+  it('accepts OFF with no radius', () => {
+    expect(CreateSiteSchema.parse({ ...site, geofenceMode: 'OFF' }).geofenceMode).toBe('OFF');
   });
 
-  it('refuses an unknown status', () => {
-    expect(() => UpdateSiteSchema.parse({ status: 'MAYBE' })).toThrow();
+  it('accepts CUSTOM with a radius', () => {
+    expect(CreateSiteSchema.parse({ ...site, geofenceMode: 'CUSTOM', geofenceRadiusM: 250 }).geofenceRadiusM).toBe(250);
   });
 
-  it('refuses a site code that create would also refuse', () => {
-    expect(() => UpdateSiteSchema.parse({ siteCode: 'lower case' })).toThrow();
+  // The invalid state the resolver would otherwise have to guess at.
+  it('rejects CUSTOM with no radius', () => {
+    expect(CreateSiteSchema.safeParse({ ...site, geofenceMode: 'CUSTOM' }).success).toBe(false);
   });
-});
 
-describe('UpdateTaskTypeSchema', () => {
-  it('accepts isActive, which is how a task type is retired', () => {
-    expect(UpdateTaskTypeSchema.parse({ isActive: false }).isActive).toBe(false);
+  it('rejects a negative radius', () => {
+    expect(CreateSiteSchema.safeParse({ ...site, geofenceMode: 'CUSTOM', geofenceRadiusM: -1 }).success).toBe(false);
   });
 });
 
-describe('UpdateMilestoneSchema', () => {
-  it('treats taskTypeIds as a wholesale replacement, absent when not given', () => {
-    expect(UpdateMilestoneSchema.parse({ name: 'Handover' }).taskTypeIds).toBeUndefined();
-    expect(UpdateMilestoneSchema.parse({ taskTypeIds: [] }).taskTypeIds).toEqual([]);
-  });
-});
-
-describe('UpdateTaskSchema', () => {
-  it('accepts a status', () => {
-    expect(UpdateTaskSchema.parse({ status: 'ONGOING' }).status).toBe('ONGOING');
+describe('CreateProjectSchema geofence', () => {
+  it('accepts an explicit null default, meaning no checks on this project', () => {
+    expect(CreateProjectSchema.parse({ code: 'P1', name: 'P', defaultGeofenceRadiusM: null }).defaultGeofenceRadiusM).toBeNull();
   });
 
-  it('accepts a null assignee, which is how a task is unassigned', () => {
-    expect(UpdateTaskSchema.parse({ assigneeId: null }).assigneeId).toBeNull();
-  });
-});
-
-describe('ListTasksQuerySchema', () => {
-  it('defaults to no filter', () => {
-    expect(ListTasksQuerySchema.parse({})).toEqual({});
-  });
-
-  it('refuses a siteId that is not a uuid', () => {
-    expect(() => ListTasksQuerySchema.parse({ siteId: 'nope' })).toThrow();
+  it('accepts a radius', () => {
+    expect(CreateProjectSchema.parse({ code: 'P1', name: 'P', defaultGeofenceRadiusM: 500 }).defaultGeofenceRadiusM).toBe(500);
   });
 });

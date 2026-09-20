@@ -5,6 +5,8 @@ export const ProjectStatusSchema = z.enum(['DRAFT', 'ACTIVE', 'ON_HOLD', 'COMPLE
 export const SiteStatusSchema = z.enum(['PLANNED', 'IN_DELIVERY', 'COMPLETED', 'BLOCKED']);
 export const TaskStatusSchema = z.enum(['NOT_STARTED', 'ONGOING', 'REVIEWING', 'RECTIFYING', 'COMPLETED', 'CANCELLED']);
 export const MilestoneKindSchema = z.enum(['PROJECT', 'CONTRACT']);
+export const GeofenceModeSchema = z.enum(['INHERIT', 'CUSTOM', 'OFF']);
+export const GeofenceRadiusSchema = z.number().int().positive().max(100_000);
 
 export const CreateProjectSchema = z.object({
   code: z.string().trim().min(1).max(50).regex(/^[A-Z0-9_-]+$/),
@@ -13,23 +15,34 @@ export const CreateProjectSchema = z.object({
   phase: z.string().trim().max(100).optional(),
   startDate: z.coerce.date().optional(),
   targetDate: z.coerce.date().optional(),
+  defaultGeofenceRadiusM: GeofenceRadiusSchema.nullable().optional(),
 }).strip();
 export type CreateProjectDto = z.infer<typeof CreateProjectSchema>;
 export const UpdateProjectSchema = CreateProjectSchema.omit({ code: true }).partial().extend({ status: ProjectStatusSchema.optional() });
 export type UpdateProjectDto = z.infer<typeof UpdateProjectSchema>;
 
-export const CreateSiteSchema = z.object({
+/** The site fields as a plain object, so both schemas below can derive from it. */
+const SiteFields = z.object({
   siteCode: z.string().trim().min(1).max(50).regex(/^[A-Z0-9_-]+$/),
   name: z.string().trim().min(1).max(200),
   regionName: z.string().trim().min(1).max(150).optional(),
   latitude: z.number().gte(-90).lte(90).optional(),
   longitude: z.number().gte(-180).lte(180).optional(),
-  geofenceRadiusM: z.number().int().positive().max(100_000).optional(),
+  geofenceMode: GeofenceModeSchema.default('INHERIT'),
+  geofenceRadiusM: GeofenceRadiusSchema.nullable().optional(),
   address: z.string().max(500).optional(),
   city: z.string().max(100).optional(),
   area: z.string().max(100).optional(),
   scopeVariant: z.string().max(100).optional(),
-}).strip();
+});
+
+/** A CUSTOM site with no radius would resolve to "no check", which is the opposite of what CUSTOM means. */
+const customNeedsRadius = (value: { geofenceMode?: string | undefined; geofenceRadiusM?: number | null | undefined }): boolean =>
+  value.geofenceMode !== 'CUSTOM' || (value.geofenceRadiusM !== null && value.geofenceRadiusM !== undefined);
+
+const CUSTOM_RADIUS_MESSAGE = { message: 'A custom geofence needs a radius in metres', path: ['geofenceRadiusM'] };
+
+export const CreateSiteSchema = SiteFields.strip().refine(customNeedsRadius, CUSTOM_RADIUS_MESSAGE);
 export type CreateSiteDto = z.infer<typeof CreateSiteSchema>;
 
 export const CreateTaskTypeSchema = z.object({
@@ -75,7 +88,11 @@ export type AssignTaskDto = z.infer<typeof AssignTaskSchema>;
  * `.extend` is what makes that possible — `.partial()` keeps the create
  * schema's `.default([])`, which would silently re-add an empty array.
  */
-export const UpdateSiteSchema = CreateSiteSchema.partial().extend({ status: SiteStatusSchema.optional() });
+export const UpdateSiteSchema = SiteFields
+  .partial()
+  .extend({ status: SiteStatusSchema.optional() })
+  .strip()
+  .refine(customNeedsRadius, CUSTOM_RADIUS_MESSAGE);
 export type UpdateSiteDto = z.infer<typeof UpdateSiteSchema>;
 
 export const UpdateTaskTypeSchema = CreateTaskTypeSchema.partial().extend({ isActive: z.boolean().optional() });

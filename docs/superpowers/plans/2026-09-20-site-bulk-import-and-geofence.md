@@ -543,10 +543,13 @@ const SiteFields = z.object({
 });
 
 /** A CUSTOM site with no radius would resolve to "no check", which is the opposite of what CUSTOM means. */
-const customNeedsRadius = (value: { geofenceMode?: string; geofenceRadiusM?: number | null }): boolean =>
+// The explicit `| undefined`s are required: under exactOptionalPropertyTypes
+// an `x?: string` parameter accepts an absent key but NOT an explicit
+// undefined, so the refined object's own type would not be assignable.
+const customNeedsRadius = (value: { geofenceMode?: string | undefined; geofenceRadiusM?: number | null | undefined }): boolean =>
   value.geofenceMode !== 'CUSTOM' || (value.geofenceRadiusM !== null && value.geofenceRadiusM !== undefined);
 
-const CUSTOM_RADIUS_MESSAGE = { message: 'A custom geofence needs a radius in metres', path: ['geofenceRadiusM'] } as const;
+const CUSTOM_RADIUS_MESSAGE = { message: 'A custom geofence needs a radius in metres', path: ['geofenceRadiusM'] };
 
 export const CreateSiteSchema = SiteFields.strip().refine(customNeedsRadius, CUSTOM_RADIUS_MESSAGE);
 export type CreateSiteDto = z.infer<typeof CreateSiteSchema>;
