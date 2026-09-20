@@ -540,6 +540,7 @@ async function createProjectAction(_previous, form) {
     const phase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'phase');
     const startDate = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'startDate');
     const targetDate = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'targetDate');
+    const defaultGeofenceRadiusM = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'defaultGeofenceRadiusM');
     const result = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$lib$2f$project$2d$api$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["createProject"])({
         code,
         name,
@@ -554,6 +555,9 @@ async function createProjectAction(_previous, form) {
         },
         ...targetDate === undefined ? {} : {
             targetDate: new Date(targetDate)
+        },
+        ...defaultGeofenceRadiusM === undefined ? {} : {
+            defaultGeofenceRadiusM: defaultGeofenceRadiusM === 'off' ? null : Number(defaultGeofenceRadiusM)
         }
     });
     const state = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["settle"])(result, '/projects');
@@ -562,12 +566,51 @@ async function createProjectAction(_previous, form) {
     return state;
 }
 /** Every sub-resource action revalidates its project's page, which is the only page that renders it. */ const page = (projectId)=>`/projects/${projectId}`;
+/**
+ * The geofence half of a site form, as the API wants it.
+ *
+ * Returns an error string rather than throwing, so the caller can answer the
+ * form directly. The lone-coordinate check is repeated here rather than left
+ * to the service: a round trip to be told the obvious is a worse answer than
+ * an immediate one.
+ */ function siteGeofenceFields(form) {
+    const latitude = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'latitude');
+    const longitude = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'longitude');
+    if (latitude === undefined !== (longitude === undefined)) {
+        return {
+            error: 'Latitude and longitude must be given together, or both left blank.'
+        };
+    }
+    const mode = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'geofenceMode') ?? 'INHERIT';
+    const radius = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'geofenceRadiusM');
+    if (mode === 'CUSTOM' && radius === undefined) return {
+        error: 'A custom geofence needs a radius in metres.'
+    };
+    return {
+        fields: {
+            ...latitude === undefined ? {} : {
+                latitude: Number(latitude)
+            },
+            ...longitude === undefined ? {} : {
+                longitude: Number(longitude)
+            },
+            geofenceMode: mode,
+            ...mode === 'CUSTOM' && radius !== undefined ? {
+                geofenceRadiusM: Number(radius)
+            } : {}
+        }
+    };
+}
 async function createSiteAction(_previous, form) {
     const projectId = String(form.get('projectId'));
     const siteCode = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'siteCode');
     const name = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'name');
     if (!siteCode || !name) return {
         error: 'A site code and a name are required.'
+    };
+    const geofence = siteGeofenceFields(form);
+    if ('error' in geofence) return {
+        error: geofence.error
     };
     const regionName = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'regionName');
     const city = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'city');
@@ -579,20 +622,26 @@ async function createSiteAction(_previous, form) {
         },
         ...city === undefined ? {} : {
             city
-        }
+        },
+        ...geofence.fields
     }), page(projectId));
 }
 async function updateSiteAction(_previous, form) {
     const projectId = String(form.get('projectId'));
     const name = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'name');
     const status = (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["optional"])(form, 'status');
+    const geofence = siteGeofenceFields(form);
+    if ('error' in geofence) return {
+        error: geofence.error
+    };
     return (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$projects$2f$settle$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["settle"])(await (0, __TURBOPACK__imported__module__$5b$project$5d2f$apps$2f$web$2f$app$2f$lib$2f$project$2d$api$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["updateSite"])(String(form.get('siteId')), {
         ...name === undefined ? {} : {
             name
         },
         ...status === undefined ? {} : {
             status: status
-        }
+        },
+        ...geofence.fields
     }), page(projectId));
 }
 async function deleteSiteAction(_previous, form) {

@@ -27,6 +27,7 @@ export async function createProjectAction(_previous: FormState, form: FormData):
   const phase = optional(form, 'phase');
   const startDate = optional(form, 'startDate');
   const targetDate = optional(form, 'targetDate');
+  const defaultGeofenceRadiusM = optional(form, 'defaultGeofenceRadiusM');
 
   const result = await createProject({
     code,
@@ -35,6 +36,9 @@ export async function createProjectAction(_previous: FormState, form: FormData):
     ...(phase === undefined ? {} : { phase }),
     ...(startDate === undefined ? {} : { startDate: new Date(startDate) }),
     ...(targetDate === undefined ? {} : { targetDate: new Date(targetDate) }),
+    ...(defaultGeofenceRadiusM === undefined
+      ? {}
+      : { defaultGeofenceRadiusM: defaultGeofenceRadiusM === 'off' ? null : Number(defaultGeofenceRadiusM) }),
   });
 
   const state = await settle(result, '/projects');
@@ -46,17 +50,47 @@ export async function createProjectAction(_previous: FormState, form: FormData):
 /** Every sub-resource action revalidates its project's page, which is the only page that renders it. */
 const page = (projectId: string) => `/projects/${projectId}`;
 
+/**
+ * The geofence half of a site form, as the API wants it.
+ *
+ * Returns an error string rather than throwing, so the caller can answer the
+ * form directly. The lone-coordinate check is repeated here rather than left
+ * to the service: a round trip to be told the obvious is a worse answer than
+ * an immediate one.
+ */
+function siteGeofenceFields(form: FormData): { fields: Record<string, unknown> } | { error: string } {
+  const latitude = optional(form, 'latitude');
+  const longitude = optional(form, 'longitude');
+  if ((latitude === undefined) !== (longitude === undefined)) {
+    return { error: 'Latitude and longitude must be given together, or both left blank.' };
+  }
+  const mode = optional(form, 'geofenceMode') ?? 'INHERIT';
+  const radius = optional(form, 'geofenceRadiusM');
+  if (mode === 'CUSTOM' && radius === undefined) return { error: 'A custom geofence needs a radius in metres.' };
+  return {
+    fields: {
+      ...(latitude === undefined ? {} : { latitude: Number(latitude) }),
+      ...(longitude === undefined ? {} : { longitude: Number(longitude) }),
+      geofenceMode: mode,
+      ...(mode === 'CUSTOM' && radius !== undefined ? { geofenceRadiusM: Number(radius) } : {}),
+    },
+  };
+}
+
 export async function createSiteAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
   const siteCode = optional(form, 'siteCode');
   const name = optional(form, 'name');
   if (!siteCode || !name) return { error: 'A site code and a name are required.' };
+  const geofence = siteGeofenceFields(form);
+  if ('error' in geofence) return { error: geofence.error };
   const regionName = optional(form, 'regionName');
   const city = optional(form, 'city');
   return settle(await createSite(projectId, {
     siteCode, name,
     ...(regionName === undefined ? {} : { regionName }),
     ...(city === undefined ? {} : { city }),
+    ...geofence.fields,
   }), page(projectId));
 }
 
@@ -64,9 +98,12 @@ export async function updateSiteAction(_previous: FormState, form: FormData): Pr
   const projectId = String(form.get('projectId'));
   const name = optional(form, 'name');
   const status = optional(form, 'status');
+  const geofence = siteGeofenceFields(form);
+  if ('error' in geofence) return { error: geofence.error };
   return settle(await updateSite(String(form.get('siteId')), {
     ...(name === undefined ? {} : { name }),
     ...(status === undefined ? {} : { status: status as SiteStatus }),
+    ...geofence.fields,
   }), page(projectId));
 }
 

@@ -7,6 +7,7 @@
   "/page": "app/page.js",
   "/projects/[id]/edit/page": "app/projects/[id]/edit/page.js",
   "/projects/[id]/page": "app/projects/[id]/page.js",
+  "/projects/[id]/sites/import/page": "app/projects/[id]/sites/import/page.js",
   "/projects/new/page": "app/projects/new/page.js",
   "/projects/page": "app/projects/page.js"
 }

@@ -2335,7 +2335,7 @@ describe('previewImportAction', () => {
   it('rejects a submission with no file', async () => {
     const form = new FormData();
     form.set('projectId', PROJECT_ID);
-    expect((await previewImportAction({}, form)).error).toContain('Choose a file');
+    expect((await previewImportAction({}, form)).error).toContain('Choose a .xlsx file');
     expect(previewSiteImport).not.toHaveBeenCalled();
   });
 

@@ -35,6 +35,15 @@ export function CreateProjectForm() {
         <label className="field">Phase<input name="phase" maxLength={100} /></label>
         <label className="field">Start date<input name="startDate" type="date" /></label>
         <label className="field">Target date<input name="targetDate" type="date" /></label>
+        <label className="field">Default geofence
+          <select name="defaultGeofenceRadiusM" defaultValue="500">
+            <option value="500">500 m</option>
+            <option value="250">250 m</option>
+            <option value="1000">1 km</option>
+            <option value="off">No proximity checks on this project</option>
+          </select>
+          <span className="hint">Sites inherit this. Turn it off for linear works such as fiber runs.</span>
+        </label>
       </div>
       <FormError state={state} />
       <p className="form-note">New projects start as <code>DRAFT</code>.</p>
@@ -79,6 +88,16 @@ export function CreateSiteForm({ projectId }: { projectId: string }) {
       <label className="field">Name<input name="name" required maxLength={200} /></label>
       <label className="field">Region<input name="regionName" maxLength={150} /></label>
       <label className="field">City<input name="city" maxLength={100} /></label>
+      <label className="field">Latitude<input name="latitude" type="number" step="any" min={-90} max={90} /></label>
+      <label className="field">Longitude<input name="longitude" type="number" step="any" min={-180} max={180} /></label>
+      <label className="field">Geofence
+        <select name="geofenceMode" defaultValue="INHERIT">
+          <option value="INHERIT">Use the project default</option>
+          <option value="CUSTOM">Custom radius</option>
+          <option value="OFF">No proximity check</option>
+        </select>
+      </label>
+      <label className="field">Radius (m)<input name="geofenceRadiusM" type="number" min={1} max={100000} /></label>
       <SubmitButton>Add site</SubmitButton>
       <FormError state={state} />
     </form>

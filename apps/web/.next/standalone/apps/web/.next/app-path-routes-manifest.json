@@ -7,6 +7,7 @@
   "/page": "/",
   "/projects/[id]/edit/page": "/projects/[id]/edit",
   "/projects/[id]/page": "/projects/[id]",
+  "/projects/[id]/sites/import/page": "/projects/[id]/sites/import",
   "/projects/new/page": "/projects/new",
   "/projects/page": "/projects"
 }

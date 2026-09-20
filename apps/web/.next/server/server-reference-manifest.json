@@ -29,6 +29,12 @@
           "exportedName": "createProjectAction",
           "filename": "apps/web/app/projects/actions.ts"
         },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": 320,
+          "async": false,
+          "exportedName": "createProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
         "app/projects/new/page": {
           "moduleId": 19699,
           "async": false,
@@ -39,6 +45,7 @@
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
         "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
         "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
@@ -58,6 +65,12 @@
           "exportedName": "createMilestoneAction",
           "filename": "apps/web/app/projects/actions.ts"
         },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": 320,
+          "async": false,
+          "exportedName": "createMilestoneAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
         "app/projects/new/page": {
           "moduleId": 19699,
           "async": false,
@@ -68,6 +81,7 @@
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
         "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
         "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
@@ -87,6 +101,12 @@
           "exportedName": "createSiteAction",
           "filename": "apps/web/app/projects/actions.ts"
         },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": 320,
+          "async": false,
+          "exportedName": "createSiteAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
         "app/projects/new/page": {
           "moduleId": 19699,
           "async": false,
@@ -97,6 +117,7 @@
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
         "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
         "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
@@ -131,6 +152,12 @@
           "exportedName": "deleteProjectAction",
           "filename": "apps/web/app/projects/actions.ts"
         },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": 320,
+          "async": false,
+          "exportedName": "deleteProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
         "app/projects/new/page": {
           "moduleId": 19699,
           "async": false,
@@ -141,6 +168,7 @@
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
         "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
         "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
@@ -190,6 +218,12 @@
           "exportedName": "createTaskAction",
           "filename": "apps/web/app/projects/actions.ts"
         },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": 320,
+          "async": false,
+          "exportedName": "createTaskAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
         "app/projects/new/page": {
           "moduleId": 19699,
           "async": false,
@@ -200,6 +234,7 @@
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
         "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
         "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
@@ -249,6 +284,12 @@
           "exportedName": "updateProjectAction",
           "filename": "apps/web/app/projects/actions.ts"
         },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": 320,
+          "async": false,
+          "exportedName": "updateProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
         "app/projects/new/page": {
           "moduleId": 19699,
           "async": false,
@@ -259,6 +300,7 @@
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
         "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
         "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
@@ -278,6 +320,12 @@
           "exportedName": "createTaskTypeAction",
           "filename": "apps/web/app/projects/actions.ts"
         },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": 320,
+          "async": false,
+          "exportedName": "createTaskTypeAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
         "app/projects/new/page": {
           "moduleId": 19699,
           "async": false,
@@ -288,6 +336,7 @@
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
         "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
         "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
@@ -307,6 +356,12 @@
           "exportedName": "archiveProjectAction",
           "filename": "apps/web/app/projects/actions.ts"
         },
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": 320,
+          "async": false,
+          "exportedName": "archiveProjectAction",
+          "filename": "apps/web/app/projects/actions.ts"
+        },
         "app/projects/new/page": {
           "moduleId": 19699,
           "async": false,
@@ -317,6 +372,7 @@
       "layer": {
         "app/projects/[id]/edit/page": "action-browser",
         "app/projects/[id]/page": "action-browser",
+        "app/projects/[id]/sites/import/page": "action-browser",
         "app/projects/new/page": "action-browser"
       },
       "filename": "apps/web/app/projects/actions.ts",
@@ -351,6 +407,36 @@
       },
       "filename": "apps/web/app/projects/actions.ts",
       "exportedName": "updateMilestoneAction"
+    },
+    "603e86ce2cd26f052cf617a06c6fa3ae684548f685": {
+      "workers": {
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": 320,
+          "async": false,
+          "exportedName": "commitImportAction",
+          "filename": "apps/web/app/projects/[id]/sites/import/actions.ts"
+        }
+      },
+      "layer": {
+        "app/projects/[id]/sites/import/page": "action-browser"
+      },
+      "filename": "apps/web/app/projects/[id]/sites/import/actions.ts",
+      "exportedName": "commitImportAction"
+    },
+    "602ec0c3ddb58556fe920b3c5329b5a373ad5b7885": {
+      "workers": {
+        "app/projects/[id]/sites/import/page": {
+          "moduleId": 320,
+          "async": false,
+          "exportedName": "previewImportAction",
+          "filename": "apps/web/app/projects/[id]/sites/import/actions.ts"
+        }
+      },
+      "layer": {
+        "app/projects/[id]/sites/import/page": "action-browser"
+      },
+      "filename": "apps/web/app/projects/[id]/sites/import/actions.ts",
+      "exportedName": "previewImportAction"
     }
   },
   "edge": {},

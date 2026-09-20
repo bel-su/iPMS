@@ -35,6 +35,14 @@
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/projects/(?<nxtPid>[^/]+?)/edit(?:/)?$"
+    },
+    {
+      "page": "/projects/[id]/sites/import",
+      "regex": "^/projects/([^/]+?)/sites/import(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/projects/(?<nxtPid>[^/]+?)/sites/import(?:/)?$"
     }
   ],
   "staticRoutes": [

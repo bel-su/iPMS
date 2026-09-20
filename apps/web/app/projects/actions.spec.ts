@@ -6,24 +6,26 @@ vi.mock('next/cache', () => ({ revalidatePath }));
 vi.mock('next/navigation', () => ({ redirect }));
 
 const deleteProject = vi.fn();
+const createSite = vi.fn().mockResolvedValue({ state: 'ready', data: {} });
 const updateTask = vi.fn().mockResolvedValue({ state: 'ready', data: {} });
 vi.mock('../lib/project-api', () => ({
   deleteProject, updateTask,
   createProject: vi.fn(), updateProject: vi.fn(), archiveProject: vi.fn(),
-  createSite: vi.fn(), updateSite: vi.fn(), deleteSite: vi.fn(),
+  createSite, updateSite: vi.fn(), deleteSite: vi.fn(),
   createTaskType: vi.fn(), updateTaskType: vi.fn(), deleteTaskType: vi.fn(),
   createMilestone: vi.fn(), updateMilestone: vi.fn(), deleteMilestone: vi.fn(),
   createTask: vi.fn(), deleteTask: vi.fn(),
 }));
 
 const { settle } = await import('./settle');
-const { deleteProjectAction, updateTaskAction } = await import('./actions');
+const { createSiteAction, deleteProjectAction, updateTaskAction } = await import('./actions');
 
 beforeEach(() => {
   revalidatePath.mockClear();
   redirect.mockClear();
   deleteProject.mockClear();
   updateTask.mockClear();
+  createSite.mockClear();
 });
 
 describe('settle', () => {
@@ -100,5 +102,47 @@ describe('updateTaskAction', () => {
     data.set('title', 'Renamed');
     await updateTaskAction({}, data);
     expect(updateTask).toHaveBeenCalledWith('t-1', { title: 'Renamed' });
+  });
+});
+
+describe('createSiteAction geofence', () => {
+  const PROJECT_ID = '0192f7a0-0000-7000-8000-000000000001';
+
+  it('sends coordinates and a custom geofence', async () => {
+    const form = new FormData();
+    form.set('projectId', PROJECT_ID);
+    form.set('siteCode', 'SITE_01');
+    form.set('name', 'One');
+    form.set('latitude', '27.7172');
+    form.set('longitude', '85.3240');
+    form.set('geofenceMode', 'CUSTOM');
+    form.set('geofenceRadiusM', '250');
+    await createSiteAction({}, form);
+    expect(createSite).toHaveBeenCalledWith(PROJECT_ID, expect.objectContaining({
+      latitude: 27.7172, longitude: 85.324, geofenceMode: 'CUSTOM', geofenceRadiusM: 250,
+    }));
+  });
+
+  // Answered here rather than by a round trip to be told the obvious.
+  it('rejects a latitude with no longitude before calling the API', async () => {
+    const form = new FormData();
+    form.set('projectId', PROJECT_ID);
+    form.set('siteCode', 'SITE_01');
+    form.set('name', 'One');
+    form.set('latitude', '27.7172');
+    const state = await createSiteAction({}, form);
+    expect(state.error).toContain('together');
+    expect(createSite).not.toHaveBeenCalled();
+  });
+
+  it('rejects a custom geofence with no radius', async () => {
+    const form = new FormData();
+    form.set('projectId', PROJECT_ID);
+    form.set('siteCode', 'SITE_01');
+    form.set('name', 'One');
+    form.set('geofenceMode', 'CUSTOM');
+    const state = await createSiteAction({}, form);
+    expect(state.error).toContain('radius');
+    expect(createSite).not.toHaveBeenCalled();
   });
 });
