@@ -44,6 +44,29 @@ const CALLS: { name: string; call: () => Promise<unknown>; path: string; method?
     name: 'assignTask', call: () => api.assignTask('task-1', { assigneeId: 'u-1' }),
     path: '/api/v1/tasks/task-1/assign', method: 'POST', json: { assigneeId: 'u-1' },
   },
+  { name: 'listTasks', call: () => api.listTasks('p-1'), path: '/api/v1/projects/p-1/tasks' },
+  {
+    name: 'updateSite', call: () => api.updateSite('s-1', { name: 'Renamed' }),
+    path: '/api/v1/sites/s-1', method: 'PATCH', json: { name: 'Renamed' },
+  },
+  {
+    name: 'updateTaskType', call: () => api.updateTaskType('tt-1', { isActive: false }),
+    path: '/api/v1/task-types/tt-1', method: 'PATCH', json: { isActive: false },
+  },
+  {
+    name: 'updateMilestone', call: () => api.updateMilestone('m-1', { name: 'Handover' }),
+    path: '/api/v1/milestones/m-1', method: 'PATCH', json: { name: 'Handover' },
+  },
+  {
+    name: 'updateTask', call: () => api.updateTask('t-1', { status: 'ONGOING' }),
+    path: '/api/v1/tasks/t-1', method: 'PATCH', json: { status: 'ONGOING' },
+  },
+  { name: 'archiveProject', call: () => api.archiveProject('p-1'), path: '/api/v1/projects/p-1/archive', method: 'POST' },
+  { name: 'deleteProject', call: () => api.deleteProject('p-1'), path: '/api/v1/projects/p-1', method: 'DELETE' },
+  { name: 'deleteSite', call: () => api.deleteSite('s-1'), path: '/api/v1/sites/s-1', method: 'DELETE' },
+  { name: 'deleteTaskType', call: () => api.deleteTaskType('tt-1'), path: '/api/v1/task-types/tt-1', method: 'DELETE' },
+  { name: 'deleteMilestone', call: () => api.deleteMilestone('m-1'), path: '/api/v1/milestones/m-1', method: 'DELETE' },
+  { name: 'deleteTask', call: () => api.deleteTask('t-1'), path: '/api/v1/tasks/t-1', method: 'DELETE' },
 ];
 
 describe('project-api — every call maps to a gateway route', () => {
@@ -57,15 +80,17 @@ describe('project-api — every call maps to a gateway route', () => {
     });
   }
 
-  // The gateway routes '/api/v1/projects' and '/api/v1/tasks' to the project
-  // service, and nothing else reaches it. A path outside those prefixes 404s
+  // These are the prefixes ROUTES in apps/gateway/src/proxy/routes.ts sends to
+  // the project service, and nothing else reaches it. A path outside them 404s
   // at the edge rather than failing somewhere visible.
+  const ROUTED = ['/api/v1/dashboard', '/api/v1/projects', '/api/v1/sites', '/api/v1/task-types', '/api/v1/milestones', '/api/v1/tasks'];
+
   it('uses only paths the gateway allowlist routes to the project service', async () => {
     for (const { call } of CALLS) {
       authFetch.mockClear();
       await call();
       const path = authFetch.mock.calls[0]![0] as string;
-      expect(path.startsWith('/api/v1/projects') || path.startsWith('/api/v1/tasks') || path === '/api/v1/dashboard').toBe(true);
+      expect(ROUTED.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))).toBe(true);
     }
   });
 });
@@ -80,5 +105,12 @@ describe('project-api — results pass through untouched', () => {
     authFetch.mockResolvedValueOnce({ state: 'forbidden', message: 'Permission project.create is required' });
     expect(await api.createProject({ code: 'ALPHA', name: 'Alpha' }))
       .toEqual({ state: 'forbidden', message: 'Permission project.create is required' });
+  });
+});
+
+describe('listTasks filtering', () => {
+  it('passes the filter as a query, which the gateway forwards untouched', async () => {
+    await api.listTasks('p-1', { status: 'ONGOING' });
+    expect(authFetch).toHaveBeenCalledWith('/api/v1/projects/p-1/tasks', { query: { status: 'ONGOING' } });
   });
 });

@@ -6,7 +6,11 @@ import type {
   CreateSiteDto,
   CreateTaskDto,
   CreateTaskTypeDto,
+  UpdateMilestoneDto,
   UpdateProjectDto,
+  UpdateSiteDto,
+  UpdateTaskDto,
+  UpdateTaskTypeDto,
 } from '@ipms/contracts';
 import { authFetch, type ApiResult } from './api-client';
 
@@ -150,4 +154,49 @@ export async function createTask(projectId: string, task: CreateTaskDto): Promis
 /** Assignment is addressed by task, not by project — `/api/v1/tasks` is its own gateway prefix. */
 export async function assignTask(taskId: string, assignment: AssignTaskDto): Promise<ApiResult<Task>> {
   return authFetch<Task>(`/api/v1/tasks/${taskId}/assign`, { method: 'POST', json: assignment });
+}
+
+export async function listTasks(projectId: string, filter: { siteId?: string; status?: TaskStatus } = {}): Promise<ApiResult<Task[]>> {
+  return authFetch<Task[]>(`/api/v1/projects/${projectId}/tasks`, { query: filter });
+}
+
+export async function updateSite(id: string, changes: UpdateSiteDto): Promise<ApiResult<Site>> {
+  return authFetch<Site>(`/api/v1/sites/${id}`, { method: 'PATCH', json: changes });
+}
+
+export async function updateTaskType(id: string, changes: UpdateTaskTypeDto): Promise<ApiResult<TaskType>> {
+  return authFetch<TaskType>(`/api/v1/task-types/${id}`, { method: 'PATCH', json: changes });
+}
+
+export async function updateMilestone(id: string, changes: UpdateMilestoneDto): Promise<ApiResult<Milestone>> {
+  return authFetch<Milestone>(`/api/v1/milestones/${id}`, { method: 'PATCH', json: changes });
+}
+
+export async function updateTask(id: string, changes: UpdateTaskDto): Promise<ApiResult<Task>> {
+  return authFetch<Task>(`/api/v1/tasks/${id}`, { method: 'PATCH', json: changes });
+}
+
+/** Archiving is the ordinary end of a project's life; `deleteProject` is the irreversible one. */
+export async function archiveProject(id: string): Promise<ApiResult<Project>> {
+  return authFetch<Project>(`/api/v1/projects/${id}/archive`, { method: 'POST' });
+}
+
+export async function deleteProject(id: string): Promise<ApiResult<void>> {
+  return authFetch<void>(`/api/v1/projects/${id}`, { method: 'DELETE' });
+}
+
+export async function deleteSite(id: string): Promise<ApiResult<void>> {
+  return authFetch<void>(`/api/v1/sites/${id}`, { method: 'DELETE' });
+}
+
+export async function deleteTaskType(id: string): Promise<ApiResult<void>> {
+  return authFetch<void>(`/api/v1/task-types/${id}`, { method: 'DELETE' });
+}
+
+export async function deleteMilestone(id: string): Promise<ApiResult<void>> {
+  return authFetch<void>(`/api/v1/milestones/${id}`, { method: 'DELETE' });
+}
+
+export async function deleteTask(id: string): Promise<ApiResult<void>> {
+  return authFetch<void>(`/api/v1/tasks/${id}`, { method: 'DELETE' });
 }
