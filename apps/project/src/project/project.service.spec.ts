@@ -231,3 +231,38 @@ describe('deleteTask', () => {
     expect(prisma.task.delete).toHaveBeenCalledWith({ where: { id: 't-1' } });
   });
 });
+
+describe('createSite geofence', () => {
+  it('stores the mode and radius', async () => {
+    const prisma = makePrisma();
+    await service(prisma).createSite('p-1', {
+      siteCode: 'S1', name: 'One', geofenceMode: 'CUSTOM', geofenceRadiusM: 250,
+    } as never);
+    expect(prisma.site.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ geofenceMode: 'CUSTOM', geofenceRadiusM: 250 }),
+    });
+  });
+
+  it('defaults an unspecified site to INHERIT with a null radius', async () => {
+    const prisma = makePrisma();
+    await service(prisma).createSite('p-1', { siteCode: 'S1', name: 'One', geofenceMode: 'INHERIT' } as never);
+    expect(prisma.site.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ geofenceMode: 'INHERIT', geofenceRadiusM: null }),
+    });
+  });
+});
+
+describe('createProject geofence default', () => {
+  it('defaults to 500 m', async () => {
+    const prisma = makePrisma();
+    await service(prisma).createProject({ code: 'P1', name: 'P' } as never);
+    expect(prisma.project.create).toHaveBeenCalledWith({ data: expect.objectContaining({ defaultGeofenceRadiusM: 500 }) });
+  });
+
+  // An explicit null means "no checks on this project" and must survive.
+  it('keeps an explicit null', async () => {
+    const prisma = makePrisma();
+    await service(prisma).createProject({ code: 'P1', name: 'P', defaultGeofenceRadiusM: null } as never);
+    expect(prisma.project.create).toHaveBeenCalledWith({ data: expect.objectContaining({ defaultGeofenceRadiusM: null }) });
+  });
+});
