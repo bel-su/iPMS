@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma-clients/project';
+import { resolveGeofenceRadius, type GeofenceMode } from '@ipms/geo';
 import { uuidv7, type AssignTaskDto, type CreateMilestoneDto, type CreateProjectDto, type CreateSiteDto, type CreateTaskDto, type CreateTaskTypeDto, type ListTasksQueryDto, type UpdateMilestoneDto, type UpdateProjectDto, type UpdateSiteDto, type UpdateTaskDto, type UpdateTaskTypeDto } from '@ipms/contracts';
 
 @Injectable()
@@ -29,6 +30,24 @@ export class ProjectService {
   async deleteTaskType(id:string){ await this.requireTaskType(id); const tasks=await this.prisma.task.count({where:{taskTypeId:id}}); if(tasks>0) throw new ConflictException(`This task type is used by ${tasks} task(s). Deactivate it instead.`); await this.prisma.taskType.delete({where:{id}}); }
   async deleteMilestone(id:string){ await this.requireMilestone(id); await this.prisma.milestone.delete({where:{id}}); }
   async deleteTask(id:string){ const task=await this.requireTask(id); if(task.currentSubmissionId) throw new ConflictException('This task has a QC submission. Cancel the task instead of deleting it.'); await this.prisma.task.delete({where:{id}}); }
+  /**
+   * Coordinates and effective radius for one site, for the qc service.
+   *
+   * Decimal columns arrive as Prisma `Decimal`; they are narrowed to `number`
+   * here so the caller never has to know which driver produced them.
+   */
+  async siteGeofence(id: string): Promise<{ latitude: number | null; longitude: number | null; effectiveRadiusM: number | null }> {
+    const site = await this.prisma.site.findUnique({ where: { id }, include: { project: { select: { defaultGeofenceRadiusM: true } } } });
+    if (!site) throw new NotFoundException('Site not found');
+    return {
+      latitude: site.latitude === null ? null : Number(site.latitude),
+      longitude: site.longitude === null ? null : Number(site.longitude),
+      effectiveRadiusM: resolveGeofenceRadius(
+        { geofenceMode: site.geofenceMode as GeofenceMode, geofenceRadiusM: site.geofenceRadiusM },
+        { defaultGeofenceRadiusM: site.project.defaultGeofenceRadiusM },
+      ),
+    };
+  }
   async dashboard() { const [projects, reviewCount, rectifying] = await Promise.all([this.prisma.project.findMany({ where: { status: 'ACTIVE' }, include: { _count: { select: { sites: true } } }, take: 12, orderBy: { updatedAt: 'desc' } }), this.prisma.task.count({ where: { status: 'REVIEWING' } }), this.prisma.task.count({ where: { status: 'RECTIFYING' } })]); return { activeProjectCount: projects.length, sitesInDelivery: projects.reduce((total, p) => total + p._count.sites, 0), pendingReviews: reviewCount, rectifyingTasks: rectifying, projects }; }
   private async requireProject(id: string) { if (!await this.prisma.project.findUnique({ where: { id } })) throw new NotFoundException('Project not found'); }
   private async requireSite(id:string){ const site=await this.prisma.site.findUnique({where:{id}}); if(!site) throw new NotFoundException('Site not found'); return site; }

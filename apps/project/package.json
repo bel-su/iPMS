@@ -12,6 +12,7 @@
   "dependencies": {
     "@ipms/authz": "workspace:*",
     "@ipms/contracts": "workspace:*",
+    "@ipms/geo": "workspace:*",
     "@ipms/observability": "workspace:*",
     "@ipms/persistence": "workspace:*",
     "@nestjs/common": "12.0.3",

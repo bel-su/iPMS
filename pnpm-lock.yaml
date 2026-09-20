@@ -224,6 +224,9 @@ importers:
       '@ipms/contracts':
         specifier: workspace:*
         version: link:../../libs/contracts
+      '@ipms/geo':
+        specifier: workspace:*
+        version: link:../../libs/geo
       '@ipms/observability':
         specifier: workspace:*
         version: link:../../libs/observability

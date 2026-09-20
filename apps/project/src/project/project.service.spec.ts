@@ -266,3 +266,46 @@ describe('createProject geofence default', () => {
     expect(prisma.project.create).toHaveBeenCalledWith({ data: expect.objectContaining({ defaultGeofenceRadiusM: null }) });
   });
 });
+
+describe('siteGeofence', () => {
+  /** Coordinates arrive as Prisma Decimal, which serializes as a string. */
+  const site = (over: Record<string, unknown> = {}) => ({
+    id: 's-1', latitude: '27.7172000', longitude: '85.3240000',
+    geofenceMode: 'INHERIT', geofenceRadiusM: null,
+    project: { defaultGeofenceRadiusM: 500 }, ...over,
+  });
+
+  it('resolves an inheriting site to the project default', async () => {
+    const prisma = makePrisma();
+    prisma.site.findUnique.mockResolvedValue(site());
+    expect(await service(prisma).siteGeofence('s-1')).toEqual({
+      latitude: 27.7172, longitude: 85.324, effectiveRadiusM: 500,
+    });
+  });
+
+  it('resolves an OFF site to no radius', async () => {
+    const prisma = makePrisma();
+    prisma.site.findUnique.mockResolvedValue(site({ geofenceMode: 'OFF' }));
+    expect((await service(prisma).siteGeofence('s-1')).effectiveRadiusM).toBeNull();
+  });
+
+  it('resolves a CUSTOM site to its own radius', async () => {
+    const prisma = makePrisma();
+    prisma.site.findUnique.mockResolvedValue(site({ geofenceMode: 'CUSTOM', geofenceRadiusM: 250 }));
+    expect((await service(prisma).siteGeofence('s-1')).effectiveRadiusM).toBe(250);
+  });
+
+  it('returns null coordinates for a site that has none', async () => {
+    const prisma = makePrisma();
+    prisma.site.findUnique.mockResolvedValue(site({ latitude: null, longitude: null }));
+    const result = await service(prisma).siteGeofence('s-1');
+    expect(result.latitude).toBeNull();
+    expect(result.longitude).toBeNull();
+  });
+
+  it('404s an unknown site', async () => {
+    const prisma = makePrisma();
+    prisma.site.findUnique.mockResolvedValue(null);
+    await expect(service(prisma).siteGeofence('s-1')).rejects.toThrow(NotFoundException);
+  });
+});

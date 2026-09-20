@@ -83,6 +83,10 @@ describe('resolveUpstream — internal routes stay private', () => {
     expect(resolveUpstream('/api/v1/audit/internal/authz/explain')).toBeUndefined();
   });
 
+  it('refuses the site geofence lookup', () => {
+    expect(resolveUpstream('/api/v1/internal/sites/abc/geofence')).toBeUndefined();
+  });
+
   it('refuses a bare /internal path', () => {
     expect(resolveUpstream('/internal')).toBeUndefined();
   });
