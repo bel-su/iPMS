@@ -80,3 +80,17 @@ describe('project.delete', () => {
       .toEqual(['project.archive', 'project.delete', 'project.update', 'project.view']);
   });
 });
+
+describe('site.import', () => {
+  it('is in the catalogue', () => {
+    expect(PERMISSION_CODES.has('site.import')).toBe(true);
+  });
+
+  // It overwrites existing sites, so bulk authority must not exceed the
+  // one-at-a-time authority the holder already has.
+  it('depends on site.update, not only site.create', () => {
+    expect(expandDependencies(['site.import'])).toEqual(
+      expect.arrayContaining(['site.view', 'site.create', 'site.update', 'project.view']),
+    );
+  });
+});
