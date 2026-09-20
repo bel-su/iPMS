@@ -17,11 +17,18 @@ describe('resolveUpstream — allowlist', () => {
   });
 
   it('routes the project prefixes to the project service', () => {
-    for (const path of ['/api/v1/dashboard', '/api/v1/projects', '/api/v1/projects/x/sites', '/api/v1/tasks/x/assign']) {
+    for (const path of [
+      '/api/v1/dashboard', '/api/v1/projects', '/api/v1/projects/x/sites', '/api/v1/projects/x/tasks',
+      '/api/v1/tasks/x/assign', '/api/v1/sites/x', '/api/v1/task-types/x', '/api/v1/milestones/x',
+    ]) {
       const upstream = resolveUpstream(path);
       expect(upstream?.service).toBe('project');
       expect(upstream?.port).toBe(3004);
     }
+  });
+
+  it('does not reach an internal path under a new prefix', () => {
+    expect(resolveUpstream('/api/v1/sites/internal/secrets')).toBeUndefined();
   });
 
   it('routes the qc prefix to the qc service', () => {
