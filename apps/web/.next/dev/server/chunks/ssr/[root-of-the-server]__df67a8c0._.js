@@ -13,41 +13,85 @@ __turbopack_context__.n(__turbopack_context__.i("[project]/apps/web/app/layout.t
 "use strict";
 
 __turbopack_context__.s([
+    "assignTask",
+    ()=>assignTask,
+    "createMilestone",
+    ()=>createMilestone,
+    "createProject",
+    ()=>createProject,
+    "createSite",
+    ()=>createSite,
+    "createTask",
+    ()=>createTask,
+    "createTaskType",
+    ()=>createTaskType,
+    "getProject",
+    ()=>getProject,
     "getProjectDashboard",
-    ()=>getProjectDashboard
+    ()=>getProjectDashboard,
+    "listProjects",
+    ()=>listProjects,
+    "updateProject",
+    ()=>updateProject
 ]);
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$7_$40$babel$2b$core$40$7$2e$29$2e$7_$40$opentelemetry$2b$api$40$1$2e$9$2e$1_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$server$2d$only$2f$empty$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/.pnpm/next@16.0.7_@babel+core@7.29.7_@opentelemetry+api@1.9.1_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/server-only/empty.js [app-rsc] (ecmascript)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$7_$40$babel$2b$core$40$7$2e$29$2e$7_$40$opentelemetry$2b$api$40$1$2e$9$2e$1_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$headers$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/.pnpm/next@16.0.7_@babel+core@7.29.7_@opentelemetry+api@1.9.1_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/headers.js [app-rsc] (ecmascript)");
+(()=>{
+    const e = new Error("Cannot find module './api-client.js'");
+    e.code = 'MODULE_NOT_FOUND';
+    throw e;
+})();
 ;
 ;
-const apiBaseUrl = process.env['IPMS_API_BASE_URL'] ?? 'http://127.0.0.1:3000';
 async function getProjectDashboard() {
-    const token = (await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$7_$40$babel$2b$core$40$7$2e$29$2e$7_$40$opentelemetry$2b$api$40$1$2e$9$2e$1_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$headers$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["cookies"])()).get('ipms_access_token')?.value;
-    if (!token) return {
-        state: 'unauthenticated'
-    };
-    try {
-        const response = await fetch(`${apiBaseUrl}/api/v1/dashboard`, {
-            headers: {
-                authorization: `Bearer ${token}`
-            },
-            cache: 'no-store'
-        });
-        if (response.status === 401 || response.status === 403) return {
-            state: 'unauthenticated'
-        };
-        if (!response.ok) return {
-            state: 'unavailable'
-        };
-        return {
-            state: 'ready',
-            data: await response.json()
-        };
-    } catch  {
-        return {
-            state: 'unavailable'
-        };
-    }
+    return authFetch('/api/v1/dashboard');
+}
+async function listProjects() {
+    return authFetch('/api/v1/projects');
+}
+async function getProject(id) {
+    return authFetch(`/api/v1/projects/${id}`);
+}
+async function createProject(project) {
+    return authFetch('/api/v1/projects', {
+        method: 'POST',
+        json: project
+    });
+}
+async function updateProject(id, changes) {
+    return authFetch(`/api/v1/projects/${id}`, {
+        method: 'PATCH',
+        json: changes
+    });
+}
+async function createSite(projectId, site) {
+    return authFetch(`/api/v1/projects/${projectId}/sites`, {
+        method: 'POST',
+        json: site
+    });
+}
+async function createTaskType(projectId, taskType) {
+    return authFetch(`/api/v1/projects/${projectId}/task-types`, {
+        method: 'POST',
+        json: taskType
+    });
+}
+async function createMilestone(projectId, milestone) {
+    return authFetch(`/api/v1/projects/${projectId}/milestones`, {
+        method: 'POST',
+        json: milestone
+    });
+}
+async function createTask(projectId, task) {
+    return authFetch(`/api/v1/projects/${projectId}/tasks`, {
+        method: 'POST',
+        json: task
+    });
+}
+async function assignTask(taskId, assignment) {
+    return authFetch(`/api/v1/tasks/${taskId}/assign`, {
+        method: 'POST',
+        json: assignment
+    });
 }
 }),
 "[project]/apps/web/app/page.tsx [app-rsc] (ecmascript)", ((__turbopack_context__) => {

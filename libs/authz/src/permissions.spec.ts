@@ -69,3 +69,14 @@ describe('validatePermissionSet', () => {
     expect(validatePermissionSet([]).valid).toBe(true);
   });
 });
+
+describe('project.delete', () => {
+  it('is in the catalogue', () => {
+    expect(PERMISSIONS.map((p) => p.code)).toContain('project.delete');
+  });
+
+  it('depends on archive, so no role holds the irreversible power without the reversible one', () => {
+    expect(expandDependencies(['project.delete']).sort())
+      .toEqual(['project.archive', 'project.delete', 'project.update', 'project.view']);
+  });
+});

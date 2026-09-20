@@ -1,0 +1,37 @@
+import 'reflect-metadata';
+import { describe, expect, it, vi } from 'vitest';
+import { PERMISSION_KEY, type PermissionMetadata } from '@ipms/authz';
+import { ProjectController } from './project.controller.js';
+import type { ProjectService } from './project.service.js';
+
+function permissionOf(method: keyof ProjectController): string | undefined {
+  const handler = ProjectController.prototype[method] as unknown as object;
+  return (Reflect.getMetadata(PERMISSION_KEY, handler) as PermissionMetadata | undefined)?.permission;
+}
+
+describe('permissions on the destructive routes', () => {
+  const EXPECTED: [keyof ProjectController, string][] = [
+    ['archive', 'project.archive'],
+    ['remove', 'project.delete'],
+    ['removeSite', 'site.delete'],
+    ['removeTaskType', 'task.update'],
+    ['removeMilestone', 'milestone.update'],
+    ['removeTask', 'task.delete'],
+    ['tasks', 'task.view'],
+  ];
+
+  for (const [method, permission] of EXPECTED) {
+    it(`${String(method)} requires ${permission}`, () => {
+      expect(permissionOf(method)).toBe(permission);
+    });
+  }
+});
+
+describe('id parsing', () => {
+  it('refuses an id that is not a uuid before the service is reached', () => {
+    const service = { deleteProject: vi.fn() };
+    const controller = new ProjectController(service as unknown as ProjectService);
+    expect(() => controller.remove('not-a-uuid')).toThrow();
+    expect(service.deleteProject).not.toHaveBeenCalled();
+  });
+});

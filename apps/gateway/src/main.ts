@@ -4,9 +4,8 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyReplyFrom from '@fastify/reply-from';
-import { createLogger } from '@ipms/observability';
+import { GlobalExceptionFilter, createLogger } from '@ipms/observability';
 import { AppModule } from './app.module.js';
-import { GlobalExceptionFilter } from './errors/exception.filter.js';
 import { extractToken, verifyToken } from '@ipms/authz';
 
 const log = createLogger('gateway');
@@ -78,7 +77,7 @@ async function bootstrap(): Promise<void> {
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   });
 
-  app.useGlobalFilters(new GlobalExceptionFilter());
+  app.useGlobalFilters(new GlobalExceptionFilter('gateway'));
   app.enableShutdownHooks();
 
   const port = Number(process.env['PORT'] ?? 3000);

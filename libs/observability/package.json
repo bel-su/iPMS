@@ -3,16 +3,26 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "pino": "10.3.1",
     "@ipms/authz": "workspace:*",
+    "@ipms/contracts": "workspace:*",
     "@nestjs/common": "12.0.3",
-    "prom-client": "15.1.3"
+    "prom-client": "15.1.3",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@nestjs/testing": "12.0.3",

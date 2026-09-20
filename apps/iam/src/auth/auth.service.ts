@@ -7,8 +7,12 @@ import { resolvePermissions, type AuthzOverride } from '@ipms/authz';
 import { PasswordService } from './password.service.js';
 import { TokenService } from './token.service.js';
 
-/** Identical for every failure mode, so responses never reveal whether a username exists. */
-const GENERIC_FAILURE = 'Invalid username or password';
+/**
+ * Identical for every failure mode, so responses never reveal whether a
+ * username exists. Exported because the controller answers a body the schema
+ * refuses with this same message, for the same reason.
+ */
+export const GENERIC_FAILURE = 'Invalid username or password';
 
 /**
  * Publishes each user's current token version to the shared cache the gateway

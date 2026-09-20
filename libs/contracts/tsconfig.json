@@ -3,7 +3,12 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node"]
+    "types": ["node"],
+    // Sibling libs resolve through node_modules to their built `exports`, not
+    // through the workspace path aliases. The aliases point at `.ts` sources,
+    // which would pull another lib's source into this lib's program and nest
+    // the emitted output under an extra directory level.
+    "paths": {}
   },
   "include": ["src/**/*.ts"]
 }

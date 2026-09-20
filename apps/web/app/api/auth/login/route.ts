@@ -1,21 +1,37 @@
 import { NextResponse } from 'next/server';
+import { loginWithPassword, writeSession } from '../../../lib/session';
 
-const apiBaseUrl = process.env['IPMS_API_BASE_URL'] ?? 'http://127.0.0.1:3000';
-
-export async function POST(request: Request) {
-  const body: unknown = await request.json();
+/**
+ * Exchanges a username and password for a session this browser holds in
+ * http-only cookies, so the access token is never readable from client script.
+ *
+ * The credentials are checked by iam, not here. This handler only refuses a
+ * request that is not a login attempt at all, so that a malformed body is
+ * reported as a bad request rather than as an unavailable gateway.
+ */
+export async function POST(request: Request): Promise<NextResponse> {
+  let body: unknown;
   try {
-    const response = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store',
-    });
-    if (!response.ok) return NextResponse.json({ message: 'Invalid username or password' }, { status: response.status });
-    const tokens = await response.json() as { accessToken: string; refreshToken: string; expiresIn: number };
-    const result = NextResponse.json({ ok: true });
-    const secure = process.env['NODE_ENV'] === 'production';
-    result.cookies.set('ipms_access_token', tokens.accessToken, { httpOnly: true, sameSite: 'lax', secure, maxAge: tokens.expiresIn, path: '/' });
-    result.cookies.set('ipms_refresh_token', tokens.refreshToken, { httpOnly: true, sameSite: 'lax', secure, maxAge: 2_592_000, path: '/' });
-    return result;
+    body = await request.json();
   } catch {
-    return NextResponse.json({ message: 'The API is not available' }, { status: 503 });
+    return NextResponse.json({ message: 'Enter a username and password.' }, { status: 400 });
   }
+
+  const { username, password } = (body ?? {}) as { username?: unknown; password?: unknown };
+  if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
+    return NextResponse.json({ message: 'Enter a username and password.' }, { status: 400 });
+  }
+
+  const result = await loginWithPassword({ username, password });
+
+  if (result.state === 'rejected') {
+    return NextResponse.json({ message: 'Invalid username or password.' }, { status: 401 });
+  }
+  if (result.state === 'unavailable') {
+    return NextResponse.json({ message: 'The iPMS API is not available. Try again in a moment.' }, { status: 503 });
+  }
+
+  const response = NextResponse.json({ ok: true });
+  writeSession(response, result.tokens);
+  return response;
 }

@@ -40,6 +40,12 @@ export const ROUTES: Upstream[] = [
   { prefix: '/api/v1/audit', service: 'audit', ...AUDIT },
   { prefix: '/api/v1/dashboard', service: 'project', ...PROJECT },
   { prefix: '/api/v1/projects', service: 'project', ...PROJECT },
+  // Sub-resources are addressed by their own id, so each needs its own prefix.
+  // Project-level milestones are '/api/v1/milestones'; '/api/v1/site-milestones'
+  // is reserved for per-site milestone instances, which are a different entity.
+  { prefix: '/api/v1/sites', service: 'project', ...PROJECT },
+  { prefix: '/api/v1/task-types', service: 'project', ...PROJECT },
+  { prefix: '/api/v1/milestones', service: 'project', ...PROJECT },
   { prefix: '/api/v1/tasks', service: 'project', ...PROJECT },
   { prefix: '/api/v1/qc', service: 'qc', ...QC },
 ];

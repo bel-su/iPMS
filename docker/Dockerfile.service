@@ -5,26 +5,53 @@ FROM node:22.13-alpine AS base
 RUN npm install -g pnpm@10.15.0
 WORKDIR /app
 
-FROM base AS deps
+FROM base AS build
+ARG SERVICE
 RUN apk add --no-cache python3 make g++
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY libs ./libs
-COPY apps ./apps
+COPY . .
 RUN pnpm install --frozen-lockfile
 
-FROM deps AS build
+# The libraries are built first and consumed as packages: each one's
+# `exports` points at its own `dist`, so the service compiles against, and at
+# runtime loads, real JavaScript. Compiling library sources into the service's
+# own output instead would make every service carry its own copy.
+RUN pnpm -r --filter "./libs/*" build
+
+# Prisma generates into `apps/$SERVICE/node_modules/@prisma-clients/$SERVICE`,
+# so it must run before the service is compiled against those types.
+RUN if [ -f "apps/$SERVICE/prisma/schema.prisma" ]; then \
+      DATABASE_URL="postgresql://dummy" pnpm --filter "$SERVICE" exec prisma generate; \
+    fi
+RUN pnpm --filter "$SERVICE" build
+
+# `deploy` resolves this service's production dependency graph — including the
+# workspace libraries, copied in with their built output — into one
+# self-contained tree with a plain node_modules and no symlinks out of it.
+RUN pnpm --filter "$SERVICE" deploy --prod --legacy /deploy
+
+# `deploy` builds node_modules from the lockfile, which does not describe the
+# generated Prisma client, so it is carried over separately.
+RUN if [ -d "apps/$SERVICE/node_modules/@prisma-clients" ]; then \
+      cp -R "apps/$SERVICE/node_modules/@prisma-clients" /deploy/node_modules/; \
+    fi
+
+# Migrations run as their own one-shot container, from the build stage, which
+# still has the dev dependencies the runtime image prunes — the Prisma CLI
+# among them. Kept out of the service's own startup on purpose: several
+# replicas booting at once would race each other to apply the same migration.
+FROM build AS migrate
 ARG SERVICE
-COPY . .
-RUN pnpm nx build "$SERVICE" --configuration=production
-RUN if [ -f "apps/$SERVICE/prisma/schema.prisma" ]; then pnpm --filter "$SERVICE" exec prisma generate; fi
+ENV SERVICE=$SERVICE
+WORKDIR /app/apps/$SERVICE
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy"]
 
 FROM base AS runtime
-ARG SERVICE
 ENV NODE_ENV=production
 RUN addgroup -S ipms && adduser -S ipms -G ipms
-COPY --from=build --chown=ipms:ipms /app/dist/apps/$SERVICE ./dist
-COPY --from=build --chown=ipms:ipms /app/node_modules ./node_modules
-COPY --from=build --chown=ipms:ipms /app/apps/$SERVICE/prisma ./prisma
+COPY --from=build --chown=ipms:ipms /deploy ./
 USER ipms
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+# Every service compiles to the same layout, so this needs no build argument at
+# runtime — the missing `ENV SERVICE` is what made the previous image exit with
+# `Cannot find module '/app/dist/apps/src/main.js'`.
+CMD ["node", "dist/src/main.js"]

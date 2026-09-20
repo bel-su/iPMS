@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
@@ -21,8 +22,7 @@
     "@nestjs/core": "12.0.3",
     "@nestjs/platform-fastify": "12.0.3",
     "fastify": "5.12.4",
-    "ioredis": "6.0.0",
-    "zod": "4.6.5"
+    "ioredis": "6.0.0"
   },
   "devDependencies": {
     "testcontainers": "12.1.0"

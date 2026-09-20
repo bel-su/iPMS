@@ -1,0 +1,8 @@
+{
+  // Emit-only variant. The tests stay in `tsconfig.json` so that the editor,
+  // `typecheck` and Vitest's esbuild transform all still apply these compiler
+  // options to them — excluding a spec file there silently drops
+  // `experimentalDecorators` for it, and a decorator then fails to parse.
+  "extends": "./tsconfig.json",
+  "exclude": ["src/**/*.spec.ts", "src/**/*.test.ts"]
+}
