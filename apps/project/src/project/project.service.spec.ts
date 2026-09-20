@@ -87,6 +87,25 @@ describe('updateSite', () => {
     expect(prisma.site.update.mock.calls[0]![0].data).toEqual({ regionId: 'r-9' });
   });
 
+  it('clears the region when regionName is explicitly null, and upserts nothing', async () => {
+    prisma.site.update.mockResolvedValue({ id: 's-1' });
+    await service(prisma).updateSite('s-1', { regionName: null });
+    expect(prisma.region.upsert).not.toHaveBeenCalled();
+    expect(prisma.site.update.mock.calls[0]![0].data).toEqual({ regionId: null });
+  });
+
+  it('leaves the region alone when regionName is absent', async () => {
+    prisma.site.update.mockResolvedValue({ id: 's-1' });
+    await service(prisma).updateSite('s-1', { name: 'Renamed' });
+    expect(prisma.site.update.mock.calls[0]![0].data).toEqual({ name: 'Renamed' });
+  });
+
+  it('writes nulls straight through for the other clearable fields', async () => {
+    prisma.site.update.mockResolvedValue({ id: 's-1' });
+    await service(prisma).updateSite('s-1', { latitude: null, longitude: null, city: null });
+    expect(prisma.site.update.mock.calls[0]![0].data).toEqual({ latitude: null, longitude: null, city: null });
+  });
+
   it('refuses a site that does not exist', async () => {
     prisma.site.findUnique.mockResolvedValue(null);
     await expect(service(prisma).updateSite('missing', { name: 'x' })).rejects.toBeInstanceOf(NotFoundException);
