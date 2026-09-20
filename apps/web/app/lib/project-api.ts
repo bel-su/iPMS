@@ -3,9 +3,11 @@ import type {
   AssignTaskDto,
   CreateMilestoneDto,
   CreateProjectDto,
-  CreateSiteDto,
+  CreateSiteInput,
   CreateTaskDto,
   CreateTaskTypeDto,
+  SiteImportCommitDto,
+  SiteImportPreviewDto,
   UpdateMilestoneDto,
   UpdateProjectDto,
   UpdateSiteDto,
@@ -43,6 +45,7 @@ export interface Project {
   status: ProjectStatus;
   startDate: string | null;
   targetDate: string | null;
+  defaultGeofenceRadiusM: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,7 +61,8 @@ export interface Site {
   /** Prisma Decimal, serialized by its own toJSON. */
   latitude: string | null;
   longitude: string | null;
-  geofenceRadiusM: number;
+  geofenceMode: 'INHERIT' | 'CUSTOM' | 'OFF';
+  geofenceRadiusM: number | null;
   address: string | null;
   city: string | null;
   area: string | null;
@@ -136,7 +140,7 @@ export async function updateProject(id: string, changes: UpdateProjectDto): Prom
   return authFetch<Project>(`/api/v1/projects/${id}`, { method: 'PATCH', json: changes });
 }
 
-export async function createSite(projectId: string, site: CreateSiteDto): Promise<ApiResult<Site>> {
+export async function createSite(projectId: string, site: CreateSiteInput): Promise<ApiResult<Site>> {
   return authFetch<Site>(`/api/v1/projects/${projectId}/sites`, { method: 'POST', json: site });
 }
 
@@ -200,4 +204,19 @@ export async function deleteMilestone(id: string): Promise<ApiResult<void>> {
 
 export async function deleteTask(id: string): Promise<ApiResult<void>> {
   return authFetch<void>(`/api/v1/tasks/${id}`, { method: 'DELETE' });
+}
+
+
+/**
+ * Uploads a workbook for validation. Writes nothing: the report it returns is
+ * what the manager confirms, and `importable` is the payload commit takes.
+ */
+export async function previewSiteImport(projectId: string, file: File): Promise<ApiResult<SiteImportPreviewDto>> {
+  const body = new FormData();
+  body.set('file', file, file.name);
+  return authFetch<SiteImportPreviewDto>(`/api/v1/projects/${projectId}/sites/import/preview`, { method: 'POST', body });
+}
+
+export async function commitSiteImport(projectId: string, payload: SiteImportCommitDto): Promise<ApiResult<{ created: number; updated: number }>> {
+  return authFetch(`/api/v1/projects/${projectId}/sites/import/commit`, { method: 'POST', json: payload });
 }

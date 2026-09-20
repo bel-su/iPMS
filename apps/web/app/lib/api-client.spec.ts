@@ -70,6 +70,21 @@ describe('authFetch — the request it builds', () => {
 
     expect(fetchMock.mock.calls[0]![1].headers['content-type']).toBeUndefined();
   });
+
+  it('sends a raw body without forcing a JSON content type', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const form = new FormData();
+    form.set('file', new Blob(['x']), 'sites.xlsx');
+    await authFetch('/api/v1/x', { method: 'POST', body: form });
+
+    const init = fetchMock.mock.calls[0]![1];
+    expect(init.body).toBe(form);
+    // Set explicitly, the multipart boundary would be missing and the upload
+    // would be unparseable upstream — fetch must derive it from the FormData.
+    expect(init.headers['content-type']).toBeUndefined();
+  });
 });
 
 describe('authFetch — outcomes', () => {

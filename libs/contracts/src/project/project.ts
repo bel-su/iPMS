@@ -43,7 +43,14 @@ const customNeedsRadius = (value: { geofenceMode?: string | undefined; geofenceR
 const CUSTOM_RADIUS_MESSAGE = { message: 'A custom geofence needs a radius in metres', path: ['geofenceRadiusM'] };
 
 export const CreateSiteSchema = SiteFields.strip().refine(customNeedsRadius, CUSTOM_RADIUS_MESSAGE);
+/** What a handler holds after parsing: `geofenceMode` is present, the default applied. */
 export type CreateSiteDto = z.infer<typeof CreateSiteSchema>;
+/**
+ * What a caller sends. Distinct from `CreateSiteDto` because `geofenceMode`
+ * carries a default, so it is required on the way out of the parser and
+ * optional on the way in — a client must not be made to name it.
+ */
+export type CreateSiteInput = z.input<typeof CreateSiteSchema>;
 
 export const CreateTaskTypeSchema = z.object({
   code: z.string().trim().min(1).max(50).regex(/^[A-Z0-9_-]+$/),
