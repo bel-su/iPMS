@@ -27,7 +27,7 @@ export function FormError({ state }: { state: FormState }) {
 export function CreateProjectForm() {
   const [state, action] = useActionState(createProjectAction, EMPTY);
   return (
-    <form action={action} style={{ padding: 20 }}>
+    <form action={action} className="panel-form">
       <div className="form-grid">
         <label className="field">Code<input name="code" required pattern="[A-Z0-9_\-]+" maxLength={50} /><span className="hint">Upper case, digits, dash or underscore.</span></label>
         <label className="field">Name<input name="name" required maxLength={200} /></label>
@@ -109,7 +109,7 @@ export function CreateTaskForm({
   const [state, action] = useActionState(createTaskAction, EMPTY);
   const active = taskTypes.filter((type) => type.isActive);
   if (sites.length === 0 || active.length === 0) {
-    return <p className="form-note" style={{ padding: 16 }}>Add a site and an active task type before creating tasks.</p>;
+    return <p className="form-note">Add a site and an active task type before creating tasks.</p>;
   }
   return (
     <form action={action} className="inline-form">
@@ -166,7 +166,7 @@ const STATUSES = ['DRAFT', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED'] as con
 export function EditProjectForm({ project }: { project: ProjectDetail }) {
   const [state, action] = useActionState(updateProjectAction, EMPTY);
   return (
-    <form action={action} style={{ padding: 20 }}>
+    <form action={action} className="panel-form">
       <input type="hidden" name="projectId" value={project.id} />
       <div className="form-grid">
         <label className="field">Code<input value={project.code} readOnly disabled /><span className="hint">Fixed at creation.</span></label>
@@ -188,7 +188,7 @@ export function EditProjectForm({ project }: { project: ProjectDetail }) {
 export function ArchiveForm({ projectId }: { projectId: string }) {
   const [state, action] = useActionState(archiveProjectAction, EMPTY);
   return (
-    <form action={action} style={{ padding: 20 }}>
+    <form action={action} className="panel-form">
       <input type="hidden" name="projectId" value={projectId} />
       <SubmitButton className="ghost-button">Archive this project</SubmitButton>
       <FormError state={state} />

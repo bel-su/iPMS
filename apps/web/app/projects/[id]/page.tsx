@@ -2,10 +2,7 @@ import { getCurrentUser, hasPermission } from '../../lib/iam-api';
 import { getProject, listTasks } from '../../lib/project-api';
 import { deleteMilestoneAction, deleteSiteAction, deleteTaskAction, deleteTaskTypeAction } from '../actions';
 import { CreateMilestoneForm, CreateSiteForm, CreateTaskForm, CreateTaskTypeForm, RowAction } from '../forms';
-
-function StatePage({ title, children }: { title: string; children: React.ReactNode }) {
-  return <main className="state-page"><section className="state-card"><a className="brand" href="/"><span>i</span>PMS</a><h1>{title}</h1>{children}</section></main>;
-}
+import { Sidebar, StatePage, TopActions } from '../../shell';
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,10 +22,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   return (
     <main className="app-shell">
+      <Sidebar active="projects" />
       <section className="content">
         <header className="topbar">
           <div className="crumbs"><a href="/projects">Projects</a><b>/</b><strong>{data.code}</strong></div>
-          {may('project.update') ? <a className="ghost-button" href={`/projects/${data.id}/edit`}>Edit project</a> : null}
+          <TopActions>
+            {may('project.update') ? <a className="ghost-button" href={`/projects/${data.id}/edit`}>Edit project</a> : null}
+          </TopActions>
         </header>
 
         <div className="dashboard">

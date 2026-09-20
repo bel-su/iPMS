@@ -1,9 +1,6 @@
 import { getCurrentUser, hasPermission } from '../lib/iam-api';
 import { listProjects } from '../lib/project-api';
-
-function StatePage({ title, children }: { title: string; children: React.ReactNode }) {
-  return <main className="state-page"><section className="state-card"><a className="brand" href="/"><span>i</span>PMS</a><h1>{title}</h1>{children}</section></main>;
-}
+import { Sidebar, StatePage, TopActions } from '../shell';
 
 export default async function ProjectsPage() {
   const [projects, user] = await Promise.all([listProjects(), getCurrentUser()]);
@@ -23,8 +20,9 @@ export default async function ProjectsPage() {
 
   return (
     <main className="app-shell">
+      <Sidebar active="projects" />
       <section className="content">
-        <header className="topbar"><div className="crumbs"><a href="/">Workspace</a><b>/</b><strong>Projects</strong></div></header>
+        <header className="topbar"><div className="crumbs"><a href="/">Workspace</a><b>/</b><strong>Projects</strong></div><TopActions /></header>
         <div className="dashboard">
           <div className="toolbar">
             <div><p className="eyebrow">ALL PROJECTS</p><h1>Projects</h1></div>

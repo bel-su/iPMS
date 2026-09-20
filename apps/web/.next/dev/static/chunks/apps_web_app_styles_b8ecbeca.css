@@ -383,7 +383,16 @@ a {
 }
 
 .panel {
-  padding: 23px;
+  --panel-pad: 23px;
+  padding: var(--panel-pad);
+}
+
+.dashboard > .panel + .panel, .dashboard > .welcome + .panel {
+  margin-top: 20px;
+}
+
+.panel > .data-table {
+  margin-top: 15px;
 }
 
 .panel-header {
@@ -506,6 +515,8 @@ a {
 }
 
 .badge {
+  color: #738095;
+  background: #eef1f5;
   border-radius: 3px;
   padding: 3px 6px;
   font-size: 9px;
@@ -753,6 +764,12 @@ a {
     margin: 0;
   }
 
+  .top-actions .ghost-button {
+    white-space: nowrap;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
   .menu-button {
     color: #556078;
     background: none;
@@ -830,7 +847,12 @@ a {
   }
 
   .panel {
-    padding: 17px;
+    --panel-pad: 17px;
+  }
+
+  .panel > .data-table {
+    display: block;
+    overflow-x: auto;
   }
 
   .project-summary {
@@ -1040,10 +1062,23 @@ a {
   background: #94a3b80f;
 }
 
+.data-table .badge {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
 .data-table .row-actions {
-  justify-content: flex-end;
-  gap: 8px;
-  display: flex;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.data-table .row-actions > * {
+  vertical-align: middle;
+  display: inline-block;
+}
+
+.data-table .row-actions > * + * {
+  margin-left: 8px;
 }
 
 .form-grid {
@@ -1080,17 +1115,33 @@ a {
   font-weight: 400;
 }
 
-.inline-form {
+.panel > .inline-form, .panel > .form-note {
+  margin: 18px calc(var(--panel-pad) * -1) calc(var(--panel-pad) * -1);
+  padding: 16px var(--panel-pad);
+  background: #fbfcfe;
   border-top: 1px solid #94a3b82e;
+  border-radius: 0 0 10px 10px;
+}
+
+.inline-form {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 12px;
-  padding: 16px;
   display: flex;
 }
 
 .inline-form .field {
   flex: 180px;
+}
+
+.panel-form {
+  gap: 16px;
+  margin-top: 18px;
+  display: grid;
+}
+
+.panel-form .primary-button, .panel-form .ghost-button, .panel-form .danger-button {
+  justify-self: start;
 }
 
 .ghost-button, .danger-button {

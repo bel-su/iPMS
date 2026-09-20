@@ -1,10 +1,7 @@
 import { getCurrentUser, hasPermission } from '../../../lib/iam-api';
 import { getProject } from '../../../lib/project-api';
 import { ArchiveForm, DeleteProjectForm, EditProjectForm } from '../../forms';
-
-function StatePage({ title, children }: { title: string; children: React.ReactNode }) {
-  return <main className="state-page"><section className="state-card"><a className="brand" href="/"><span>i</span>PMS</a><h1>{title}</h1>{children}</section></main>;
-}
+import { Sidebar, StatePage, TopActions } from '../../../shell';
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,9 +20,11 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
 
   return (
     <main className="app-shell">
+      <Sidebar active="projects" />
       <section className="content">
         <header className="topbar">
           <div className="crumbs"><a href="/projects">Projects</a><b>/</b><a href={`/projects/${data.id}`}>{data.code}</a><b>/</b><strong>Edit</strong></div>
+          <TopActions />
         </header>
         <div className="dashboard">
           <section className="panel">
