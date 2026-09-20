@@ -18,7 +18,7 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
     code: 'PROJECT_MANAGER', name: 'Project Manager',
     description: 'Runs projects: sites, milestones, task dispatch, and QC approval.',
     permissions: [
-      'project.view', 'project.create', 'project.update',
+      'project.view', 'project.create', 'project.update', 'project.archive',
       'site.view', 'site.create', 'site.update',
       'milestone.view', 'milestone.create', 'milestone.update', 'milestone.declare',
       'task.view', 'task.create', 'task.update', 'task.assign', 'task.generate', 'task.cancel',

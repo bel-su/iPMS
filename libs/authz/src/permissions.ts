@@ -36,6 +36,7 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   def('project', 'create', 'Create projects', ['project.view']),
   def('project', 'update', 'Update projects', ['project.view']),
   def('project', 'archive', 'Archive projects', ['project.view', 'project.update']),
+  def('project', 'delete', 'Permanently delete a project', ['project.view', 'project.archive']),
   def('site', 'view', 'View sites', ['project.view']),
   def('site', 'create', 'Create sites', ['site.view']),
   def('site', 'update', 'Update sites', ['site.view']),
