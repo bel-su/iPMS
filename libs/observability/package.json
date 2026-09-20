@@ -19,8 +19,10 @@
   "dependencies": {
     "pino": "10.3.1",
     "@ipms/authz": "workspace:*",
+    "@ipms/contracts": "workspace:*",
     "@nestjs/common": "12.0.3",
-    "prom-client": "15.1.3"
+    "prom-client": "15.1.3",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@nestjs/testing": "12.0.3",

@@ -1,9 +1,8 @@
 import { ArgumentsHost, Catch, HttpException, HttpStatus, type ExceptionFilter } from '@nestjs/common';
 import { ZodError } from 'zod';
 import { buildError, uuidv7, type ErrorCode } from '@ipms/contracts';
-import { createLogger, getCorrelationId } from '@ipms/observability';
-
-const log = createLogger('gateway');
+import { getCorrelationId } from './correlation.js';
+import { createLogger, type Logger } from './logger.js';
 
 const STATUS_TO_CODE: Record<number, ErrorCode> = {
   400: 'VALIDATION_FAILED',
@@ -15,8 +14,23 @@ const STATUS_TO_CODE: Record<number, ErrorCode> = {
   429: 'RATE_LIMITED',
 };
 
+/**
+ * Turns anything thrown into the platform's error envelope.
+ *
+ * It lives beside the logger rather than in one service because the envelope
+ * is what the web client parses: a service that does not register this
+ * reports every refusal in a shape the client cannot read, so a considered
+ * 409 — "this project still has tasks" — reaches the user as an unexplained
+ * failure.
+ */
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
+  private readonly log: Logger;
+
+  constructor(service = 'app') {
+    this.log = createLogger(service);
+  }
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<{
       status(code: number): { send(body: unknown): unknown };
@@ -40,7 +54,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     // Log the real error server-side; return nothing that could leak internals.
-    log.error({ err: exception, correlationId }, 'unhandled exception');
+    this.log.error({ err: exception, correlationId }, 'unhandled exception');
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).send(
       buildError('INTERNAL', 'An unexpected error occurred', correlationId),
     );
