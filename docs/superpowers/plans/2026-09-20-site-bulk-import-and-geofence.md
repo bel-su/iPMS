@@ -2762,11 +2762,28 @@ Expected: sites that existed before Task 3 read `CUSTOM`; anything imported sinc
 
 - [ ] **Step 3: Confirm the internal endpoint is unreachable from outside**
 
+The authoritative check is the unit test, because the gateway authenticates
+*before* it resolves a route: without a valid session token every path returns
+`401`, including nonsense ones, so a live probe cannot tell a refused route
+from a rejected token.
+
+```bash
+pnpm --filter gateway test
+```
+
+Expected: PASS, including `refuses the site geofence lookup`, which asserts
+`resolveUpstream('/api/v1/internal/sites/abc/geofence')` is `undefined`.
+
+Then, **only if you hold a valid session token** (the stack must have been
+seeded with `IAM_DEMO_PASSWORD` set, or you can sign in through the web app):
+
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:3000/api/v1/internal/sites/$SITE_ID/geofence"
 ```
 
-Expected: `404` from the gateway. A `200` here means the `/internal/` guard regressed and the task is not done.
+Expected: `404`. A `200` means the `/internal/` guard regressed. A `401` means
+the token is not valid and this probe proved nothing — fall back to the unit
+test above.
 
 - [ ] **Step 4: Commit any fixes and open the PR**
 
