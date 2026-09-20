@@ -64,3 +64,40 @@ export type CreateTaskDto = z.infer<typeof CreateTaskSchema>;
 
 export const AssignTaskSchema = z.object({ assigneeId: UuidSchema }).strip();
 export type AssignTaskDto = z.infer<typeof AssignTaskSchema>;
+
+/**
+ * The update shapes.
+ *
+ * Each is its create schema made partial, so a validation rule is written once
+ * and cannot drift between the two paths, plus the one field only an update
+ * may set. `taskTypeIds` on a milestone update is a wholesale replacement of
+ * the requirement set: absent leaves it alone, `[]` clears it. The explicit
+ * `.extend` is what makes that possible — `.partial()` keeps the create
+ * schema's `.default([])`, which would silently re-add an empty array.
+ */
+export const UpdateSiteSchema = CreateSiteSchema.partial().extend({ status: SiteStatusSchema.optional() });
+export type UpdateSiteDto = z.infer<typeof UpdateSiteSchema>;
+
+export const UpdateTaskTypeSchema = CreateTaskTypeSchema.partial().extend({ isActive: z.boolean().optional() });
+export type UpdateTaskTypeDto = z.infer<typeof UpdateTaskTypeSchema>;
+
+export const UpdateMilestoneSchema = CreateMilestoneSchema.partial().extend({ taskTypeIds: z.array(UuidSchema).optional() });
+export type UpdateMilestoneDto = z.infer<typeof UpdateMilestoneSchema>;
+
+/**
+ * `assigneeId` is nullable rather than merely optional: absent means "leave
+ * the assignee alone", null means "unassign", and a form needs both.
+ */
+export const UpdateTaskSchema = z.object({
+  title: z.string().trim().min(1).max(250).optional(),
+  status: TaskStatusSchema.optional(),
+  assigneeId: UuidSchema.nullable().optional(),
+  plannedCompletionAt: z.coerce.date().nullable().optional(),
+}).strip();
+export type UpdateTaskDto = z.infer<typeof UpdateTaskSchema>;
+
+export const ListTasksQuerySchema = z.object({
+  siteId: UuidSchema.optional(),
+  status: TaskStatusSchema.optional(),
+}).strip();
+export type ListTasksQueryDto = z.infer<typeof ListTasksQuerySchema>;
