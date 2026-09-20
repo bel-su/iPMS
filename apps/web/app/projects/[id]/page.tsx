@@ -57,6 +57,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                         <td>{site.geofenceMode === 'CUSTOM' ? `${site.geofenceRadiusM} m` : site.geofenceMode === 'OFF' ? 'No check' : 'Project default'}</td>
                         <td><span className="badge">{site.status}</span></td>
                         <td className="row-actions">
+                          {may('site.update')
+                            ? <a className="ghost-button" href={`/projects/${data.id}/sites/${site.id}/edit`}>Edit</a>
+                            : null}
                           {may('site.delete')
                             ? <RowAction
                                 action={deleteSiteAction}
