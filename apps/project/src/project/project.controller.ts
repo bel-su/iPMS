@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { RequirePermission, type AuthzUser } from '@ipms/authz';
-import { AssignTaskSchema, CreateMilestoneSchema, CreateProjectSchema, CreateSiteSchema, CreateTaskSchema, CreateTaskTypeSchema, ListTasksQuerySchema, UpdateProjectSchema, UuidSchema } from '@ipms/contracts';
+import { AssignTaskSchema, CreateMilestoneSchema, CreateProjectSchema, CreateSiteSchema, CreateTaskSchema, CreateTaskTypeSchema, ListTasksQuerySchema, UpdateMilestoneSchema, UpdateProjectSchema, UpdateSiteSchema, UpdateTaskSchema, UpdateTaskTypeSchema, UuidSchema } from '@ipms/contracts';
 import { ProjectService } from './project.service.js';
 @Controller() export class ProjectController { constructor(private readonly service: ProjectService) {}
   @Get('dashboard') @RequirePermission('project.view') dashboard(){ return this.service.dashboard(); }
@@ -13,5 +13,9 @@ import { ProjectService } from './project.service.js';
   @Post('projects/:id/task-types') @RequirePermission('task.create') taskType(@Param('id') id:string,@Body() body:unknown){ return this.service.createTaskType(UuidSchema.parse(id),CreateTaskTypeSchema.parse(body)); }
   @Post('projects/:id/milestones') @RequirePermission('milestone.create') milestone(@Param('id') id:string,@Body() body:unknown){ return this.service.createMilestone(UuidSchema.parse(id),CreateMilestoneSchema.parse(body)); }
   @Post('projects/:id/tasks') @RequirePermission('task.create') task(@Param('id') id:string,@Body() body:unknown,@Req() req:{user:AuthzUser}){ return this.service.createTask(UuidSchema.parse(id),CreateTaskSchema.parse(body),req.user.id); }
+  @Patch('sites/:id') @RequirePermission('site.update') updateSite(@Param('id') id:string,@Body() body:unknown){ return this.service.updateSite(UuidSchema.parse(id),UpdateSiteSchema.parse(body)); }
+  @Patch('task-types/:id') @RequirePermission('task.update') updateTaskType(@Param('id') id:string,@Body() body:unknown){ return this.service.updateTaskType(UuidSchema.parse(id),UpdateTaskTypeSchema.parse(body)); }
+  @Patch('milestones/:id') @RequirePermission('milestone.update') updateMilestone(@Param('id') id:string,@Body() body:unknown){ return this.service.updateMilestone(UuidSchema.parse(id),UpdateMilestoneSchema.parse(body)); }
+  @Patch('tasks/:id') @RequirePermission('task.update') updateTask(@Param('id') id:string,@Body() body:unknown){ return this.service.updateTask(UuidSchema.parse(id),UpdateTaskSchema.parse(body)); }
   @Post('tasks/:id/assign') @RequirePermission('task.assign') assign(@Param('id') id:string,@Body() body:unknown){ return this.service.assignTask(UuidSchema.parse(id),AssignTaskSchema.parse(body)); }
 }
