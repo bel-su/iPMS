@@ -2,10 +2,11 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma-clients/qc';
 import { uuidv7, type CreateSubmissionDto, type CreateTemplateDto, type ReviewSubmissionDto } from '@ipms/contracts';
+import { resolveGeofence, type SiteGeofenceClient } from './site-geofence.client.js';
 
 @Injectable()
 export class QcService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaClient, private readonly geofence: SiteGeofenceClient) {}
 
   async listTemplates(projectId?: string) {
     return this.prisma.checklistTemplate.findMany({
@@ -41,7 +42,12 @@ export class QcService {
     return submission;
   }
 
-  async createSubmission(dto: CreateSubmissionDto, actorId: string) {
+  /**
+   * `bearer` is the submitting user's own Authorization header, forwarded to
+   * the project service so the geofence lookup stays permission-checked
+   * without a shared service secret.
+   */
+  async createSubmission(dto: CreateSubmissionDto, actorId: string, bearer: string) {
     const duplicate = await this.prisma.submission.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
     if (duplicate) return this.getSubmission(duplicate.id);
     const template = await this.prisma.checklistTemplate.findUnique({ where: { id: dto.templateId }, include: { sections: { include: { items: true } } } });
@@ -52,8 +58,11 @@ export class QcService {
     for (const item of items) { const response = responses.get(item.id); if (!response) continue; if (response.selfCheckResult === 'NA' && !item.allowsNa) throw new BadRequestException(`Item ${item.number} does not allow N/A`); if (response.photoMediaIds.length < item.minPhotos || response.photoMediaIds.length > item.maxPhotos) throw new BadRequestException(`Item ${item.number} has an invalid photo count`); }
     const last = await this.prisma.submission.aggregate({ where: { taskId: dto.taskId }, _max: { attemptNo: true } });
     const integrityHash = createHash('sha256').update(JSON.stringify(dto.responses.map((r) => ({ itemId: r.itemId, result: r.selfCheckResult, photos: [...r.photoMediaIds].sort() })).sort((a, b) => a.itemId.localeCompare(b.itemId)))).digest('hex');
+    // Never throws: an unreachable project service records UNVERIFIED rather
+    // than failing a submission that represents work already done in the field.
+    const outcome = resolveGeofence(await this.geofence.fetch(dto.siteId, bearer), dto);
     return this.prisma.$transaction(async (tx) => {
-      const submission = await tx.submission.create({ data: { id: uuidv7(), taskId: dto.taskId, siteId: dto.siteId, projectId: dto.projectId, templateId: template.id, templateVersion: template.version, attemptNo: (last._max.attemptNo ?? 0) + 1, status: 'SUBMITTED', submittedBy: actorId, submittedAt: new Date(), integrityHash, idempotencyKey: dto.idempotencyKey, deviceId: dto.deviceId ?? null } });
+      const submission = await tx.submission.create({ data: { id: uuidv7(), taskId: dto.taskId, siteId: dto.siteId, projectId: dto.projectId, templateId: template.id, templateVersion: template.version, attemptNo: (last._max.attemptNo ?? 0) + 1, status: 'SUBMITTED', submittedBy: actorId, submittedAt: new Date(), integrityHash, idempotencyKey: dto.idempotencyKey, deviceId: dto.deviceId ?? null, latitude: dto.latitude ?? null, longitude: dto.longitude ?? null, distanceFromSiteM: outcome.distanceFromSiteM, geofenceStatus: outcome.geofenceStatus } });
       for (const response of dto.responses) { const itemResponse = await tx.itemResponse.create({ data: { id: uuidv7(), submissionId: submission.id, itemId: response.itemId, selfCheckResult: response.selfCheckResult, selfCheckDescription: response.selfCheckDescription ?? null, textValue: response.textValue ?? null, numberValue: response.numberValue ?? null, booleanValue: response.booleanValue ?? null, selectValue: response.selectValue ?? null } }); if (response.photoMediaIds.length) await tx.itemPhoto.createMany({ data: response.photoMediaIds.map((mediaId, sequence) => ({ id: uuidv7(), itemResponseId: itemResponse.id, mediaId, sequence })) }); }
       return submission;
     });

@@ -4,14 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "_comment": "test script removed while qc has no tests; sub-project 3 restores it with the rewrite. Not passWithNoTests — a green target that ran zero assertions hides an untested service.",
     "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "prisma:generate": "prisma generate"
   },
   "dependencies": {
     "@ipms/authz": "workspace:*",
     "@ipms/contracts": "workspace:*",
+    "@ipms/geo": "workspace:*",
     "@ipms/observability": "workspace:*",
     "@ipms/persistence": "workspace:*",
     "@nestjs/common": "12.0.3",
