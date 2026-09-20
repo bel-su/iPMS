@@ -2669,19 +2669,30 @@ describe('commit', () => {
     expect(await prisma.region.count({ where: { projectId } })).toBe(2);
   });
 
-  // The all-or-nothing guarantee. A row that violates the unique index mid
-  // transaction must leave the project exactly as it was.
-  it('rolls the whole file back when one row fails at the database', async () => {
+  /**
+   * The all-or-nothing guarantee, tested where it actually bites.
+   *
+   * The failing row is an UPDATE, not a create. `commit` runs `createMany`
+   * first and the individual updates after, so the insert of S1 has already
+   * succeeded inside the transaction when S2's over-long name is rejected by
+   * Postgres. Only a real rollback can make S1 disappear again.
+   *
+   * Putting the bad value in a create instead would prove nothing: `createMany`
+   * is one statement and fails atomically on its own.
+   */
+  it('rolls back an already-inserted row when a later update fails', async () => {
     await prisma.site.create({ data: { id: uuidv7(), projectId, siteCode: 'S2', name: 'Existing' } });
-    // The second row's name is past varchar(200). Only Postgres rejects that
-    // — the service is called directly here, so nothing catches it earlier —
-    // which is exactly the mid-transaction failure the rollback must survive.
-    // S1 must not survive it, and the pre-existing S2 must.
+
     await expect(commit({
       columns: ['site_code', 'name'],
-      rows: [row({ siteCode: 'S1', rowNumber: 2 }), row({ siteCode: 'S3', name: 'x'.repeat(300), rowNumber: 3 })],
+      rows: [
+        row({ siteCode: 'S1', name: 'Fresh', rowNumber: 2 }),
+        row({ siteCode: 'S2', name: 'x'.repeat(300), rowNumber: 3 }),
+      ],
     })).rejects.toThrow();
+
     expect(await prisma.site.findFirst({ where: { projectId, siteCode: 'S1' } })).toBeNull();
+    expect((await prisma.site.findFirst({ where: { projectId, siteCode: 'S2' } }))?.name).toBe('Existing');
     expect(await prisma.site.count({ where: { projectId } })).toBe(1);
   });
 
