@@ -39,7 +39,7 @@ Prisma schema and initial migration, Nest bootstrap, guard wiring, health and me
 database roles, Compose entries, gateway routes.
 
 **Out:** every business endpoint, and therefore every contract schema. Object storage,
-FCM and SMTP clients. JetStream stream definitions. New permission catalog entries.
+FCM and SMTP clients. Event subjects and their JetStream streams. New permission entries.
 `docs-web` and `mobile`, which are clients rather than services and are covered by their
 own specs. See §6 for each omission and the condition that ends it.
 
@@ -88,7 +88,9 @@ Plus, outside the service directory:
 | `docker/docker-compose.yml` | `<svc>-migrate` one-shot and `<svc>` with healthcheck, following the `qc` pair verbatim |
 | `apps/gateway/src/proxy/routes.ts` | host/port constant and one `ROUTES` entry |
 | `.env.example` | `<SVC>_DATABASE_URL` for running outside Compose |
-| `libs/events/src/subjects.ts` | `media.photo.processed` and `media.photo.rejected` only — see §6.3 |
+| `libs/authz/src/permissions.ts` | the §6.4 note only — no new codes |
+
+`libs/events` is deliberately **not** touched — see §6.3.
 
 `docker/Dockerfile.service` and `.github/workflows/ci.yml` need **no change at all**. The
 Dockerfile is generic over its `SERVICE` build argument and already branches on whether
@@ -236,27 +238,39 @@ transactional provider for email.
 
 **Anchor:** beside the provider list in `apps/notification/src/app.module.ts`.
 
-### 6.3 JetStream streams for `media` and `notification`
+### 6.3 Media subjects and their JetStream stream
 
-**Deferred:** `SUBJECTS` gains `media.photo.processed` and `media.photo.rejected`;
-`STREAMS` gains nothing.
+**Deferred:** `libs/events` is not touched at all. No `SUBJECTS` entries, no `STREAMS`
+entry.
 
-**Why:** `EventBus.ensureStreams()` creates durable consumers, and a durable consumer
-with no reader is a queue filling silently behind code that does not exist — strictly
-worse than no stream, because it retains messages that nothing will ever acknowledge and
-the backlog looks like a working system until someone inspects it. The two subject
-constants are inert by comparison: they are shared vocabulary, they cost nothing, and
-having them named in one place is the point of `libs/events`.
+**Why:** an earlier draft of this spec proposed adding the two subject constants now and
+the stream later, on the grounds that constants are inert and a durable consumer with no
+reader is a queue filling silently behind code that does not exist.
 
-Note that until a `MEDIA` stream exists, publishing to those subjects reaches no stream.
-That is the expected state, not a defect, and anything that starts publishing must add
-the stream in the same change.
+The codebase already refuses that split, and for a better reason. `subjects.spec.ts`
+asserts that every entry in `SUBJECTS` is covered by exactly one stream:
 
-**Bring it back when:** the first producer or consumer of a media event is written —
-whichever comes first, in the same change. `STREAMS` is typed
-`Record<'IAM' | 'AUDIT', StreamDefinition>`, so the key union widens then too.
+```ts
+it('covers every subject with exactly one stream', () => { … })
+```
 
-**Anchor:** beside the new `SUBJECTS` entries in `libs/events/src/subjects.ts`.
+That invariant is the mechanical form of the hazard the earlier draft could only
+describe in a comment: **a subject with no stream is a message that vanishes.** Adding
+the constants alone would fail the suite, and the correct response is to respect the
+invariant rather than weaken the test.
+
+So both halves move together, which is what should have been specified in the first
+place. Naming a subject is not free vocabulary — under this invariant it is a commitment
+that somewhere to deliver it exists.
+
+**Bring it back when:** the first producer or consumer of a media event is written. The
+subjects, the `MEDIA` stream and its durable consumers all land in that one change, and
+`STREAMS` — typed `Record<'IAM' | 'AUDIT', StreamDefinition>` — widens its key union
+then.
+
+**Anchor:** none in `libs/events`, since nothing there changes. The reminder lives with
+the storage note in `apps/media/src/app.module.ts`, which is the file that will be open
+when media events are first published.
 
 ### 6.4 Permission catalog entries
 
@@ -296,5 +310,6 @@ the audit block.
 
 `Dockerfile.service`, the CI workflow, and all five existing services are untouched. The
 only edits outside the three new directories are additive: three rows in `init.sql`, two
-Compose entries each, three `ROUTES` entries, two `SUBJECTS` constants, and three lines
-in `.env.example`. No existing behaviour can observe any of it.
+Compose entries each, three `ROUTES` entries, one comment in `libs/authz`, and three
+lines in `.env.example`. `libs/events` is untouched. No existing behaviour can observe
+any of it.
