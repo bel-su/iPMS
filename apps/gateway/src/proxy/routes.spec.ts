@@ -37,8 +37,23 @@ describe('resolveUpstream — allowlist', () => {
     expect(upstream?.port).toBe(3005);
   });
 
+  it('routes the media prefix to the media service', () => {
+    const upstream = resolveUpstream('/api/v1/media/objects');
+    expect(upstream?.service).toBe('media');
+    expect(upstream?.port).toBe(3006);
+  });
+
+  it('keeps media internal paths private', () => {
+    expect(resolveUpstream('/api/v1/media/internal/objects')).toBeUndefined();
+  });
+
+  it('keeps the media prefix authenticated', () => {
+    expect(isPublicPath('/api/v1/media')).toBe(false);
+    expect(isPublicPath('/api/v1/media/objects')).toBe(false);
+  });
+
   it('refuses a path on no declared prefix', () => {
-    expect(resolveUpstream('/api/v1/media')).toBeUndefined();
+    expect(resolveUpstream('/api/v1/billing')).toBeUndefined();
   });
 
   it('refuses a prefix that only shares a string prefix with a route', () => {

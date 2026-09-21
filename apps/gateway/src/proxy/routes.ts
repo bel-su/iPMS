@@ -26,6 +26,7 @@ const IAM = { host: upstreamHost('iam', 'iam'), port: upstreamPort('iam', 3001) 
 const AUDIT = { host: upstreamHost('audit', 'audit'), port: upstreamPort('audit', 3003) };
 const PROJECT = { host: upstreamHost('project', 'project'), port: upstreamPort('project', 3004) };
 const QC = { host: upstreamHost('qc', 'qc'), port: upstreamPort('qc', 3005) };
+const MEDIA = { host: upstreamHost('media', 'media'), port: upstreamPort('media', 3006) };
 
 /**
  * Only paths listed here are reachable. Anything else 404s at the edge, which
@@ -48,6 +49,7 @@ export const ROUTES: Upstream[] = [
   { prefix: '/api/v1/milestones', service: 'project', ...PROJECT },
   { prefix: '/api/v1/tasks', service: 'project', ...PROJECT },
   { prefix: '/api/v1/qc', service: 'qc', ...QC },
+  { prefix: '/api/v1/media', service: 'media', ...MEDIA },
 ];
 
 /**
