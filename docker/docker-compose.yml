@@ -197,6 +197,36 @@ services:
       # a submission must never wait on the project service being up.
       PROJECT_INTERNAL_URL: http://project:3004
 
+  media-migrate:
+    <<: *migrate-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      target: migrate
+      args: { SERVICE: media }
+    environment:
+      DATABASE_URL: postgresql://ipms_media:ipms_media@postgres:5432/ipms_media
+
+  media:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      args: { SERVICE: media }
+    depends_on:
+      <<: *infra-ready
+      media-migrate: { condition: service_completed_successfully }
+    environment:
+      <<: *service-env
+      PORT: 3006
+      MEDIA_DATABASE_URL: postgresql://ipms_media:ipms_media@postgres:5432/ipms_media
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3006/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   gateway:
     <<: *service-defaults
     build:

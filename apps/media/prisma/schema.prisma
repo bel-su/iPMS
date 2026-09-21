@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+  // Each service must generate into its own location: with no `output`, Prisma 7
+  // writes generated client code into the *installed* @prisma/client package
+  // (see prisma.config.ts), and pnpm's content-addressable store collapses two
+  // services' identical @prisma/client@7.10.0 dependency into one physical
+  // folder — the second service to run `prisma generate` silently overwrites
+  // the first service's generated models.
+  output = "../node_modules/@prisma-clients/media"
+}
+datasource db {
+  provider = "postgresql"
+}
+
+model MediaObject {
+  id String @id @db.Uuid
+  storageKey String @unique @db.VarChar(500)
+  contentType String @db.VarChar(100)
+  sizeBytes Int
+  contentHash String @db.VarChar(64)
+  thumbnailKey String? @db.VarChar(500)
+  status String @default("PENDING") @db.VarChar(20)
+  uploadedBy String @db.Uuid
+  capturedAt DateTime? @db.Timestamptz(6)
+  latitude Decimal? @db.Decimal(10,7)
+  longitude Decimal? @db.Decimal(10,7)
+  watermarkVerified Boolean @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  // How a duplicate upload is recognised. Added with the table because adding
+  // it later means a migration on a table holding every photo in the system.
+  @@index([contentHash])
+  @@map("media_object")
+}
+
+model OutboxEvent {
+  id            String    @id @db.Uuid
+  subject       String    @db.VarChar(100)
+  payload       Json
+  correlationId String    @db.VarChar(64)
+  actorId       String?   @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  publishedAt   DateTime? @db.Timestamptz(6)
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_event")
+}
