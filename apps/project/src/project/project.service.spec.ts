@@ -87,6 +87,25 @@ describe('updateSite', () => {
     expect(prisma.site.update.mock.calls[0]![0].data).toEqual({ regionId: 'r-9' });
   });
 
+  it('clears the region when regionName is explicitly null, and upserts nothing', async () => {
+    prisma.site.update.mockResolvedValue({ id: 's-1' });
+    await service(prisma).updateSite('s-1', { regionName: null });
+    expect(prisma.region.upsert).not.toHaveBeenCalled();
+    expect(prisma.site.update.mock.calls[0]![0].data).toEqual({ regionId: null });
+  });
+
+  it('leaves the region alone when regionName is absent', async () => {
+    prisma.site.update.mockResolvedValue({ id: 's-1' });
+    await service(prisma).updateSite('s-1', { name: 'Renamed' });
+    expect(prisma.site.update.mock.calls[0]![0].data).toEqual({ name: 'Renamed' });
+  });
+
+  it('writes nulls straight through for the other clearable fields', async () => {
+    prisma.site.update.mockResolvedValue({ id: 's-1' });
+    await service(prisma).updateSite('s-1', { latitude: null, longitude: null, city: null });
+    expect(prisma.site.update.mock.calls[0]![0].data).toEqual({ latitude: null, longitude: null, city: null });
+  });
+
   it('refuses a site that does not exist', async () => {
     prisma.site.findUnique.mockResolvedValue(null);
     await expect(service(prisma).updateSite('missing', { name: 'x' })).rejects.toBeInstanceOf(NotFoundException);
@@ -229,5 +248,83 @@ describe('deleteTask', () => {
     prisma.task.findUnique.mockResolvedValue({ id: 't-1', currentSubmissionId: null });
     await service(prisma).deleteTask('t-1');
     expect(prisma.task.delete).toHaveBeenCalledWith({ where: { id: 't-1' } });
+  });
+});
+
+describe('createSite geofence', () => {
+  it('stores the mode and radius', async () => {
+    const prisma = makePrisma();
+    await service(prisma).createSite('p-1', {
+      siteCode: 'S1', name: 'One', geofenceMode: 'CUSTOM', geofenceRadiusM: 250,
+    } as never);
+    expect(prisma.site.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ geofenceMode: 'CUSTOM', geofenceRadiusM: 250 }),
+    });
+  });
+
+  it('defaults an unspecified site to INHERIT with a null radius', async () => {
+    const prisma = makePrisma();
+    await service(prisma).createSite('p-1', { siteCode: 'S1', name: 'One', geofenceMode: 'INHERIT' } as never);
+    expect(prisma.site.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ geofenceMode: 'INHERIT', geofenceRadiusM: null }),
+    });
+  });
+});
+
+describe('createProject geofence default', () => {
+  it('defaults to 500 m', async () => {
+    const prisma = makePrisma();
+    await service(prisma).createProject({ code: 'P1', name: 'P' } as never);
+    expect(prisma.project.create).toHaveBeenCalledWith({ data: expect.objectContaining({ defaultGeofenceRadiusM: 500 }) });
+  });
+
+  // An explicit null means "no checks on this project" and must survive.
+  it('keeps an explicit null', async () => {
+    const prisma = makePrisma();
+    await service(prisma).createProject({ code: 'P1', name: 'P', defaultGeofenceRadiusM: null } as never);
+    expect(prisma.project.create).toHaveBeenCalledWith({ data: expect.objectContaining({ defaultGeofenceRadiusM: null }) });
+  });
+});
+
+describe('siteGeofence', () => {
+  /** Coordinates arrive as Prisma Decimal, which serializes as a string. */
+  const site = (over: Record<string, unknown> = {}) => ({
+    id: 's-1', latitude: '27.7172000', longitude: '85.3240000',
+    geofenceMode: 'INHERIT', geofenceRadiusM: null,
+    project: { defaultGeofenceRadiusM: 500 }, ...over,
+  });
+
+  it('resolves an inheriting site to the project default', async () => {
+    const prisma = makePrisma();
+    prisma.site.findUnique.mockResolvedValue(site());
+    expect(await service(prisma).siteGeofence('s-1')).toEqual({
+      latitude: 27.7172, longitude: 85.324, effectiveRadiusM: 500,
+    });
+  });
+
+  it('resolves an OFF site to no radius', async () => {
+    const prisma = makePrisma();
+    prisma.site.findUnique.mockResolvedValue(site({ geofenceMode: 'OFF' }));
+    expect((await service(prisma).siteGeofence('s-1')).effectiveRadiusM).toBeNull();
+  });
+
+  it('resolves a CUSTOM site to its own radius', async () => {
+    const prisma = makePrisma();
+    prisma.site.findUnique.mockResolvedValue(site({ geofenceMode: 'CUSTOM', geofenceRadiusM: 250 }));
+    expect((await service(prisma).siteGeofence('s-1')).effectiveRadiusM).toBe(250);
+  });
+
+  it('returns null coordinates for a site that has none', async () => {
+    const prisma = makePrisma();
+    prisma.site.findUnique.mockResolvedValue(site({ latitude: null, longitude: null }));
+    const result = await service(prisma).siteGeofence('s-1');
+    expect(result.latitude).toBeNull();
+    expect(result.longitude).toBeNull();
+  });
+
+  it('404s an unknown site', async () => {
+    const prisma = makePrisma();
+    prisma.site.findUnique.mockResolvedValue(null);
+    await expect(service(prisma).siteGeofence('s-1')).rejects.toThrow(NotFoundException);
   });
 });

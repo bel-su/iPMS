@@ -17,6 +17,7 @@
       "@ipms/contracts": ["libs/contracts/src/index.ts"],
       "@ipms/persistence": ["libs/persistence/src/index.ts"],
       "@ipms/events": ["libs/events/src/index.ts"],
+      "@ipms/geo": ["libs/geo/src/index.ts"],
       "@ipms/authz": ["libs/authz/src/index.ts"]
     }
   }

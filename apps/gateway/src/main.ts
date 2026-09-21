@@ -6,6 +6,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyReplyFrom from '@fastify/reply-from';
 import { GlobalExceptionFilter, createLogger } from '@ipms/observability';
 import { AppModule } from './app.module.js';
+import { registerPassthroughBodyParser } from './proxy/passthrough-body.js';
 import { extractToken, verifyToken } from '@ipms/authz';
 
 const log = createLogger('gateway');
@@ -59,6 +60,10 @@ async function bootstrap(): Promise<void> {
     // hangs must not hold a gateway connection open indefinitely.
     undici: { headersTimeout: 30_000, bodyTimeout: 60_000 },
   });
+
+  // Fastify answers 415 to any content type it has no parser for, which killed
+  // every multipart upload at the edge. See the module for the full reasoning.
+  registerPassthroughBodyParser(app.getHttpAdapter().getInstance());
 
   await app.register(fastifyCookie, { secret: requireEnv('COOKIE_SECRET') });
   await app.register(fastifyHelmet, { contentSecurityPolicy: false });

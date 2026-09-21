@@ -41,6 +41,7 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   def('site', 'create', 'Create sites', ['site.view']),
   def('site', 'update', 'Update sites', ['site.view']),
   def('site', 'delete', 'Delete sites', ['site.view', 'site.update']),
+  def('site', 'import', 'Bulk-import sites from Excel', ['site.view', 'site.create', 'site.update']),
   def('milestone', 'view', 'View milestones', ['project.view']),
   def('milestone', 'create', 'Create milestones', ['milestone.view']),
   def('milestone', 'update', 'Update milestones', ['milestone.view']),

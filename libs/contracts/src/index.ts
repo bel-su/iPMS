@@ -6,4 +6,5 @@ export * from './iam/role.js';
 export * from './iam/scope.js';
 export * from './audit/query.js';
 export * from './project/project.js';
+export * from './project/site-import.js';
 export * from './qc/qc.js';

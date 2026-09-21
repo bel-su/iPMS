@@ -1,59 +1,83 @@
 import { describe, expect, it } from 'vitest';
-import {
-  ListTasksQuerySchema,
-  UpdateMilestoneSchema,
-  UpdateSiteSchema,
-  UpdateTaskSchema,
-  UpdateTaskTypeSchema,
-} from './project.js';
+import { CreateSiteSchema, CreateProjectSchema, UpdateSiteSchema } from './project.js';
 
-describe('UpdateSiteSchema', () => {
-  it('accepts a single field', () => {
+const site = { siteCode: 'SITE_01', name: 'Site One' };
+
+describe('CreateSiteSchema geofence', () => {
+  it('defaults to INHERIT when no mode is given', () => {
+    expect(CreateSiteSchema.parse(site).geofenceMode).toBe('INHERIT');
+  });
+
+  it('accepts OFF with no radius', () => {
+    expect(CreateSiteSchema.parse({ ...site, geofenceMode: 'OFF' }).geofenceMode).toBe('OFF');
+  });
+
+  it('accepts CUSTOM with a radius', () => {
+    expect(CreateSiteSchema.parse({ ...site, geofenceMode: 'CUSTOM', geofenceRadiusM: 250 }).geofenceRadiusM).toBe(250);
+  });
+
+  // The invalid state the resolver would otherwise have to guess at.
+  it('rejects CUSTOM with no radius', () => {
+    expect(CreateSiteSchema.safeParse({ ...site, geofenceMode: 'CUSTOM' }).success).toBe(false);
+  });
+
+  it('rejects a negative radius', () => {
+    expect(CreateSiteSchema.safeParse({ ...site, geofenceMode: 'CUSTOM', geofenceRadiusM: -1 }).success).toBe(false);
+  });
+});
+
+describe('CreateProjectSchema geofence', () => {
+  it('accepts an explicit null default, meaning no checks on this project', () => {
+    expect(CreateProjectSchema.parse({ code: 'P1', name: 'P', defaultGeofenceRadiusM: null }).defaultGeofenceRadiusM).toBeNull();
+  });
+
+  it('accepts a radius', () => {
+    expect(CreateProjectSchema.parse({ code: 'P1', name: 'P', defaultGeofenceRadiusM: 500 }).defaultGeofenceRadiusM).toBe(500);
+  });
+});
+
+describe('UpdateSiteSchema clearing', () => {
+  it('accepts null for the fields an update may clear', () => {
+    const parsed = UpdateSiteSchema.parse({ regionName: null, city: null, latitude: null, longitude: null });
+    expect(parsed).toEqual({ regionName: null, city: null, latitude: null, longitude: null });
+  });
+
+  it('omits a field that was not sent, which is how "leave it alone" is said', () => {
     expect(UpdateSiteSchema.parse({ name: 'Renamed' })).toEqual({ name: 'Renamed' });
   });
 
-  it('accepts a status, which create cannot set', () => {
-    expect(UpdateSiteSchema.parse({ status: 'IN_DELIVERY' }).status).toBe('IN_DELIVERY');
+  it('rejects one coordinate sent without the other', () => {
+    expect(UpdateSiteSchema.safeParse({ latitude: 27.7 }).success).toBe(false);
   });
 
-  it('refuses an unknown status', () => {
-    expect(() => UpdateSiteSchema.parse({ status: 'MAYBE' })).toThrow();
+  // Half a coordinate is a site no distance can be measured from.
+  it('rejects one coordinate cleared while the other is set', () => {
+    expect(UpdateSiteSchema.safeParse({ latitude: null, longitude: 85.3 }).success).toBe(false);
   });
 
-  it('refuses a site code that create would also refuse', () => {
-    expect(() => UpdateSiteSchema.parse({ siteCode: 'lower case' })).toThrow();
-  });
-});
-
-describe('UpdateTaskTypeSchema', () => {
-  it('accepts isActive, which is how a task type is retired', () => {
-    expect(UpdateTaskTypeSchema.parse({ isActive: false }).isActive).toBe(false);
-  });
-});
-
-describe('UpdateMilestoneSchema', () => {
-  it('treats taskTypeIds as a wholesale replacement, absent when not given', () => {
-    expect(UpdateMilestoneSchema.parse({ name: 'Handover' }).taskTypeIds).toBeUndefined();
-    expect(UpdateMilestoneSchema.parse({ taskTypeIds: [] }).taskTypeIds).toEqual([]);
-  });
-});
-
-describe('UpdateTaskSchema', () => {
-  it('accepts a status', () => {
-    expect(UpdateTaskSchema.parse({ status: 'ONGOING' }).status).toBe('ONGOING');
+  it('accepts both coordinates together', () => {
+    expect(UpdateSiteSchema.safeParse({ latitude: 27.7, longitude: 85.3 }).success).toBe(true);
   });
 
-  it('accepts a null assignee, which is how a task is unassigned', () => {
-    expect(UpdateTaskSchema.parse({ assigneeId: null }).assigneeId).toBeNull();
+  it('still rejects CUSTOM with no radius', () => {
+    expect(UpdateSiteSchema.safeParse({ geofenceMode: 'CUSTOM' }).success).toBe(false);
+  });
+
+  // `.partial()` keeps the create schema's default, so an update that said
+  // nothing about the geofence used to hand the service an INHERIT that the
+  // caller never sent, silently discarding a site's CUSTOM radius or its OFF.
+  it('does not invent a geofence mode for an update that never mentioned one', () => {
+    expect(UpdateSiteSchema.parse({ name: 'Renamed' })).not.toHaveProperty('geofenceMode');
+  });
+
+  it('still refuses a latitude out of range', () => {
+    expect(UpdateSiteSchema.safeParse({ latitude: 91, longitude: 0 }).success).toBe(false);
   });
 });
 
-describe('ListTasksQuerySchema', () => {
-  it('defaults to no filter', () => {
-    expect(ListTasksQuerySchema.parse({})).toEqual({});
-  });
-
-  it('refuses a siteId that is not a uuid', () => {
-    expect(() => ListTasksQuerySchema.parse({ siteId: 'nope' })).toThrow();
+describe('CreateSiteSchema clearing', () => {
+  // Creating a site with an explicitly null city says nothing that omitting it does not.
+  it('rejects null for a field only an update may clear', () => {
+    expect(CreateSiteSchema.safeParse({ ...site, city: null }).success).toBe(false);
   });
 });

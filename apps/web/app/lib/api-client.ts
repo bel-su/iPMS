@@ -34,6 +34,13 @@ export interface ApiRequest {
   json?: unknown;
   /** Appended as a query string; undefined values are dropped. */
   query?: Record<string, string | undefined>;
+  /**
+   * Sent as the request body verbatim, for uploads. The content type is left
+   * unset on purpose: `fetch` derives it from a `FormData` body along with the
+   * multipart boundary, and setting it by hand omits the boundary and makes
+   * the upload unparseable upstream.
+   */
+  body?: BodyInit;
 }
 
 const UNREACHABLE = 'The iPMS API could not be reached.';
@@ -85,7 +92,11 @@ export async function authFetch<T>(path: string, request: ApiRequest = {}): Prom
         authorization: `Bearer ${token}`,
         ...(request.json === undefined ? {} : { 'content-type': 'application/json' }),
       },
-      ...(request.json === undefined ? {} : { body: JSON.stringify(request.json) }),
+      ...(request.json !== undefined
+        ? { body: JSON.stringify(request.json) }
+        : request.body !== undefined
+          ? { body: request.body }
+          : {}),
       cache: 'no-store',
     });
   } catch {

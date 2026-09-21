@@ -6,24 +6,28 @@ vi.mock('next/cache', () => ({ revalidatePath }));
 vi.mock('next/navigation', () => ({ redirect }));
 
 const deleteProject = vi.fn();
+const createSite = vi.fn().mockResolvedValue({ state: 'ready', data: {} });
+const updateSite = vi.fn().mockResolvedValue({ state: 'ready', data: {} });
 const updateTask = vi.fn().mockResolvedValue({ state: 'ready', data: {} });
 vi.mock('../lib/project-api', () => ({
   deleteProject, updateTask,
   createProject: vi.fn(), updateProject: vi.fn(), archiveProject: vi.fn(),
-  createSite: vi.fn(), updateSite: vi.fn(), deleteSite: vi.fn(),
+  createSite, updateSite, deleteSite: vi.fn(),
   createTaskType: vi.fn(), updateTaskType: vi.fn(), deleteTaskType: vi.fn(),
   createMilestone: vi.fn(), updateMilestone: vi.fn(), deleteMilestone: vi.fn(),
   createTask: vi.fn(), deleteTask: vi.fn(),
 }));
 
 const { settle } = await import('./settle');
-const { deleteProjectAction, updateTaskAction } = await import('./actions');
+const { createSiteAction, deleteProjectAction, updateSiteAction, updateTaskAction } = await import('./actions');
 
 beforeEach(() => {
   revalidatePath.mockClear();
   redirect.mockClear();
   deleteProject.mockClear();
   updateTask.mockClear();
+  createSite.mockClear();
+  updateSite.mockClear();
 });
 
 describe('settle', () => {
@@ -100,5 +104,133 @@ describe('updateTaskAction', () => {
     data.set('title', 'Renamed');
     await updateTaskAction({}, data);
     expect(updateTask).toHaveBeenCalledWith('t-1', { title: 'Renamed' });
+  });
+});
+
+describe('createSiteAction geofence', () => {
+  const PROJECT_ID = '0192f7a0-0000-7000-8000-000000000001';
+
+  it('sends coordinates and a custom geofence', async () => {
+    const form = new FormData();
+    form.set('projectId', PROJECT_ID);
+    form.set('siteCode', 'SITE_01');
+    form.set('name', 'One');
+    form.set('latitude', '27.7172');
+    form.set('longitude', '85.3240');
+    form.set('geofenceMode', 'CUSTOM');
+    form.set('geofenceRadiusM', '250');
+    await createSiteAction({}, form);
+    expect(createSite).toHaveBeenCalledWith(PROJECT_ID, expect.objectContaining({
+      latitude: 27.7172, longitude: 85.324, geofenceMode: 'CUSTOM', geofenceRadiusM: 250,
+    }));
+  });
+
+  // Answered here rather than by a round trip to be told the obvious.
+  it('rejects a latitude with no longitude before calling the API', async () => {
+    const form = new FormData();
+    form.set('projectId', PROJECT_ID);
+    form.set('siteCode', 'SITE_01');
+    form.set('name', 'One');
+    form.set('latitude', '27.7172');
+    const state = await createSiteAction({}, form);
+    expect(state.error).toContain('together');
+    expect(createSite).not.toHaveBeenCalled();
+  });
+
+  it('rejects a custom geofence with no radius', async () => {
+    const form = new FormData();
+    form.set('projectId', PROJECT_ID);
+    form.set('siteCode', 'SITE_01');
+    form.set('name', 'One');
+    form.set('geofenceMode', 'CUSTOM');
+    const state = await createSiteAction({}, form);
+    expect(state.error).toContain('radius');
+    expect(createSite).not.toHaveBeenCalled();
+  });
+
+  // A create has nothing to remove, so two blank coordinates mean nothing at all.
+  it('sends no coordinates at all when both are left blank', async () => {
+    const form = new FormData();
+    form.set('projectId', PROJECT_ID);
+    form.set('siteCode', 'SITE_01');
+    form.set('name', 'One');
+    form.set('latitude', '');
+    form.set('longitude', '');
+    await createSiteAction({}, form);
+    expect(createSite.mock.calls[0]![1]).not.toHaveProperty('latitude');
+  });
+});
+
+describe('updateSiteAction', () => {
+  /** The edit form always submits every field, so a blank one is a deliberate clear. */
+  function form(overrides: Record<string, string> = {}): FormData {
+    const data = new FormData();
+    const fields: Record<string, string> = {
+      projectId: 'p-1', siteId: 's-1', name: 'Site One',
+      regionName: 'North', city: 'Pokhara',
+      latitude: '27.7172', longitude: '85.3240',
+      geofenceMode: 'INHERIT', geofenceRadiusM: '', status: 'PLANNED',
+      ...overrides,
+    };
+    for (const [key, value] of Object.entries(fields)) data.set(key, value);
+    return data;
+  }
+
+  const sent = () => updateSite.mock.calls[0]![1];
+
+  it('sends the edited fields', async () => {
+    await expect(updateSiteAction({}, form())).rejects.toThrow('NEXT_REDIRECT');
+    expect(updateSite.mock.calls[0]![0]).toBe('s-1');
+    expect(sent()).toEqual({
+      name: 'Site One', status: 'PLANNED', regionName: 'North', city: 'Pokhara',
+      latitude: 27.7172, longitude: 85.324, geofenceMode: 'INHERIT',
+    });
+  });
+
+  it('sends null for a field the user emptied, which is how a value is removed', async () => {
+    await expect(updateSiteAction({}, form({ regionName: '', city: '' }))).rejects.toThrow('NEXT_REDIRECT');
+    expect(sent()).toMatchObject({ regionName: null, city: null });
+  });
+
+  it('clears both coordinates when both are emptied', async () => {
+    await expect(updateSiteAction({}, form({ latitude: '', longitude: '' }))).rejects.toThrow('NEXT_REDIRECT');
+    expect(sent()).toMatchObject({ latitude: null, longitude: null });
+  });
+
+  it('refuses a lone coordinate before calling the API', async () => {
+    const state = await updateSiteAction({}, form({ longitude: '' }));
+    expect(state.error).toMatch(/together/i);
+    expect(updateSite).not.toHaveBeenCalled();
+  });
+
+  it('refuses a custom geofence with no radius before calling the API', async () => {
+    const state = await updateSiteAction({}, form({ geofenceMode: 'CUSTOM' }));
+    expect(state.error).toMatch(/radius/i);
+    expect(updateSite).not.toHaveBeenCalled();
+  });
+
+  it('sends the radius when the geofence is custom', async () => {
+    await expect(updateSiteAction({}, form({ geofenceMode: 'CUSTOM', geofenceRadiusM: '250' })))
+      .rejects.toThrow('NEXT_REDIRECT');
+    expect(sent()).toMatchObject({ geofenceMode: 'CUSTOM', geofenceRadiusM: 250 });
+  });
+
+  // A blank name would otherwise be dropped silently and the site keep its old one.
+  it('refuses a blank name before calling the API', async () => {
+    const state = await updateSiteAction({}, form({ name: '' }));
+    expect(state.error).toMatch(/name/i);
+    expect(updateSite).not.toHaveBeenCalled();
+  });
+
+  it('lands the user back on the row they changed', async () => {
+    await expect(updateSiteAction({}, form())).rejects.toThrow('NEXT_REDIRECT');
+    expect(revalidatePath).toHaveBeenCalledWith('/projects/p-1');
+    expect(redirect).toHaveBeenCalledWith('/projects/p-1#sites');
+  });
+
+  it("shows the API's refusal and does not redirect", async () => {
+    updateSite.mockResolvedValueOnce({ state: 'forbidden', message: 'Not allowed' });
+    expect(await updateSiteAction({}, form())).toEqual({ error: 'Not allowed' });
+    expect(redirect).not.toHaveBeenCalled();
   });
 });

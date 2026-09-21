@@ -70,6 +70,10 @@ model Submission {
   integrityHash String @db.VarChar(64)
   idempotencyKey String @unique @db.VarChar(255)
   deviceId String? @db.VarChar(255)
+  latitude Decimal? @db.Decimal(10,7)
+  longitude Decimal? @db.Decimal(10,7)
+  distanceFromSiteM Int?
+  geofenceStatus String @default("NOT_APPLICABLE") @db.VarChar(20)
   template ChecklistTemplate @relation(fields:[templateId],references:[id])
   responses ItemResponse[]
   decisions ReviewDecision[]

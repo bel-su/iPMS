@@ -13,6 +13,7 @@ model Project {
   clientName String? @map("client_name") @db.VarChar(200)
   phase String? @db.VarChar(100)
   status String @default("DRAFT") @db.VarChar(30)
+  defaultGeofenceRadiusM Int? @default(500)
   startDate DateTime? @db.Date
   targetDate DateTime? @db.Date
   createdAt DateTime @default(now()) @db.Timestamptz(6)
@@ -41,7 +42,8 @@ model Site {
   name String @db.VarChar(200)
   latitude Decimal? @db.Decimal(10,7)
   longitude Decimal? @db.Decimal(10,7)
-  geofenceRadiusM Int @default(100)
+  geofenceMode String @default("INHERIT") @db.VarChar(10)
+  geofenceRadiusM Int?
   address String? @db.VarChar(500)
   city String? @db.VarChar(100)
   area String? @db.VarChar(100)

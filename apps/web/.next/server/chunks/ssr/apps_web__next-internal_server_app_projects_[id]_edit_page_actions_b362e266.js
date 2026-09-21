@@ -1,3 +1,0 @@
-module.exports=[4884,a=>{"use strict";var b=a.i(50231);a.s([],36691),a.i(36691),a.s(["600721fcbd61f94b1fae9e84343d2cb6000a85de42",()=>b.createProjectAction,"601894e1bdc191056c78c84667f585b08f6b1010a2",()=>b.createMilestoneAction,"602ed293c326c52a29b94c5038b202a5b3076cb714",()=>b.createSiteAction,"60535c836bb21f1cb3c986b53a39434988fb69a60f",()=>b.deleteProjectAction,"60bba9b4273fe231b6bf7e82cc07ea0922877f3718",()=>b.createTaskAction,"60d73903bff5dbd53ba97163895c3c7dc744d28d64",()=>b.updateProjectAction,"60dfe6b1120140f9ad2eba09166c3d2df20f4c79b5",()=>b.createTaskTypeAction,"60e2a144c391d8f35e80dd5b49a5f34ff1ca1566b2",()=>b.archiveProjectAction],4884)}];
-
-//# sourceMappingURL=apps_web__next-internal_server_app_projects_%5Bid%5D_edit_page_actions_b362e266.js.map

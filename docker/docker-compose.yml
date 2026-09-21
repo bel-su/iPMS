@@ -191,6 +191,11 @@ services:
       <<: *service-env
       PORT: 3005
       QC_DATABASE_URL: postgresql://ipms_qc:ipms_qc@postgres:5432/ipms_qc
+      # Straight to the project service, not via the gateway: the geofence
+      # lookup is under /internal/, which the gateway refuses by design.
+      # Deliberately no depends_on — the lookup fails soft to UNVERIFIED, and
+      # a submission must never wait on the project service being up.
+      PROJECT_INTERNAL_URL: http://project:3004
 
   gateway:
     <<: *service-defaults

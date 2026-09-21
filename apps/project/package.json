@@ -10,8 +10,10 @@
     "prisma:generate": "prisma generate"
   },
   "dependencies": {
+    "@fastify/multipart": "10.1.1",
     "@ipms/authz": "workspace:*",
     "@ipms/contracts": "workspace:*",
+    "@ipms/geo": "workspace:*",
     "@ipms/observability": "workspace:*",
     "@ipms/persistence": "workspace:*",
     "@nestjs/common": "12.0.3",
@@ -21,9 +23,12 @@
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "@prisma/client-runtime-utils": "7.10.0",
+    "exceljs": "4.4.0",
+    "fastify": "5.12.4",
     "pg": "8.23.0"
   },
   "devDependencies": {
+    "@testcontainers/postgresql": "12.1.0",
     "@types/pg": "8.23.1",
     "prisma": "7.10.0",
     "reflect-metadata": "0.2.2"

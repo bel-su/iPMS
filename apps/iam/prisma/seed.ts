@@ -19,7 +19,7 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
     description: 'Runs projects: sites, milestones, task dispatch, and QC approval.',
     permissions: [
       'project.view', 'project.create', 'project.update', 'project.archive',
-      'site.view', 'site.create', 'site.update',
+      'site.view', 'site.create', 'site.update', 'site.import',
       'milestone.view', 'milestone.create', 'milestone.update', 'milestone.declare',
       'task.view', 'task.create', 'task.update', 'task.assign', 'task.generate', 'task.cancel',
       'qc_template.view', 'qc_template.create', 'qc_template.update', 'qc_template.publish', 'qc_template.import',

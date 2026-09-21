@@ -32,3 +32,21 @@ export function optional(form: FormData, field: string): string | undefined {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
+
+/**
+ * Reads a field an update may clear.
+ *
+ * Three answers where `optional` has two: a field absent from the form means
+ * "leave it alone", present but empty means "remove the value", and anything
+ * else is the new value. The middle one is what an edit form needs and what a
+ * PATCH cannot otherwise be told, so this is not built on `optional`.
+ *
+ * The key is returned in an object rather than alone so the caller can spread
+ * it, and typed through `K` so the spread keeps the field's real name.
+ */
+export function clearable<K extends string>(form: FormData, field: K): { [P in K]?: string | null } {
+  const value = form.get(field);
+  if (typeof value !== 'string') return {} as { [P in K]?: string | null };
+  const trimmed = value.trim();
+  return { [field]: trimmed.length > 0 ? trimmed : null } as { [P in K]?: string | null };
+}
