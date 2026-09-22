@@ -22,6 +22,8 @@ export interface TokenClaims {
   roles: string[];
   permissions: string[];
   tokenVersion: number;
+  /** See TokenPayloadSchema in @ipms/contracts for why this is optional. */
+  mustChangePassword?: boolean;
 }
 
 /** The browser's access-token cookie. Flutter and service callers use the Authorization header. */
@@ -95,6 +97,9 @@ export function signToken(
     permissions: claims.permissions,
     tokenVersion: claims.tokenVersion,
     typ: type,
+    // Spread conditionally rather than writing `mustChangePassword: false`, so
+    // an ordinary token's bytes are unchanged by this field's existence.
+    ...(claims.mustChangePassword ? { mustChangePassword: true } : {}),
     iat,
     exp: iat + ttlSeconds,
   }));

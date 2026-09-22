@@ -25,6 +25,12 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
       'qc_template.view', 'qc_template.create', 'qc_template.update', 'qc_template.publish', 'qc_template.import',
       'qc_submission.view', 'qc_review.view', 'qc_review.approve', 'qc_review.reject',
       'qc_evidence.export', 'audit.view', 'user.view', 'scope.view',
+      // Managing their own team: creating field engineers and QC managers, and
+      // editing or deactivating the people they created. Which roles they may
+      // actually confer is not decided here — the permission is only the verb.
+      // ROLE_ASSIGNMENT in @ipms/authz is the object gate, and it lets a
+      // project manager reach FIELD_ENGINEER and QC_MANAGER and nothing else.
+      'user.create', 'user.update', 'user.deactivate', 'role.assign',
     ],
   },
   {

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Req, UnauthorizedException } from '@nestjs/common';
-import { LoginSchema, RefreshSchema, type TokenPair } from '@ipms/contracts';
+import { ChangePasswordSchema, LoginSchema, RefreshSchema, type TokenPair } from '@ipms/contracts';
 import { Public, type AuthzUser } from '@ipms/authz';
 import { AuthService, GENERIC_FAILURE } from './auth.service.js';
 
@@ -46,6 +46,18 @@ export class AuthController {
   async logout(@Req() req: { user?: AuthzUser }): Promise<{ status: 'ok' }> {
     if (!req.user) throw new UnauthorizedException('Authentication required');
     await this.auth.revokeAll(req.user.id);
+    return { status: 'ok' };
+  }
+
+  /**
+   * Authenticated but unguarded by any permission, on purpose: the caller's
+   * token carries none while they owe a change, and this is the one route that
+   * lets them out of that state.
+   */
+  @Post('change-password')
+  async changePassword(@Body() body: unknown, @Req() req: { user?: AuthzUser }): Promise<{ status: 'ok' }> {
+    if (!req.user) throw new UnauthorizedException('Authentication required');
+    await this.auth.changePassword(req.user.id, ChangePasswordSchema.parse(body));
     return { status: 'ok' };
   }
 

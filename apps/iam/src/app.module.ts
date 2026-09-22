@@ -13,6 +13,8 @@ import { AuthController } from './auth/auth.controller.js';
 import { AuthService, type TokenVersionStore } from './auth/auth.service.js';
 import { PasswordService } from './auth/password.service.js';
 import { TokenService, type TokenConfig } from './auth/token.service.js';
+import { UsersController } from './users/users.controller.js';
+import { UsersService } from './users/users.service.js';
 import { RolesController } from './roles/roles.controller.js';
 import { RolesService } from './roles/roles.service.js';
 import { ScopesController } from './scopes/scopes.controller.js';
@@ -88,7 +90,7 @@ function iamOverrideProvider(prisma: PrismaService): OverrideProvider {
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [AuthController, RolesController, ScopesController, EffectiveController, HealthController, MetricsController],
+  controllers: [AuthController, UsersController, RolesController, ScopesController, EffectiveController, HealthController, MetricsController],
   providers: [
     {
       provide: PrismaService,
@@ -179,6 +181,17 @@ function iamOverrideProvider(prisma: PrismaService): OverrideProvider {
       provide: RolesService,
       useFactory: (prisma: PrismaService) => new RolesService(prisma.db as never),
       inject: [PrismaService],
+    },
+    {
+      // A factory with an explicit `inject` list, like every service here: the
+      // constructor's `import type` parameters are erased, so a bare class
+      // entry would leave Nest with an unresolvable token at bootstrap.
+      provide: UsersService,
+      useFactory: (
+        prisma: PrismaService, passwords: PasswordService,
+        versions: TokenVersionStore, tokens: TokenService,
+      ) => new UsersService(prisma.db as never, passwords, versions, tokens),
+      inject: [PrismaService, PasswordService, TOKEN_VERSIONS, TokenService],
     },
     {
       // `versions` is the same `TokenVersionStore` port `AuthService` writes
