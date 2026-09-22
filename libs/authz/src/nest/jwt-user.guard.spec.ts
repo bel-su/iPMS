@@ -157,3 +157,31 @@ describe('JwtUserGuard', () => {
     await expect(guard().canActivate(ctx(request(untyped)))).rejects.toThrow('Authentication required');
   });
 });
+
+describe('JwtUserGuard and the mustChangePassword claim', () => {
+  beforeEach(() => {
+    process.env['JWT_SECRET'] = SECRET;
+  });
+
+  afterEach(() => {
+    delete process.env['JWT_SECRET'];
+  });
+
+  /**
+   * A user who owes a password change holds a token with no roles and no
+   * permissions; a service that wants to say so needs the claim on
+   * `request.user` rather than re-parsing the token itself.
+   */
+  it('copies the claim onto request.user', async () => {
+    const token = sign(validPayload({ roles: [], permissions: [], mustChangePassword: true }));
+    const req = request(token);
+    await new JwtUserGuard(reflectorFor(false) as never).canActivate(ctx(req));
+    expect(req['user']).toMatchObject({ roles: [], permissions: [], mustChangePassword: true });
+  });
+
+  it('leaves it off an ordinary token rather than setting it false', async () => {
+    const req = request(sign(validPayload()));
+    await new JwtUserGuard(reflectorFor(false) as never).canActivate(ctx(req));
+    expect(req['user']).not.toHaveProperty('mustChangePassword');
+  });
+});
