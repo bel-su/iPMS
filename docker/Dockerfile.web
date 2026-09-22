@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.7
+FROM node:22.13-alpine AS base
+RUN npm install -g pnpm@10.15.0
+WORKDIR /app
+
+FROM base AS build
+RUN apk add --no-cache python3 make g++
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm -r --filter "./libs/*" build
+RUN pnpm --filter web build
+
+FROM base AS runtime
+ENV NODE_ENV=production
+ENV PORT=3100
+ENV HOSTNAME="0.0.0.0"
+
+RUN addgroup -S ipms && adduser -S ipms -G ipms
+
+COPY --from=build --chown=ipms:ipms /app/apps/web/.next/standalone ./
+COPY --from=build --chown=ipms:ipms /app/apps/web/.next/static ./apps/web/.next/static
+
+USER ipms
+EXPOSE 3100
+CMD ["node", "apps/web/server.js"]

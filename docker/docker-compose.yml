@@ -2,41 +2,66 @@ name: ipms
 
 x-service-defaults: &service-defaults
   restart: unless-stopped
-  environment: &service-env
-    NODE_ENV: production
-    LOG_LEVEL: ${LOG_LEVEL:-info}
-    NATS_URL: nats://nats:4222
-    REDIS_URL: redis://redis:6379
-    JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-    JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-900}
-    JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-2592000}
 
-# The infrastructure every service needs before it can boot. `depends_on` is
-# listed per service rather than here, because each one must additionally wait
-# for its own migration container, and a merge key replaces `depends_on`
-# wholesale instead of merging into it.
-x-infra-ready: &infra-ready
-  postgres: { condition: service_healthy }
-  nats:     { condition: service_healthy }
-  redis:    { condition: service_healthy }
-
-# One-shot: applies this service's migrations and exits. The service that owns
-# the database waits for it to exit 0.
 x-migrate-defaults: &migrate-defaults
   restart: "no"
-  depends_on:
-    postgres: { condition: service_healthy }
 
 services:
-  postgres:
-    build:
-      context: ./postgres
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  postgres-iam:
+    image: postgres:17-alpine
+    env_file:
+      - ./env/iam-db.env
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-iam-data:/var/lib/postgresql/data
+    ports:
+      - "${IAM_DB_PORT:-5433}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ipms_iam -d ipms_iam"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  postgres-audit:
+    image: postgres:17-alpine
+    env_file:
+      - ./env/audit-db.env
+    volumes:
+      - postgres-audit-data:/var/lib/postgresql/data
+    ports:
+      - "${AUDIT_DB_PORT:-5434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ipms_audit -d ipms_audit"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  postgres-project:
+    image: postgres:17-alpine
+    env_file:
+      - ./env/project-db.env
+    volumes:
+      - postgres-project-data:/var/lib/postgresql/data
+    ports:
+      - "${PROJECT_DB_PORT:-5435}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ipms_project -d ipms_project"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  postgres-qc:
+    image: postgres:17-alpine
+    env_file:
+      - ./env/qc-db.env
+    volumes:
+      - postgres-qc-data:/var/lib/postgresql/data
+    ports:
+      - "${QC_DB_PORT:-5436}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ipms_qc -d ipms_qc"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -73,13 +98,6 @@ services:
       - loki-data:/loki
     restart: unless-stopped
 
-  # Applies iam's migrations, then reconciles the permission catalog and the
-  # system roles — reference data the platform cannot authorize anything
-  # without, and which `seedIam` is written to re-apply safely every time.
-  #
-  # The four demo accounts are opt-in: `seed.main.ts` creates them only under
-  # NODE_ENV development or test, so setting IAM_DEMO_PASSWORD is what turns
-  # them on. Leave it unset and no credentials are created.
   iam-migrate:
     <<: *migrate-defaults
     build:
@@ -88,11 +106,10 @@ services:
       target: migrate
       args: { SERVICE: iam }
     command: ["sh", "-c", "pnpm exec prisma migrate deploy && pnpm exec tsx prisma/seed.main.ts"]
-    environment:
-      DATABASE_URL: postgresql://ipms_iam:ipms_iam@postgres:5432/ipms_iam
-      IAM_DATABASE_URL: postgresql://ipms_iam:ipms_iam@postgres:5432/ipms_iam
-      NODE_ENV: ${IAM_DEMO_PASSWORD:+development}
-      IAM_DEMO_PASSWORD: ${IAM_DEMO_PASSWORD:-}
+    env_file:
+      - ./env/iam.env
+    depends_on:
+      postgres-iam: { condition: service_healthy }
 
   iam:
     <<: *service-defaults
@@ -100,13 +117,13 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.service
       args: { SERVICE: iam }
+    env_file:
+      - ./env/iam.env
     depends_on:
-      <<: *infra-ready
-      iam-migrate: { condition: service_completed_successfully }
-    environment:
-      <<: *service-env
-      PORT: 3001
-      IAM_DATABASE_URL: postgresql://ipms_iam:ipms_iam@postgres:5432/ipms_iam
+      postgres-iam: { condition: service_healthy }
+      nats:         { condition: service_healthy }
+      redis:        { condition: service_healthy }
+      iam-migrate:  { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -121,8 +138,10 @@ services:
       dockerfile: docker/Dockerfile.service
       target: migrate
       args: { SERVICE: audit }
-    environment:
-      DATABASE_URL: postgresql://ipms_audit:ipms_audit@postgres:5432/ipms_audit
+    env_file:
+      - ./env/audit.env
+    depends_on:
+      postgres-audit: { condition: service_healthy }
 
   audit:
     <<: *service-defaults
@@ -130,13 +149,13 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.service
       args: { SERVICE: audit }
+    env_file:
+      - ./env/audit.env
     depends_on:
-      <<: *infra-ready
-      audit-migrate: { condition: service_completed_successfully }
-    environment:
-      <<: *service-env
-      PORT: 3003
-      AUDIT_DATABASE_URL: postgresql://ipms_audit:ipms_audit@postgres:5432/ipms_audit
+      postgres-audit: { condition: service_healthy }
+      nats:           { condition: service_healthy }
+      redis:          { condition: service_healthy }
+      audit-migrate:  { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3003/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -151,8 +170,10 @@ services:
       dockerfile: docker/Dockerfile.service
       target: migrate
       args: { SERVICE: project }
-    environment:
-      DATABASE_URL: postgresql://ipms_project:ipms_project@postgres:5432/ipms_project
+    env_file:
+      - ./env/project.env
+    depends_on:
+      postgres-project: { condition: service_healthy }
 
   project:
     <<: *service-defaults
@@ -160,13 +181,13 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.service
       args: { SERVICE: project }
+    env_file:
+      - ./env/project.env
     depends_on:
-      <<: *infra-ready
-      project-migrate: { condition: service_completed_successfully }
-    environment:
-      <<: *service-env
-      PORT: 3004
-      PROJECT_DATABASE_URL: postgresql://ipms_project:ipms_project@postgres:5432/ipms_project
+      postgres-project: { condition: service_healthy }
+      nats:             { condition: service_healthy }
+      redis:            { condition: service_healthy }
+      project-migrate:  { condition: service_completed_successfully }
 
   qc-migrate:
     <<: *migrate-defaults
@@ -175,8 +196,10 @@ services:
       dockerfile: docker/Dockerfile.service
       target: migrate
       args: { SERVICE: qc }
-    environment:
-      DATABASE_URL: postgresql://ipms_qc:ipms_qc@postgres:5432/ipms_qc
+    env_file:
+      - ./env/qc.env
+    depends_on:
+      postgres-qc: { condition: service_healthy }
 
   qc:
     <<: *service-defaults
@@ -184,18 +207,13 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.service
       args: { SERVICE: qc }
+    env_file:
+      - ./env/qc.env
     depends_on:
-      <<: *infra-ready
-      qc-migrate: { condition: service_completed_successfully }
-    environment:
-      <<: *service-env
-      PORT: 3005
-      QC_DATABASE_URL: postgresql://ipms_qc:ipms_qc@postgres:5432/ipms_qc
-      # Straight to the project service, not via the gateway: the geofence
-      # lookup is under /internal/, which the gateway refuses by design.
-      # Deliberately no depends_on — the lookup fails soft to UNVERIFIED, and
-      # a submission must never wait on the project service being up.
-      PROJECT_INTERNAL_URL: http://project:3004
+      postgres-qc: { condition: service_healthy }
+      nats:        { condition: service_healthy }
+      redis:       { condition: service_healthy }
+      qc-migrate:  { condition: service_completed_successfully }
 
   gateway:
     <<: *service-defaults
@@ -203,22 +221,35 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.service
       args: { SERVICE: gateway }
-    environment:
-      <<: *service-env
-      PORT: 3000
-      COOKIE_SECRET: ${COOKIE_SECRET:?COOKIE_SECRET is required}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3100}
+    env_file:
+      - ./env/gateway.env
     ports:
       - "${GATEWAY_PORT:-3000}:3000"
     depends_on:
-      <<: *infra-ready
-      iam:   { condition: service_healthy }
-      audit: { condition: service_healthy }
+      nats:    { condition: service_healthy }
+      redis:   { condition: service_healthy }
+      iam:     { condition: service_healthy }
+      audit:   { condition: service_healthy }
       project: { condition: service_started }
-      qc: { condition: service_started }
+      qc:      { condition: service_started }
+
+  web:
+    restart: unless-stopped
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    env_file:
+      - ./env/web.env
+    ports:
+      - "${WEB_PORT:-3100}:3100"
+    depends_on:
+      gateway: { condition: service_started }
 
 volumes:
-  postgres-data:
+  postgres-iam-data:
+  postgres-audit-data:
+  postgres-project-data:
+  postgres-qc-data:
   nats-data:
   redis-data:
   loki-data:
