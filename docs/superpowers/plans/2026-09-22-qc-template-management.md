@@ -1718,7 +1718,7 @@ const DOC = { sections: [{ number: '1', title: 'EHS', items: [{ number: '1.1', r
 describe('publish', () => {
   it('publishes a first version and points the template at it', async () => {
     const { templateId } = await service.create(META, ACTOR);
-    await service.saveDraft(templateId, { revision: 1, document: DOC }, ACTOR);
+    await service.saveDraft(templateId, { revision: 1, document: DOC });
     const published = await service.publish(templateId, ACTOR);
     expect(published).toMatchObject({ version: 1, status: 'PUBLISHED', publishedBy: ACTOR });
     const template = await prisma.checklistTemplate.findUniqueOrThrow({ where: { id: templateId } });
