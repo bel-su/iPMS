@@ -5,8 +5,7 @@ FROM node:22.13-alpine AS base
 RUN npm install -g pnpm@10.15.0
 WORKDIR /app
 
-FROM base AS build
-ARG SERVICE
+FROM base AS build-deps
 RUN apk add --no-cache python3 make g++
 COPY . .
 RUN pnpm install --frozen-lockfile
@@ -16,6 +15,9 @@ RUN pnpm install --frozen-lockfile
 # runtime loads, real JavaScript. Compiling library sources into the service's
 # own output instead would make every service carry its own copy.
 RUN pnpm -r --filter "./libs/*" build
+
+FROM build-deps AS build
+ARG SERVICE
 
 # Prisma generates into `apps/$SERVICE/node_modules/@prisma-clients/$SERVICE`,
 # so it must run before the service is compiled against those types.
