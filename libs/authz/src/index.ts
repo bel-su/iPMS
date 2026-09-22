@@ -3,6 +3,9 @@ export {
   PERMISSIONS, PERMISSION_CODES, expandDependencies, validatePermissionSet,
   type PermissionDefinition,
 } from './permissions.js';
+export {
+  ROLE_ASSIGNMENT, assignableRoles, mayAssign, mayManage,
+} from './assignable-roles.js';
 export { check } from './evaluate.js';
 export {
   signToken, verifyToken, extractToken, ACCESS_COOKIE,
