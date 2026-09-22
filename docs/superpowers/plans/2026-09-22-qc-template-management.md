@@ -1249,7 +1249,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Produces:
   - `document.ts`: `type Tx = Prisma.TransactionClient`; `TREE_INCLUDE` (Prisma include for sections → items, ordered); `type VersionWithTree`; `toDocument(version: VersionWithTree): TemplateDocument`; `writeTree(tx: Tx, versionId: string, doc: TemplateDocument): Promise<void>`; `clearTree(tx: Tx, versionId: string): Promise<void>`; `isUniqueViolation(error: unknown): boolean`.
   - `audit.ts`: `recordAudit(tx: Tx, entry: { actorId: string; action: string; objectId: string; previousState: JsonObject; newState: JsonObject }): Promise<void>`.
-  - `template.service.ts`: `DraftSummary = { id: string; version: number; revision: number; source: string; updatedAt: Date }`, `CreatedDraft = { templateId: string; draft: DraftSummary }`, and `class TemplateService` with `create(dto, actorId): Promise<CreatedDraft>`, `createFromImport(meta, doc, actorId): Promise<CreatedDraft>`, `rename(id, dto, actorId)`, `startDraft(id, actorId): Promise<CreatedDraft>`, `saveDraft(id, dto, actorId): Promise<DraftSummary>`, `importIntoDraft(id, doc, expectedRevision: number | undefined, actorId): Promise<CreatedDraft>`, `discardDraft(id, actorId): Promise<{ templateDeleted: boolean }>`. Task 4 adds `publish`, `disable`, `enable` to the same class.
+  - `template.service.ts`: `DraftSummary = { id: string; version: number; revision: number; source: string; updatedAt: Date }`, `CreatedDraft = { templateId: string; draft: DraftSummary }`, and `class TemplateService` with `create(dto, actorId): Promise<CreatedDraft>`, `createFromImport(meta, doc, actorId): Promise<CreatedDraft>`, `rename(id, dto, actorId)`, `startDraft(id, actorId): Promise<CreatedDraft>`, `saveDraft(id, dto): Promise<DraftSummary>`, `importIntoDraft(id, doc, expectedRevision: number | undefined, actorId): Promise<CreatedDraft>`, `discardDraft(id, actorId): Promise<{ templateDeleted: boolean }>`. Task 4 adds `publish`, `disable`, `enable` to the same class.
 
 - [ ] **Step 1: Write the failing integration test**
 
@@ -2144,7 +2144,7 @@ describe('parsing', () => {
   });
 
   it('refuses a draft save without a revision', () => {
-    expect(() => controller.saveDraft('0192f7a0-0000-7000-8000-000000000001', { document: { sections: [] } }, req)).toThrow();
+    expect(() => controller.saveDraft('0192f7a0-0000-7000-8000-000000000001', { document: { sections: [] } })).toThrow();
     expect(service.saveDraft).not.toHaveBeenCalled();
   });
 });
@@ -2196,8 +2196,8 @@ export class TemplateController {
   startDraft(@Param('id') id: string, @Req() req: Authed) { return this.templates.startDraft(UuidSchema.parse(id), req.user.id); }
 
   @Put(':id/draft') @RequirePermission('qc_template.update')
-  saveDraft(@Param('id') id: string, @Body() body: unknown, @Req() req: Authed) {
-    return this.templates.saveDraft(UuidSchema.parse(id), SaveDraftSchema.parse(body), req.user.id);
+  saveDraft(@Param('id') id: string, @Body() body: unknown) {
+    return this.templates.saveDraft(UuidSchema.parse(id), SaveDraftSchema.parse(body));
   }
 
   @Delete(':id/draft') @RequirePermission('qc_template.update')
