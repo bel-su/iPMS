@@ -5,11 +5,16 @@ import {
   AuthzGuard, JwtUserGuard, OVERRIDE_PROVIDER, SCOPE_PROVIDER, emptyOverrideProvider,
   type AuthzScope, type ScopeProvider,
 } from '@ipms/authz';
+import { EventBus } from '@ipms/events';
 import { HealthController, MetricsController, registerReadinessCheck } from '@ipms/observability';
 import { PrismaService } from './prisma.service.js';
+import { OutboxDrainer } from './outbox/outbox.drainer.js';
 import { SiteGeofenceClient } from './submissions/site-geofence.client.js';
 import { SubmissionController } from './submissions/submission.controller.js';
 import { SubmissionService } from './submissions/submission.service.js';
+import { TemplateController } from './templates/template.controller.js';
+import { TemplateQueries } from './templates/template.queries.js';
+import { TemplateService } from './templates/template.service.js';
 
 // Least-permissive scope: no qc route passes a resource to check(), so scope is never consulted.
 const scopeProvider: ScopeProvider = { async for(): Promise<AuthzScope> { return { global: false, projectIds: [], siteIds: [] }; } };
@@ -17,9 +22,15 @@ const scopeProvider: ScopeProvider = { async for(): Promise<AuthzScope> { return
 const projectInternalUrl = (): string => process.env['PROJECT_INTERNAL_URL'] ?? 'http://project:3004';
 const graceDays = (): number => Number(process.env['QC_RETIRED_VERSION_GRACE_DAYS'] ?? 7);
 
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is not set`);
+  return value;
+}
+
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [SubmissionController, HealthController, MetricsController],
+  controllers: [TemplateController, SubmissionController, HealthController, MetricsController],
   providers: [
     // Order matters: JwtUserGuard must populate request.user before AuthzGuard reads it.
     { provide: APP_GUARD, useClass: JwtUserGuard },
@@ -40,6 +51,19 @@ const graceDays = (): number => Number(process.env['QC_RETIRED_VERSION_GRACE_DAY
       useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient) => new SubmissionService(prisma.db, geofence, graceDays()),
       inject: [PrismaService, SiteGeofenceClient],
     },
+    {
+      provide: EventBus,
+      useFactory: async (): Promise<EventBus> => {
+        const bus = new EventBus();
+        await bus.connect(requireEnv('NATS_URL'));
+        await bus.ensureStreams();
+        registerReadinessCheck('nats', () => bus.isHealthy());
+        return bus;
+      },
+    },
+    { provide: OutboxDrainer, useFactory: (prisma: PrismaService, bus: EventBus) => new OutboxDrainer(prisma.db, bus), inject: [PrismaService, EventBus] },
+    { provide: TemplateService, useFactory: (prisma: PrismaService) => new TemplateService(prisma.db), inject: [PrismaService] },
+    { provide: TemplateQueries, useFactory: (prisma: PrismaService) => new TemplateQueries(prisma.db), inject: [PrismaService] },
   ],
 })
 export class AppModule {}
