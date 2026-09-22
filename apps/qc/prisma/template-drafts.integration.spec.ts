@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { ConflictException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma-clients/qc';
 import { TemplateDocumentSchema, type TemplateDocument } from '@ipms/contracts';
 import { TemplateService } from '../src/templates/template.service.js';
@@ -50,15 +51,15 @@ describe('create', () => {
 describe('saveDraft', () => {
   it('replaces the whole tree and bumps the revision', async () => {
     const { templateId } = await service.create(META, ACTOR);
-    const saved = await service.saveDraft(templateId, { revision: 1, document: DOC }, ACTOR);
+    const saved = await service.saveDraft(templateId, { revision: 1, document: DOC });
     expect(saved.revision).toBe(2);
     expect(await draftDocument(templateId)).toEqual(DOC);
   });
 
   it('refuses a stale revision and leaves the draft untouched', async () => {
     const { templateId } = await service.create(META, ACTOR);
-    await service.saveDraft(templateId, { revision: 1, document: DOC }, ACTOR);
-    await expect(service.saveDraft(templateId, { revision: 1, document: { sections: [] } }, ACTOR))
+    await service.saveDraft(templateId, { revision: 1, document: DOC });
+    await expect(service.saveDraft(templateId, { revision: 1, document: { sections: [] } }))
       .rejects.toThrow('Someone else saved this draft');
     expect(await draftDocument(templateId)).toEqual(DOC);
   });
@@ -66,15 +67,15 @@ describe('saveDraft', () => {
   it('lets exactly one of two concurrent saves at the same revision win', async () => {
     const { templateId } = await service.create(META, ACTOR);
     const results = await Promise.allSettled([
-      service.saveDraft(templateId, { revision: 1, document: DOC }, ACTOR),
-      service.saveDraft(templateId, { revision: 1, document: { sections: [] } }, ACTOR),
+      service.saveDraft(templateId, { revision: 1, document: DOC }),
+      service.saveDraft(templateId, { revision: 1, document: { sections: [] } }),
     ]);
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
   });
 
   it('answers 409 when there is no draft', async () => {
     const { templateId } = await seedPublishedTemplate(prisma);
-    await expect(service.saveDraft(templateId, { revision: 1, document: DOC }, ACTOR)).rejects.toThrow('This template has no draft');
+    await expect(service.saveDraft(templateId, { revision: 1, document: DOC })).rejects.toThrow('This template has no draft');
   });
 });
 
@@ -95,6 +96,18 @@ describe('startDraft', () => {
   it('refuses when nothing is published', async () => {
     const { templateId } = await service.create(META, ACTOR);
     await expect(service.startDraft(templateId, ACTOR)).rejects.toThrow('A draft (v1) already exists');
+  });
+
+  it('lets exactly one of two concurrent starts win', async () => {
+    const { templateId } = await seedPublishedTemplate(prisma);
+    const results = await Promise.allSettled([
+      service.startDraft(templateId, ACTOR),
+      service.startDraft(templateId, ACTOR),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toBeInstanceOf(ConflictException);
+    expect(await prisma.templateVersion.count({ where: { templateId, status: 'DRAFT' } })).toBe(1);
   });
 });
 
@@ -140,5 +153,17 @@ describe('importIntoDraft', () => {
     await expect(service.importIntoDraft(templateId, DOC, undefined, ACTOR)).rejects.toThrow('Preview the file again');
     const created = await service.importIntoDraft(templateId, DOC, 1, ACTOR);
     expect(created.draft).toMatchObject({ version: 1, revision: 2, source: 'EXCEL_IMPORT' });
+  });
+
+  it('lets exactly one of two concurrent imports with no existing draft win', async () => {
+    const { templateId } = await seedPublishedTemplate(prisma);
+    const results = await Promise.allSettled([
+      service.importIntoDraft(templateId, DOC, undefined, ACTOR),
+      service.importIntoDraft(templateId, DOC, undefined, ACTOR),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toBeInstanceOf(ConflictException);
+    expect(await prisma.templateVersion.count({ where: { templateId, status: 'DRAFT' } })).toBe(1);
   });
 });

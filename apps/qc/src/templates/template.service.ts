@@ -31,8 +31,10 @@ export class TemplateService {
   }
 
   async rename(id: string, dto: UpdateTemplateDto, actorId: string) {
-    const template = await this.requireTemplate(this.prisma, id);
     return this.prisma.$transaction(async (tx) => {
+      // Lock the row first so a concurrent rename can't slip between this read and the update.
+      await tx.$queryRaw`SELECT "id" FROM "checklist_template" WHERE "id" = ${id}::uuid FOR UPDATE`;
+      const template = await this.requireTemplate(tx, id);
       const updated = await tx.checklistTemplate.update({
         where: { id },
         data: { ...(dto.name === undefined ? {} : { name: dto.name }), ...(dto.category === undefined ? {} : { category: dto.category }) },
@@ -47,19 +49,25 @@ export class TemplateService {
   }
 
   async startDraft(id: string, actorId: string): Promise<CreatedDraft> {
-    return this.prisma.$transaction(async (tx) => {
-      await this.requireTemplate(tx, id);
-      const existing = await tx.templateVersion.findFirst({ where: { templateId: id, status: 'DRAFT' } });
-      if (existing) throw new ConflictException(`A draft (v${existing.version}) already exists`);
-      const current = await tx.templateVersion.findFirst({ where: { templateId: id, status: 'PUBLISHED' }, include: TREE_INCLUDE });
-      if (!current) throw new ConflictException('This template has nothing published to copy');
-      const draft = await this.createDraftVersion(tx, id, 'WEB', actorId);
-      await writeTree(tx, draft.id, toDocument(current));
-      return { templateId: id, draft: summary(draft) };
-    });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await this.requireTemplate(tx, id);
+        const existing = await tx.templateVersion.findFirst({ where: { templateId: id, status: 'DRAFT' } });
+        if (existing) throw new ConflictException(`A draft (v${existing.version}) already exists`);
+        const current = await tx.templateVersion.findFirst({ where: { templateId: id, status: 'PUBLISHED' }, include: TREE_INCLUDE });
+        if (!current) throw new ConflictException('This template has nothing published to copy');
+        const draft = await this.createDraftVersion(tx, id, 'WEB', actorId);
+        await writeTree(tx, draft.id, toDocument(current));
+        return { templateId: id, draft: summary(draft) };
+      });
+    } catch (error) {
+      // The loser of two concurrent starts hits the one-draft-per-template index instead of the pre-check.
+      if (isUniqueViolation(error)) throw new ConflictException('A draft already exists');
+      throw error;
+    }
   }
 
-  async saveDraft(id: string, dto: SaveDraftDto, _actorId: string): Promise<DraftSummary> {
+  async saveDraft(id: string, dto: SaveDraftDto): Promise<DraftSummary> {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const draft = await this.requireDraft(tx, id);
@@ -74,24 +82,30 @@ export class TemplateService {
   }
 
   async importIntoDraft(id: string, doc: TemplateDocument, expectedRevision: number | undefined, actorId: string): Promise<CreatedDraft> {
-    return this.prisma.$transaction(async (tx) => {
-      await this.requireTemplate(tx, id);
-      const existing = await tx.templateVersion.findFirst({ where: { templateId: id, status: 'DRAFT' } });
-      let draft: TemplateVersion;
-      if (existing) {
-        if (expectedRevision !== existing.revision) throw new ConflictException(STALE_IMPORT);
-        draft = await this.replaceDraftTree(tx, existing.id, existing.revision, doc, { source: 'EXCEL_IMPORT' }, STALE_IMPORT);
-      } else {
-        draft = await this.createDraftVersion(tx, id, 'EXCEL_IMPORT', actorId);
-        await writeTree(tx, draft.id, doc);
-      }
-      await recordAudit(tx, {
-        actorId, action: 'qc_template.imported', objectId: id,
-        previousState: existing ? { draftVersion: existing.version } : {},
-        newState: { draftVersion: draft.version, source: 'EXCEL_IMPORT' },
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await this.requireTemplate(tx, id);
+        const existing = await tx.templateVersion.findFirst({ where: { templateId: id, status: 'DRAFT' } });
+        let draft: TemplateVersion;
+        if (existing) {
+          if (expectedRevision !== existing.revision) throw new ConflictException(STALE_IMPORT);
+          draft = await this.replaceDraftTree(tx, existing.id, existing.revision, doc, { source: 'EXCEL_IMPORT' }, STALE_IMPORT);
+        } else {
+          draft = await this.createDraftVersion(tx, id, 'EXCEL_IMPORT', actorId);
+          await writeTree(tx, draft.id, doc);
+        }
+        await recordAudit(tx, {
+          actorId, action: 'qc_template.imported', objectId: id,
+          previousState: existing ? { draftVersion: existing.version } : {},
+          newState: { draftVersion: draft.version, source: 'EXCEL_IMPORT' },
+        });
+        return { templateId: id, draft: summary(draft) };
       });
-      return { templateId: id, draft: summary(draft) };
-    });
+    } catch (error) {
+      // The loser of two concurrent imports with no existing draft hits the one-draft-per-template index.
+      if (isUniqueViolation(error)) throw new ConflictException(STALE_IMPORT);
+      throw error;
+    }
   }
 
   async discardDraft(id: string, actorId: string): Promise<{ templateDeleted: boolean }> {
