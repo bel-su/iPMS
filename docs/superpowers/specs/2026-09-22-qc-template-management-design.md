@@ -234,7 +234,7 @@ CreateSubmissionSchema = existing, with templateId replaced by templateVersionId
 | `PATCH /qc/templates/:id` | `qc_template.update` | Template |
 | `POST /qc/templates/:id/draft` | `qc_template.update` | New draft (clone of current) |
 | `PUT /qc/templates/:id/draft` | `qc_template.update` | Saved draft with new revision |
-| `DELETE /qc/templates/:id/draft` | `qc_template.update` | 204 |
+| `DELETE /qc/templates/:id/draft` | `qc_template.update` | `{ templateDeleted }` — true when a never-published template went with its draft |
 | `POST /qc/templates/:id/publish` | `qc_template.publish` | Published version |
 | `POST /qc/templates/:id/disable` | `qc_template.publish` | Template |
 | `POST /qc/templates/:id/enable` | `qc_template.publish` | Template |
@@ -261,13 +261,13 @@ computed in SQL, not by loading trees.
 
 | Condition | Status | Message |
 |---|---|---|
-| Schema violation | 400 | Field paths per §5.2 |
+| Schema violation | 422 | `VALIDATION_FAILED`, `details` keyed by dotted path (the platform's `GlobalExceptionFilter`) |
 | Code already exists | 409 | "A template with code X already exists" |
 | Stale draft revision | 409 | "Someone else saved this draft. Reload to see their changes." |
 | No draft to save/publish/discard | 409 | "This template has no draft" |
 | Draft already exists (new version) | 409 | "A draft (vN) already exists" |
 | Publish while disabled | 409 | "Enable this template before publishing" |
-| Publish validation fails | 400 | Field paths |
+| Publish validation fails | 422 | As above; the service throws the `ZodError` so the filter renders it |
 | Unknown template/version | 404 | — |
 
 ### 6.4 The task checklist endpoint
@@ -485,7 +485,7 @@ and passes it in with its revision.
 - New sections and items get the next number automatically (`3`, `3.1`, `3.2`).
   *Renumber* rewrites all numbers from position (`1`, `1.1`, `1.2`, `2`, `2.1`, …).
 - *Save* calls a server action with `{revision, document}`. On success the new
-  revision replaces the old. On 400, each error path marks its field and a summary
+  revision replaces the old. On 422, each error path marks its field and a summary
   lists them. On 409 (stale revision) a banner offers *Reload*.
 - *Publish* saves first; if that succeeds, a confirmation dialog states "vN will be
   used by all projects from now on; vN−1 retires", then publishes and redirects to
