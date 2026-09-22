@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { assignableRoles, mayAssign, mayManage } from './assignable-roles.js';
 
+
 describe('assignableRoles', () => {
   it('gives a super administrator every role', () => {
     expect(assignableRoles(['SUPER_ADMIN'])).toBe('ALL');

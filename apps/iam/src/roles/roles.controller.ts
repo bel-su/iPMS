@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Req } from '@nestjs/common';
-import { RequirePermission } from '@ipms/authz';
+import { RequirePermission, mayAssign } from '@ipms/authz';
 import { PERMISSIONS } from '@ipms/authz';
 import { CloneRoleSchema, CreateRoleSchema, UpdateRoleSchema, UuidSchema } from '@ipms/contracts';
 import type { AuthzUser } from '@ipms/authz';
@@ -9,10 +9,23 @@ import { RolesService } from './roles.service.js';
 export class RolesController {
   constructor(private readonly roles: RolesService) {}
 
+  /**
+   * Each role carries whether *this caller* may confer it.
+   *
+   * The assignable-roles table lives in `@ipms/authz`, which a Next build
+   * cannot import — its barrel reaches `@nestjs/common`, and the web app's
+   * only other option would be a second copy of the rule that could drift from
+   * this one. Reporting the answer per role keeps one implementation: the web
+   * filters its role checkboxes on this flag and knows nothing about the table.
+   *
+   * It is presentation support, not enforcement. `UsersService` applies the
+   * same table to every write regardless of what any client renders.
+   */
   @Get('roles')
   @RequirePermission('role.view')
-  async list() {
-    return this.roles.list();
+  async list(@Req() req: { user: AuthzUser }) {
+    const roles = await this.roles.list();
+    return roles.map((role) => ({ ...role, assignable: mayAssign(req.user.roles, role.code) }));
   }
 
   @Get('roles/:id')

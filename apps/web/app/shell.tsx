@@ -6,7 +6,7 @@
 
 function Icon({ children }: { children: React.ReactNode }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
-type Section = 'overview' | 'projects' | 'quality';
+type Section = 'overview' | 'projects' | 'quality' | 'users';
 
 function NavItem({ section, active, href, icon, children }: {
   section: Section; active: Section; href: string; icon: string; children: React.ReactNode;

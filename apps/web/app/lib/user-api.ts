@@ -35,8 +35,16 @@ export interface User {
 
 export interface UserPage { items: User[]; total: number; page: number; limit: number }
 
-/** The slice of `RolesController`'s response the assignment controls need. */
-export interface Role { id: string; code: string; name: string; isActive: boolean }
+/**
+ * The slice of `RolesController`'s response the assignment controls need.
+ *
+ * `assignable` is computed by iam for the calling user from the same
+ * assignable-roles table it enforces writes with. It is reported rather than
+ * recomputed here because that table lives in `@ipms/authz`, which a Next build
+ * cannot import — and a second copy of the rule in this app could drift from
+ * the one that actually decides.
+ */
+export interface Role { id: string; code: string; name: string; isActive: boolean; assignable: boolean }
 
 export interface UserFilters {
   search?: string | undefined;
