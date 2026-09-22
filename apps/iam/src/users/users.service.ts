@@ -5,7 +5,8 @@ import type { PrismaClient } from '@prisma-clients/iam';
 import { mayAssign, mayManage } from '@ipms/authz';
 import {
   uuidv7,
-  type CreateUserDto, type UserListQuery, type UserResponse,
+  type AssignRolesDto, type CreateUserDto, type ResetPasswordDto,
+  type UpdateUserDto, type UserListQuery, type UserResponse,
 } from '@ipms/contracts';
 import { buildOutboxRecord, type JsonObject } from '@ipms/persistence';
 import { SUBJECTS } from '@ipms/events';
@@ -120,6 +121,34 @@ export class UsersService {
       throw new BadRequestException(`Unknown role codes: ${missing.join(', ')}`);
     }
     return roles;
+  }
+
+  /**
+   * Refuses a change that would leave the platform with no active
+   * administrator.
+   *
+   * The count runs inside the caller's transaction, which is what makes it
+   * true rather than merely likely: two concurrent demotions each reading a
+   * committed count of two would otherwise both see a survivor and both
+   * commit, leaving none.
+   *
+   * `next` is the role set the target will hold afterwards, or `'DEACTIVATE'`
+   * when they will hold the same roles but no longer be active.
+   */
+  private async assertAdminSurvives(
+    tx: Tx, userId: string, currentRoleCodes: string[], next: string[] | 'DEACTIVATE',
+  ): Promise<void> {
+    if (!currentRoleCodes.includes('SUPER_ADMIN')) return;
+    if (next !== 'DEACTIVATE' && next.includes('SUPER_ADMIN')) return;
+
+    const remaining = await tx.userRole.count({
+      where: { role: { code: 'SUPER_ADMIN' }, userId: { not: userId }, user: { isActive: true } },
+    });
+    if (remaining === 0) {
+      throw new BadRequestException(
+        'This is the last active super administrator; promote another account first',
+      );
+    }
   }
 
   private assertMayAssign(actorRoleCodes: string[], codes: string[]): void {
@@ -241,6 +270,140 @@ export class UsersService {
       // query, and it cannot drift from what the next GET will return.
       const created = await tx.user.findUniqueOrThrow({ where: { id }, select: USER_SELECT });
       return toResponse(created as UserRow);
+    });
+  }
+
+  async update(id: string, dto: UpdateUserDto, actorId: string, actorRoleCodes: string[]): Promise<UserResponse> {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await this.loadManageable(tx, id, actorRoleCodes);
+
+      // Only the fields the caller actually sent, in the write and in the
+      // ledger alike — see RolesService.update for why the audit entry cannot
+      // simply spread the DTO.
+      const data: JsonObject = {};
+      if (dto.email !== undefined) data['email'] = dto.email;
+      if (dto.fullName !== undefined) data['fullName'] = dto.fullName;
+      if (dto.employeeCode !== undefined) data['employeeCode'] = dto.employeeCode;
+
+      if (dto.email !== undefined && dto.email !== existing.email) {
+        const clash = await tx.user.findUnique({ where: { email: dto.email } });
+        if (clash) throw new BadRequestException(`Email ${dto.email} is already in use`);
+      }
+
+      await tx.user.update({ where: { id }, data: data as never });
+
+      const previousState: JsonObject = {};
+      if (dto.email !== undefined) previousState['email'] = existing.email;
+      if (dto.fullName !== undefined) previousState['fullName'] = existing.fullName;
+      if (dto.employeeCode !== undefined) previousState['employeeCode'] = existing.employeeCode;
+
+      await this.audit(tx, actorId, 'user.updated', id, previousState, data);
+
+      // No token revocation: a profile edit changes no authority.
+      const updated = await tx.user.findUniqueOrThrow({ where: { id }, select: USER_SELECT });
+      return toResponse(updated as UserRow);
+    });
+  }
+
+  async deactivate(id: string, actorId: string, actorRoleCodes: string[]): Promise<UserResponse> {
+    if (id === actorId) {
+      throw new ForbiddenException('An actor cannot deactivate their own account');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await this.loadManageable(tx, id, actorRoleCodes);
+      await this.assertAdminSurvives(tx, id, roleCodesOf(existing), 'DEACTIVATE');
+
+      await tx.user.update({ where: { id }, data: { isActive: false } });
+      // The account is refused at login from here, but a live access token
+      // would still be honoured for its full TTL without this.
+      await this.revokeTokens(tx, id);
+
+      await this.emit(tx, SUBJECTS.IAM_USER_DEACTIVATED, { userId: id }, actorId);
+      await this.audit(tx, actorId, 'user.deactivated', id, { isActive: true }, { isActive: false });
+
+      const updated = await tx.user.findUniqueOrThrow({ where: { id }, select: USER_SELECT });
+      return toResponse(updated as UserRow);
+    });
+  }
+
+  async reactivate(id: string, actorId: string, actorRoleCodes: string[]): Promise<UserResponse> {
+    return this.prisma.$transaction(async (tx) => {
+      await this.loadManageable(tx, id, actorRoleCodes);
+
+      // Deliberately does not clear `mustChangePassword`: if the account was
+      // deactivated while it still owed a change, it owes it on return.
+      await tx.user.update({ where: { id }, data: { isActive: true } });
+      await this.audit(tx, actorId, 'user.reactivated', id, { isActive: false }, { isActive: true });
+
+      const updated = await tx.user.findUniqueOrThrow({ where: { id }, select: USER_SELECT });
+      return toResponse(updated as UserRow);
+    });
+  }
+
+  async setRoles(id: string, dto: AssignRolesDto, actorId: string, actorRoleCodes: string[]): Promise<UserResponse> {
+    // Checked before anything is loaded: this is the privilege-escalation path,
+    // and `role.assign` without it is equivalent to SUPER_ADMIN.
+    if (id === actorId) {
+      throw new ForbiddenException('An actor cannot change their own roles');
+    }
+    this.assertMayAssign(actorRoleCodes, dto.roleCodes);
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await this.loadManageable(tx, id, actorRoleCodes);
+      const previousCodes = roleCodesOf(existing);
+      await this.assertAdminSurvives(tx, id, previousCodes, dto.roleCodes);
+
+      const roles = await this.resolveRoles(tx, dto.roleCodes);
+
+      // Global assignments only. Project- and site-scoped rows are granted
+      // through ScopesController and are not this endpoint's to replace.
+      await tx.userRole.deleteMany({ where: { userId: id, projectId: null, siteId: null } });
+      for (const role of roles) {
+        await tx.userRole.create({
+          data: { id: uuidv7(), userId: id, roleId: role.id, createdBy: actorId },
+        });
+      }
+
+      for (const code of previousCodes.filter((c) => !dto.roleCodes.includes(c))) {
+        await this.emit(tx, SUBJECTS.IAM_ROLE_REMOVED, { userId: id, roleCode: code, projectId: null, siteId: null }, actorId);
+      }
+      for (const code of dto.roleCodes.filter((c) => !previousCodes.includes(c))) {
+        await this.emit(tx, SUBJECTS.IAM_ROLE_ASSIGNED, { userId: id, roleCode: code, projectId: null, siteId: null }, actorId);
+      }
+
+      // The permissions claim is resolved at issuance, so without this the old
+      // authority stays live for the access token's full TTL.
+      await this.revokeTokens(tx, id);
+      await this.audit(tx, actorId, 'user.roles_changed', id,
+        { roleCodes: previousCodes }, { roleCodes: dto.roleCodes });
+
+      const updated = await tx.user.findUniqueOrThrow({ where: { id }, select: USER_SELECT });
+      return toResponse(updated as UserRow);
+    });
+  }
+
+  async resetPassword(
+    id: string, dto: ResetPasswordDto, actorId: string, actorRoleCodes: string[],
+  ): Promise<UserResponse> {
+    const passwordHash = await this.passwords.hash(dto.password);
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.loadManageable(tx, id, actorRoleCodes);
+
+      await tx.user.update({
+        where: { id },
+        // The actor now knows this password, so the account owes a change
+        // exactly as a freshly created one does.
+        data: { passwordHash, mustChangePassword: true },
+      });
+      await this.revokeTokens(tx, id);
+
+      // No password, hash, or derivative of either reaches the ledger.
+      await this.audit(tx, actorId, 'user.password_reset', id, {}, { mustChangePassword: true });
+
+      const updated = await tx.user.findUniqueOrThrow({ where: { id }, select: USER_SELECT });
+      return toResponse(updated as UserRow);
     });
   }
 }
