@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { PrismaClient, TemplateVersion } from '@prisma-clients/qc';
 import {
-  uuidv7, type CreateTemplateDto, type SaveDraftDto, type TemplateDocument,
+  PublishableDocumentSchema, uuidv7, type CreateTemplateDto, type SaveDraftDto, type TemplateDocument,
   type TemplateMetadata, type UpdateTemplateDto,
 } from '@ipms/contracts';
 import type { JsonObject } from '@ipms/persistence';
@@ -117,6 +117,53 @@ export class TemplateService {
       if (templateDeleted) await tx.checklistTemplate.delete({ where: { id } });
       else await tx.templateVersion.delete({ where: { id: draft.id } });
       return { templateDeleted };
+    });
+  }
+
+  async publish(id: string, actorId: string): Promise<TemplateVersion> {
+    return this.prisma.$transaction(async (tx) => {
+      // Serializes publishes of one template; the partial unique index is the backstop.
+      await tx.$queryRaw`SELECT "id" FROM "checklist_template" WHERE "id" = ${id}::uuid FOR UPDATE`;
+      const template = await this.requireTemplate(tx, id);
+      if (template.disabledAt) throw new ConflictException('Enable this template before publishing');
+      const draft = await tx.templateVersion.findFirst({ where: { templateId: id, status: 'DRAFT' }, include: TREE_INCLUDE });
+      if (!draft) throw new ConflictException('This template has no draft');
+      const checked = PublishableDocumentSchema.safeParse(toDocument(draft));
+      // Thrown as-is so the exception filter renders field paths as a 422.
+      if (!checked.success) throw checked.error;
+      const now = new Date();
+      const previous = await tx.templateVersion.findFirst({ where: { templateId: id, status: 'PUBLISHED' } });
+      if (previous) await tx.templateVersion.update({ where: { id: previous.id }, data: { status: 'RETIRED', retiredAt: now } });
+      const published = await tx.templateVersion.update({
+        where: { id: draft.id }, data: { status: 'PUBLISHED', publishedAt: now, publishedBy: actorId },
+      });
+      await tx.checklistTemplate.update({ where: { id }, data: { currentVersionId: published.id } });
+      await recordAudit(tx, {
+        actorId, action: 'qc_template.published', objectId: id,
+        previousState: { version: previous?.version ?? null }, newState: { version: published.version },
+      });
+      return published;
+    });
+  }
+
+  async disable(id: string, actorId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const template = await this.requireTemplate(tx, id);
+      if (template.disabledAt) throw new ConflictException('This template is already disabled');
+      if (!template.currentVersionId) throw new ConflictException('Only a published template can be disabled');
+      const updated = await tx.checklistTemplate.update({ where: { id }, data: { disabledAt: new Date() } });
+      await recordAudit(tx, { actorId, action: 'qc_template.disabled', objectId: id, previousState: { disabledAt: null }, newState: { disabledAt: updated.disabledAt!.toISOString() } });
+      return updated;
+    });
+  }
+
+  async enable(id: string, actorId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const template = await this.requireTemplate(tx, id);
+      if (!template.disabledAt) throw new ConflictException('This template is not disabled');
+      const updated = await tx.checklistTemplate.update({ where: { id }, data: { disabledAt: null } });
+      await recordAudit(tx, { actorId, action: 'qc_template.enabled', objectId: id, previousState: { disabledAt: template.disabledAt.toISOString() }, newState: { disabledAt: null } });
+      return updated;
     });
   }
 
