@@ -57,7 +57,20 @@
 
 ---
 
-## Three things that will bite you
+## Four things that will bite you
+
+**0. Never run `docker compose up --build <svc> gateway`.**
+`gateway` has `depends_on` on iam, audit, project and qc, so `--build` rebuilds all of
+them at once and four concurrent `pnpm install`s exhaust Docker's memory:
+
+```
+target qc-migrate: failed to solve: ResourceExhausted:
+process "/bin/sh -c pnpm install --frozen-lockfile" did not complete successfully:
+cannot allocate memory
+```
+
+Worse, the aborted run tears down `postgres`. Build one image at a time and start with
+`--no-deps`. Every Compose step in this plan is written that way.
 
 **1. An existing gateway test asserts `/api/v1/media` is unroutable.**
 `apps/gateway/src/proxy/routes.spec.ts:42` reads:
@@ -646,10 +659,19 @@ Expected: `media` shows `healthy`. If `media-migrate` exited non-zero, read its 
 
 ```bash
 docker compose -f docker/docker-compose.yml logs media-migrate --tail 20
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/api/v1/media/objects
+docker compose -f docker/docker-compose.yml exec -T media \
+  node -e "fetch('http://localhost:3006/health/ready').then(async r=>{console.log(r.status, await r.text())})"
 ```
 
-Expected: `401`. That is the correct answer and proves the whole path — the gateway resolved the prefix and refused an unauthenticated request. A `404` means the route did not resolve; recheck Step 3.
+Expected: `200 {"status":"ok","checks":{"postgres":"ok"}}`. That is the meaningful runtime check — the service booted, connected as its own role, and its readiness probe passes.
+
+**Do not use a gateway `curl` to prove routing.** `JwtGuard` runs before the proxy resolves an upstream, so *every* unauthenticated request returns `401` — including a prefix that does not exist at all:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/api/v1/billing/x   # also 401
+```
+
+Routing correctness is proven by `routes.spec.ts` in Steps 1–4, which calls `resolveUpstream` directly. Distinguishing a routed prefix from an unrouted one at runtime needs a valid token, which this plan does not assume you have.
 
 - [ ] **Step 17: Run the full verification and commit**
 
@@ -1025,13 +1047,18 @@ NOTIFICATION_DATABASE_URL=postgresql://ipms_notification:ipms_notification@local
 
 - [ ] **Step 13: Bring it up and verify**
 
+Build serially. `up --build` on a service the gateway depends on rebuilds the whole graph in parallel and exhausts Docker's memory during `pnpm install`:
+
 ```bash
-docker compose -f docker/docker-compose.yml up -d --build notification gateway
-docker compose -f docker/docker-compose.yml ps notification
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/api/v1/notifications
+docker compose -f docker/docker-compose.yml build notification-migrate
+docker compose -f docker/docker-compose.yml build notification
+docker compose -f docker/docker-compose.yml up notification-migrate --no-deps --exit-code-from notification-migrate
+docker compose -f docker/docker-compose.yml up -d --no-deps notification
+docker compose -f docker/docker-compose.yml exec -T notification \
+  node -e "fetch('http://localhost:3007/health/ready').then(async r=>{console.log(r.status, await r.text())})"
 ```
 
-Expected: `notification` shows `healthy`; the curl returns `401`.
+Expected: the migrate container exits `0`; the readiness probe prints `200 {"status":"ok","checks":{"postgres":"ok"}}`. See Task 1 Step 16 for why a gateway `curl` does not prove routing.
 
 - [ ] **Step 14: Commit**
 
@@ -1411,13 +1438,18 @@ DOCS_DATABASE_URL=postgresql://ipms_docs:ipms_docs@localhost:5432/ipms_docs
 
 - [ ] **Step 14: Bring it up and verify**
 
+Build serially, as in Task 2 Step 13:
+
 ```bash
-docker compose -f docker/docker-compose.yml up -d --build docs gateway
-docker compose -f docker/docker-compose.yml ps docs
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/api/v1/docs/getting-started
+docker compose -f docker/docker-compose.yml build docs-migrate
+docker compose -f docker/docker-compose.yml build docs
+docker compose -f docker/docker-compose.yml up docs-migrate --no-deps --exit-code-from docs-migrate
+docker compose -f docker/docker-compose.yml up -d --no-deps docs
+docker compose -f docker/docker-compose.yml exec -T docs \
+  node -e "fetch('http://localhost:3008/health/ready').then(async r=>{console.log(r.status, await r.text())})"
 ```
 
-Expected: `docs` shows `healthy`; the curl returns `401`.
+Expected: the migrate container exits `0`; the readiness probe prints `200 {"status":"ok","checks":{"postgres":"ok"}}`.
 
 - [ ] **Step 15: Commit**
 
@@ -1488,27 +1520,31 @@ docker compose -f docker/docker-compose.yml exec -T postgres \
 
 Expected: `FATAL: permission denied for database "ipms_qc"`. A `1` here means the `REVOKE`/`GRANT` pair is wrong and cross-service joins are possible — stop and fix `init.sql`.
 
-- [ ] **Step 4: Verify all three prefixes route and are authenticated**
+- [ ] **Step 4: Verify each service answers its own readiness probe**
+
+```bash
+for s in media:3006 notification:3007 docs:3008; do
+  svc=${s%%:*}; port=${s##*:}
+  printf '%-13s -> ' "$svc"
+  docker compose -f docker/docker-compose.yml exec -T "$svc" \
+    node -e "fetch('http://localhost:$port/health/ready').then(async r=>console.log(r.status, await r.text()))"
+done
+```
+
+Expected: `200 {"status":"ok","checks":{"postgres":"ok"}}` for all three.
+
+- [ ] **Step 5: Verify the edge refuses unauthenticated traffic**
 
 ```bash
 for p in media notifications docs; do
-  printf '%s -> ' "$p"
+  printf '%-14s -> ' "$p"
   curl -s -o /dev/null -w '%{http_code}\n' "http://localhost:3000/api/v1/$p"
 done
 ```
 
-Expected: `401` for all three. A `404` means the prefix did not resolve at the gateway.
+Expected: `401` for all three.
 
-- [ ] **Step 5: Verify internal paths stay private**
-
-```bash
-for p in media notifications docs; do
-  printf '%s -> ' "$p"
-  curl -s -o /dev/null -w '%{http_code}\n' "http://localhost:3000/api/v1/$p/internal/authz/explain"
-done
-```
-
-Expected: `404` for all three — refused at the edge before any upstream is chosen.
+Note what this does and does not prove. `JwtGuard` runs before the proxy resolves an upstream, so an undeclared prefix returns `401` as well — this confirms the edge is closed, **not** that the prefix routes. Routing is proven by `routes.spec.ts`, which calls `resolveUpstream` directly, and by the same file's `/internal/` and `isPublicPath` assertions. Re-testing that through `curl` would need a valid token.
 
 - [ ] **Step 6: Run the full workspace verification**
 
@@ -1550,9 +1586,10 @@ If `git status` shows nothing, the lockfile was already committed in an earlier 
 
 ## Done when
 
-- All eight services reach healthy from `docker compose down -v && docker compose up -d --build`.
+- All eight services reach healthy from `docker compose down -v` followed by a serial rebuild.
 - Each of the three new roles can reach its own database and is refused by every other.
-- `/api/v1/media`, `/api/v1/notifications` and `/api/v1/docs` answer `401` through the gateway; their `/internal/` paths answer `404`.
+- Each new service answers its own `/health/ready` with `{"status":"ok","checks":{"postgres":"ok"}}`.
+- `/api/v1/media`, `/api/v1/notifications` and `/api/v1/docs` answer `401` unauthenticated at the edge, and `routes.spec.ts` proves each prefix resolves to the right service and port.
 - `pnpm install --frozen-lockfile`, `pnpm exec vitest run`, and `pnpm nx run-many -t typecheck lint build` all pass.
 - The four §6 deferrals each carry their comment at the named anchor.
 - `docker/Dockerfile.service` and `.github/workflows/ci.yml` are unmodified.
