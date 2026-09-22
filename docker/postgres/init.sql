@@ -6,21 +6,25 @@ CREATE ROLE ipms_audit WITH LOGIN PASSWORD 'ipms_audit';
 CREATE ROLE ipms_project WITH LOGIN PASSWORD 'ipms_project';
 CREATE ROLE ipms_qc WITH LOGIN PASSWORD 'ipms_qc';
 CREATE ROLE ipms_media WITH LOGIN PASSWORD 'ipms_media';
+CREATE ROLE ipms_notification WITH LOGIN PASSWORD 'ipms_notification';
 
 CREATE DATABASE ipms_iam   OWNER ipms_iam;
 CREATE DATABASE ipms_audit OWNER ipms_audit;
 CREATE DATABASE ipms_project OWNER ipms_project;
 CREATE DATABASE ipms_qc OWNER ipms_qc;
 CREATE DATABASE ipms_media OWNER ipms_media;
+CREATE DATABASE ipms_notification OWNER ipms_notification;
 
 REVOKE ALL ON DATABASE ipms_iam   FROM PUBLIC;
 REVOKE ALL ON DATABASE ipms_audit FROM PUBLIC;
 REVOKE ALL ON DATABASE ipms_project FROM PUBLIC;
 REVOKE ALL ON DATABASE ipms_qc FROM PUBLIC;
 REVOKE ALL ON DATABASE ipms_media FROM PUBLIC;
+REVOKE ALL ON DATABASE ipms_notification FROM PUBLIC;
 
 GRANT CONNECT ON DATABASE ipms_iam   TO ipms_iam;
 GRANT CONNECT ON DATABASE ipms_audit TO ipms_audit;
 GRANT CONNECT ON DATABASE ipms_project TO ipms_project;
 GRANT CONNECT ON DATABASE ipms_qc TO ipms_qc;
 GRANT CONNECT ON DATABASE ipms_media TO ipms_media;
+GRANT CONNECT ON DATABASE ipms_notification TO ipms_notification;

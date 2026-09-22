@@ -227,6 +227,36 @@ services:
       retries: 5
       start_period: 20s
 
+  notification-migrate:
+    <<: *migrate-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      target: migrate
+      args: { SERVICE: notification }
+    environment:
+      DATABASE_URL: postgresql://ipms_notification:ipms_notification@postgres:5432/ipms_notification
+
+  notification:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      args: { SERVICE: notification }
+    depends_on:
+      <<: *infra-ready
+      notification-migrate: { condition: service_completed_successfully }
+    environment:
+      <<: *service-env
+      PORT: 3007
+      NOTIFICATION_DATABASE_URL: postgresql://ipms_notification:ipms_notification@postgres:5432/ipms_notification
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3007/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   gateway:
     <<: *service-defaults
     build:

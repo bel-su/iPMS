@@ -52,6 +52,16 @@ describe('resolveUpstream — allowlist', () => {
     expect(isPublicPath('/api/v1/media/objects')).toBe(false);
   });
 
+  it('routes the notifications prefix to the notification service', () => {
+    const upstream = resolveUpstream('/api/v1/notifications');
+    expect(upstream?.service).toBe('notification');
+    expect(upstream?.port).toBe(3007);
+  });
+
+  it('keeps the notifications prefix authenticated', () => {
+    expect(isPublicPath('/api/v1/notifications')).toBe(false);
+  });
+
   it('refuses a path on no declared prefix', () => {
     expect(resolveUpstream('/api/v1/billing')).toBeUndefined();
   });

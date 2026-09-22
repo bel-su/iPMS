@@ -27,6 +27,7 @@ const AUDIT = { host: upstreamHost('audit', 'audit'), port: upstreamPort('audit'
 const PROJECT = { host: upstreamHost('project', 'project'), port: upstreamPort('project', 3004) };
 const QC = { host: upstreamHost('qc', 'qc'), port: upstreamPort('qc', 3005) };
 const MEDIA = { host: upstreamHost('media', 'media'), port: upstreamPort('media', 3006) };
+const NOTIFICATION = { host: upstreamHost('notification', 'notification'), port: upstreamPort('notification', 3007) };
 
 /**
  * Only paths listed here are reachable. Anything else 404s at the edge, which
@@ -50,6 +51,7 @@ export const ROUTES: Upstream[] = [
   { prefix: '/api/v1/tasks', service: 'project', ...PROJECT },
   { prefix: '/api/v1/qc', service: 'qc', ...QC },
   { prefix: '/api/v1/media', service: 'media', ...MEDIA },
+  { prefix: '/api/v1/notifications', service: 'notification', ...NOTIFICATION },
 ];
 
 /**
