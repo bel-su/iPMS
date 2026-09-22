@@ -13,7 +13,7 @@ export function SiteImportForm({ projectId }: { projectId: string }) {
     return (
       <p className="form-note">
         Imported {commit.committed.created} new site(s) and updated {commit.committed.updated}.
-        {' '}<a href={`/projects/${projectId}`}>Back to the project</a>
+        {' '}<a href={`/projects/${projectId}/sites`}>Back to sites</a>
       </p>
     );
   }

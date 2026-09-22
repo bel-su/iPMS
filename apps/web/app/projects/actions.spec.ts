@@ -229,10 +229,11 @@ describe('updateSiteAction', () => {
     expect(updateSite).not.toHaveBeenCalled();
   });
 
-  it('lands the user back on the row they changed', async () => {
+  it('lands the user back on the sites tab, with the overview refreshed too', async () => {
     await expect(updateSiteAction({}, form())).rejects.toThrow('NEXT_REDIRECT');
     expect(revalidatePath).toHaveBeenCalledWith('/projects/p-1');
-    expect(redirect).toHaveBeenCalledWith('/projects/p-1#sites');
+    expect(revalidatePath).toHaveBeenCalledWith('/projects/p-1/sites');
+    expect(redirect).toHaveBeenCalledWith('/projects/p-1/sites');
   });
 
   it("shows the API's refusal and does not redirect", async () => {

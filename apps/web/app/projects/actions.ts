@@ -8,6 +8,7 @@ import {
 } from '../lib/project-api';
 import { type FormState } from '../lib/form-state';
 import { clearable, optional, settle } from '../lib/settle';
+import { projectPages } from './[id]/paths';
 
 /**
  * One Server Action per mutation.
@@ -47,7 +48,7 @@ export async function createProjectAction(_previous: FormState, form: FormData):
   return state;
 }
 
-/** Every sub-resource action revalidates its project's page, which is the only page that renders it. */
+/** The project's landing page, where project-level actions return to. */
 const page = (projectId: string) => `/projects/${projectId}`;
 
 /**
@@ -100,7 +101,7 @@ export async function createSiteAction(_previous: FormState, form: FormData): Pr
     ...(regionName === undefined ? {} : { regionName }),
     ...(city === undefined ? {} : { city }),
     ...geofence.fields,
-  }), page(projectId));
+  }), projectPages(projectId));
 }
 
 /**
@@ -123,14 +124,14 @@ export async function updateSiteAction(_previous: FormState, form: FormData): Pr
     ...clearable(form, 'regionName'),
     ...clearable(form, 'city'),
     ...geofence.fields,
-  }), page(projectId));
+  }), projectPages(projectId));
   if (state.error) return state;
-  redirect(`/projects/${projectId}#sites`);
+  redirect(`/projects/${projectId}/sites`);
 }
 
 export async function deleteSiteAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
-  return settle(await deleteSite(String(form.get('siteId'))), page(projectId));
+  return settle(await deleteSite(String(form.get('siteId'))), projectPages(projectId));
 }
 
 export async function createTaskTypeAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -139,7 +140,7 @@ export async function createTaskTypeAction(_previous: FormState, form: FormData)
   const name = optional(form, 'name');
   const category = optional(form, 'category');
   if (!code || !name || !category) return { error: 'A code, a name and a category are required.' };
-  return settle(await createTaskType(projectId, { code, name, category }), page(projectId));
+  return settle(await createTaskType(projectId, { code, name, category }), projectPages(projectId));
 }
 
 export async function updateTaskTypeAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -149,12 +150,12 @@ export async function updateTaskTypeAction(_previous: FormState, form: FormData)
     ...(name === undefined ? {} : { name }),
     // An unchecked checkbox sends nothing, which is how the form says "retired".
     isActive: form.get('isActive') === 'on',
-  }), page(projectId));
+  }), projectPages(projectId));
 }
 
 export async function deleteTaskTypeAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
-  return settle(await deleteTaskType(String(form.get('taskTypeId'))), page(projectId));
+  return settle(await deleteTaskType(String(form.get('taskTypeId'))), projectPages(projectId));
 }
 
 export async function createMilestoneAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -167,7 +168,7 @@ export async function createMilestoneAction(_previous: FormState, form: FormData
     kind: (optional(form, 'kind') ?? 'PROJECT') as 'PROJECT' | 'CONTRACT',
     sequence: Number(optional(form, 'sequence') ?? 0),
     taskTypeIds: form.getAll('taskTypeIds').map(String),
-  }), page(projectId));
+  }), projectPages(projectId));
 }
 
 export async function updateMilestoneAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -176,12 +177,12 @@ export async function updateMilestoneAction(_previous: FormState, form: FormData
   return settle(await updateMilestone(String(form.get('milestoneId')), {
     ...(name === undefined ? {} : { name }),
     taskTypeIds: form.getAll('taskTypeIds').map(String),
-  }), page(projectId));
+  }), projectPages(projectId));
 }
 
 export async function deleteMilestoneAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
-  return settle(await deleteMilestone(String(form.get('milestoneId'))), page(projectId));
+  return settle(await deleteMilestone(String(form.get('milestoneId'))), projectPages(projectId));
 }
 
 export async function createTaskAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -190,7 +191,7 @@ export async function createTaskAction(_previous: FormState, form: FormData): Pr
   const taskTypeId = optional(form, 'taskTypeId');
   const title = optional(form, 'title');
   if (!siteId || !taskTypeId || !title) return { error: 'A site, a task type and a title are required.' };
-  return settle(await createTask(projectId, { siteId, taskTypeId, title, origin: 'AD_HOC' }), page(projectId));
+  return settle(await createTask(projectId, { siteId, taskTypeId, title, origin: 'AD_HOC' }), projectPages(projectId));
 }
 
 export async function updateTaskAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -203,12 +204,12 @@ export async function updateTaskAction(_previous: FormState, form: FormData): Pr
     ...(status === undefined ? {} : { status: status as TaskStatus }),
     // An empty assignee field means "unassign", which is null rather than absent.
     ...(form.has('assigneeId') ? { assigneeId: assignee ?? null } : {}),
-  }), page(projectId));
+  }), projectPages(projectId));
 }
 
 export async function deleteTaskAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
-  return settle(await deleteTask(String(form.get('taskId'))), page(projectId));
+  return settle(await deleteTask(String(form.get('taskId'))), projectPages(projectId));
 }
 
 /**
@@ -222,7 +223,7 @@ export async function deleteTaskAction(_previous: FormState, form: FormData): Pr
  * re-applies whichever `defaultValue` the refreshed payload carries, so leaving
  * it stale made a saved status visibly snap back to the previous one.
  */
-const statusPages = (projectId: string) => [page(projectId), `${page(projectId)}/edit`, '/projects'];
+const statusPages = (projectId: string) => [...projectPages(projectId), `${page(projectId)}/edit`, '/projects'];
 
 /**
  * On success this returns to the project page rather than staying on the form,

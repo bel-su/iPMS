@@ -63,4 +63,11 @@
 .form-note { font-size: 13px; opacity: .7; margin: 0; }
 .tab-row { display: flex; gap: 4px; border-bottom: 1px solid rgba(148, 163, 184, .2); margin-bottom: 16px; }
 .tab-row a { padding: 10px 14px; font-size: 14px; border-bottom: 2px solid transparent; }
-.tab-row a[aria-current='true'] { border-bottom-color: #3b82f6; font-weight: 600; }
+.tab-row a[aria-current] { border-bottom-color: #3b82f6; font-weight: 600; }
+/* Project overview: the ring and bars are driven by live figures rather than the prototype's fixed ones. */
+.ring { background: conic-gradient(var(--blue) 0 var(--progress, 0%), #e7edf8 var(--progress, 0%) 100%); }
+.badge.red { background: #ffebed; color: #c34a52; }
+.badge.blue { background: #edf2ff; color: #3568d7; }
+.region-list > div { grid-template-columns: minmax(61px, 110px) 1fr 34px; }
+.region-list > div > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-row + .metrics, .tab-row + .panel, .tab-row + .api-note { margin-top: 0; }
