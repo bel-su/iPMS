@@ -31,7 +31,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ message: 'The iPMS API is not available. Try again in a moment.' }, { status: 503 });
   }
 
-  const response = NextResponse.json({ ok: true });
+  // The token this login returns carries no roles and no permissions when a
+  // change is owed, so every other page would render a forbidden state. Saying
+  // so here is what sends the user somewhere useful instead.
+  const response = NextResponse.json({
+    ok: true,
+    mustChangePassword: result.tokens.mustChangePassword === true,
+  });
   writeSession(response, result.tokens);
   return response;
 }
