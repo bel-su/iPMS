@@ -83,6 +83,36 @@ describe('seedIam', () => {
     }
   });
 
+  it('gives a project manager authority over users but not over roles', async () => {
+    const role = await prisma.role.findUniqueOrThrow({
+      where: { code: 'PROJECT_MANAGER' },
+      include: { permissions: { include: { permission: true } } },
+    });
+    const codes = role.permissions.map((rp) => rp.permission.code);
+
+    expect(codes).toContain('user.create');
+    expect(codes).toContain('user.update');
+    expect(codes).toContain('user.deactivate');
+    expect(codes).toContain('role.assign');
+    // The object gate is what stops a project manager minting an administrator;
+    // being unable to *edit a role's permissions* is a separate guarantee, and
+    // this is it.
+    expect(codes).not.toContain('role.create');
+    expect(codes).not.toContain('role.update');
+  });
+
+  it('gives QC managers and field engineers no authority over users', async () => {
+    for (const code of ['QC_MANAGER', 'FIELD_ENGINEER']) {
+      const role = await prisma.role.findUniqueOrThrow({
+        where: { code },
+        include: { permissions: { include: { permission: true } } },
+      });
+      const codes = role.permissions.map((rp) => rp.permission.code);
+      expect(codes, `${code} must not hold user.create`).not.toContain('user.create');
+      expect(codes, `${code} must not hold role.assign`).not.toContain('role.assign');
+    }
+  });
+
   it('is idempotent', async () => {
     await seedIam(prisma);
     expect(await prisma.permission.count()).toBe(PERMISSIONS.length);
