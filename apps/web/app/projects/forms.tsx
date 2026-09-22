@@ -5,7 +5,7 @@ import {
   archiveProjectAction, createMilestoneAction, createProjectAction, createSiteAction, createTaskAction,
   createTaskTypeAction, deleteProjectAction, updateProjectAction, updateSiteAction,
 } from './actions';
-import { EMPTY, type FormState } from './form-state';
+import { EMPTY, type FormState } from '../lib/form-state';
 import type { ProjectDetail } from '../lib/project-api';
 
 /** Disables itself while the action runs, so a slow API cannot be double-submitted. */
