@@ -1,6 +1,6 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { ApiResult } from '../lib/api-client';
+import type { ApiResult } from './api-client';
 import { EMPTY, type FormState } from './form-state';
 
 /**
@@ -14,14 +14,19 @@ import { EMPTY, type FormState } from './form-state';
  *
  * Server-side only: `revalidatePath` cannot run in the browser. The type and
  * the empty value the client components need live in `form-state.ts`.
+ *
+ * `revalidate` takes several paths because one value is often rendered on more
+ * than one page, and `revalidatePath` only invalidates the exact path it is
+ * given — a nested route is not covered by its parent. Refreshing one page and
+ * leaving its siblings stale is how a saved change appears not to have saved.
  */
-export async function settle<T>(result: ApiResult<T>, revalidate: string): Promise<FormState> {
+export async function settle<T>(result: ApiResult<T>, revalidate: string | readonly string[]): Promise<FormState> {
   if (result.state === 'unauthenticated') redirect('/login');
   if (result.state === 'forbidden') return { error: result.message };
   if (result.state === 'unavailable') {
     return { error: result.message, ...(result.correlationId === undefined ? {} : { correlationId: result.correlationId }) };
   }
-  revalidatePath(revalidate);
+  for (const path of typeof revalidate === 'string' ? [revalidate] : revalidate) revalidatePath(path);
   return EMPTY;
 }
 

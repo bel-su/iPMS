@@ -236,3 +236,87 @@ describe('AuthService.refresh', () => {
     expect(tokens.verifyAccess(pair.accessToken).permissions).toContain('task.view');
   });
 });
+
+/**
+ * The creator of an account knows its password, so the account must carry no
+ * authority until its holder replaces it. Minting an empty claim is what makes
+ * that an enforced rule rather than a browser-side suggestion: every AuthzGuard
+ * already refuses a permission absent from the claim, so no new enforcement
+ * code exists anywhere to be forgotten.
+ */
+describe('AuthService and mustChangePassword', () => {
+  it('issues a token with no roles and no permissions', async () => {
+    const { service } = await build({ mustChangePassword: true });
+    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const claims = tokens.verifyAccess(pair.accessToken);
+    expect(claims.roles).toEqual([]);
+    expect(claims.permissions).toEqual([]);
+    expect(claims.mustChangePassword).toBe(true);
+  });
+
+  it('reports the flag on the pair so the browser can redirect at login', async () => {
+    const { service } = await build({ mustChangePassword: true });
+    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    expect(pair.mustChangePassword).toBe(true);
+  });
+
+  it('keeps the branch on refresh, so the token cannot be rolled forward into a real one', async () => {
+    const { service } = await build({ mustChangePassword: true });
+    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const refreshed = await service.refresh(pair.refreshToken);
+    expect(tokens.verifyAccess(refreshed.accessToken).permissions).toEqual([]);
+  });
+
+  it('issues a normal token once the flag is clear', async () => {
+    const { service } = await build();
+    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const claims = tokens.verifyAccess(pair.accessToken);
+    expect(claims.permissions).toContain('task.view');
+    expect(claims.mustChangePassword).toBeUndefined();
+  });
+});
+
+describe('AuthService.changePassword', () => {
+  it('refuses a wrong current password without touching the row', async () => {
+    const { service, prisma, user } = await build();
+    await expect(service.changePassword(user.id as string, {
+      currentPassword: 'not-the-password', newPassword: 'a-long-enough-one',
+    })).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses a new password identical to the current one', async () => {
+    const { service, prisma, user } = await build();
+    await expect(service.changePassword(user.id as string, {
+      currentPassword: 'demo12345', newPassword: 'demo12345',
+    })).rejects.toThrow(/must differ/i);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('stores a new hash and clears the flag', async () => {
+    const { service, prisma, user } = await build({ mustChangePassword: true });
+    await service.changePassword(user.id as string, {
+      currentPassword: 'demo12345', newPassword: 'a-long-enough-one',
+    });
+    const data = prisma.user.update.mock.calls[0]![0].data;
+    expect(data.mustChangePassword).toBe(false);
+    expect(await passwords.verify(data.passwordHash as string, 'a-long-enough-one')).toBe(true);
+  });
+
+  // The bump kills the caller's own token, which is the point: the next sign-in
+  // is the only way to obtain one carrying their real permissions.
+  it('revokes every outstanding session', async () => {
+    const { service, versions, user } = await build();
+    await service.changePassword(user.id as string, {
+      currentPassword: 'demo12345', newPassword: 'a-long-enough-one',
+    });
+    expect(versions.publish).toHaveBeenCalled();
+  });
+
+  it('refuses a deactivated user', async () => {
+    const { service, user } = await build({ isActive: false });
+    await expect(service.changePassword(user.id as string, {
+      currentPassword: 'demo12345', newPassword: 'a-long-enough-one',
+    })).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+});

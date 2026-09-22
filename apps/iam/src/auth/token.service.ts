@@ -29,12 +29,19 @@ export class TokenService {
     user: { id: string; tokenVersion: number },
     roles: string[],
     permissions: string[],
+    mustChangePassword = false,
   ): TokenPair {
-    const claims = { sub: user.id, roles, permissions, tokenVersion: user.tokenVersion };
+    const claims = {
+      sub: user.id, roles, permissions, tokenVersion: user.tokenVersion,
+      // Spread conditionally so an ordinary token's claims are byte-identical
+      // to what they were before this field existed.
+      ...(mustChangePassword ? { mustChangePassword: true } : {}),
+    };
     return {
       accessToken: signToken(claims, 'access', this.config.secret, this.config.accessTtl),
       refreshToken: signToken(claims, 'refresh', this.config.secret, this.config.refreshTtl),
       expiresIn: this.config.accessTtl,
+      ...(mustChangePassword ? { mustChangePassword: true } : {}),
     };
   }
 

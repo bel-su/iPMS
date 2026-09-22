@@ -4,9 +4,11 @@
  * is laid out against an empty gutter.
  */
 
+import { getCurrentUser, hasPermission } from './lib/iam-api';
+
 function Icon({ children }: { children: React.ReactNode }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
-type Section = 'overview' | 'projects' | 'quality';
+type Section = 'overview' | 'projects' | 'quality' | 'users';
 
 function NavItem({ section, active, href, icon, children }: {
   section: Section; active: Section; href: string; icon: string; children: React.ReactNode;
@@ -19,7 +21,20 @@ function NavItem({ section, active, href, icon, children }: {
   );
 }
 
-export function Sidebar({ active }: { active: Section }) {
+/**
+ * Asks who the viewer is rather than taking it as a prop, so every page's call
+ * site stays `<Sidebar active="…" />` and no page has to thread an identity it
+ * does not otherwise need.
+ *
+ * Hiding an item is UX, never a boundary: `/users` renders its own forbidden
+ * state, and the gateway refuses the request underneath either way. When the
+ * identity call fails the item is hidden — the fail-closed direction — and the
+ * rest of the navigation still renders.
+ */
+export async function Sidebar({ active }: { active: Section }) {
+  const viewer = await getCurrentUser();
+  const mayViewUsers = viewer.state === 'ready' && hasPermission(viewer.data, 'user.view');
+
   return (
     <aside className="sidebar">
       <a className="brand" href="/" aria-label="iPMS home"><span>i</span>PMS</a>
@@ -28,6 +43,7 @@ export function Sidebar({ active }: { active: Section }) {
         <NavItem section="overview" active={active} href="/" icon="▦">Overview</NavItem>
         <NavItem section="projects" active={active} href="/projects" icon="◫">Projects</NavItem>
         <NavItem section="quality" active={active} href="/#quality" icon="✓">Quality</NavItem>
+        {mayViewUsers ? <NavItem section="users" active={active} href="/users" icon="◉">Users</NavItem> : null}
       </nav>
       <div className="sidebar-bottom"><a className="nav-item" href="/#settings"><Icon>⚙</Icon>Settings</a></div>
     </aside>

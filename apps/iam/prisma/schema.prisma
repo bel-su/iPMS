@@ -24,6 +24,12 @@ model User {
   passwordHash String    @db.VarChar(255)
   isActive     Boolean   @default(true)
   tokenVersion Int       @default(0)
+
+  /// True while the holder owes a password change — set on creation and on an
+  /// administrator reset, cleared when they change it themselves. Defaults to
+  /// false so existing rows, including the seeded demo accounts, are unaffected.
+  mustChangePassword Boolean @default(false)
+
   lastLoginAt  DateTime? @db.Timestamptz(6)
   createdAt    DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime  @updatedAt @db.Timestamptz(6)

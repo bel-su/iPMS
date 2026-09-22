@@ -42,6 +42,17 @@ export const TokenPayloadSchema = z.object({
   permissions: z.array(z.string()),
   tokenVersion: z.number().int().nonnegative(),
   typ: TokenTypeSchema,
+  /**
+   * Present and true only while the holder owes a password change. A token
+   * carrying it is minted with no roles and no permissions, so every
+   * `AuthzGuard` in the platform refuses it — that is what makes the forced
+   * change an enforced rule rather than a browser-side suggestion.
+   *
+   * Optional so that tokens minted before this field existed still verify:
+   * this schema strips undeclared keys, so an absent claim is absent, not
+   * invalid.
+   */
+  mustChangePassword: z.boolean().optional(),
   iat: z.number().int(),
   exp: z.number().int(),
 }).strip();
@@ -51,6 +62,8 @@ export const TokenPairSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),
   expiresIn: z.number().int().positive(),
+  /** Lets the web app send the user straight to the change-password page at login. */
+  mustChangePassword: z.boolean().optional(),
 });
 export type TokenPair = z.infer<typeof TokenPairSchema>;
 

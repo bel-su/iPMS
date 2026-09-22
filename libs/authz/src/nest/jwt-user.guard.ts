@@ -78,6 +78,7 @@ export class JwtUserGuard implements CanActivate {
       permissions: payload.permissions,
       tokenVersion: payload.tokenVersion,
       isActive: true,
+      ...(payload.mustChangePassword ? { mustChangePassword: true } : {}),
     };
     request.user = user;
     return true;

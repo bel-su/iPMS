@@ -7,6 +7,8 @@ export interface AuthzUser {
   permissions: string[];
   tokenVersion: number;
   isActive: boolean;
+  /** True while this user owes a password change; their token carries no authority. */
+  mustChangePassword?: boolean;
 }
 
 /** Replicated from iam over NATS and cached per service. Never embedded in a JWT. */

@@ -6,8 +6,8 @@ import {
   archiveProject, deleteProject, updateMilestone, updateProject, updateSite, updateTask, updateTaskType,
   type ProjectStatus, type SiteStatus, type TaskStatus,
 } from '../lib/project-api';
-import { type FormState } from './form-state';
-import { clearable, optional, settle } from './settle';
+import { type FormState } from '../lib/form-state';
+import { clearable, optional, settle } from '../lib/settle';
 
 /**
  * One Server Action per mutation.
@@ -211,23 +211,47 @@ export async function deleteTaskAction(_previous: FormState, form: FormData): Pr
   return settle(await deleteTask(String(form.get('taskId'))), page(projectId));
 }
 
+/**
+ * Every page a project's status is rendered on.
+ *
+ * Unlike the sub-resources above, a project is not shown on its own page
+ * alone: the status appears as the list badge, as the detail header, and as
+ * the edit form's `<select>`. `revalidatePath` invalidates only the exact path
+ * it is given, so all three are named here. The edit page matters most — it is
+ * the page these two actions are submitted from, and an uncontrolled `<select>`
+ * re-applies whichever `defaultValue` the refreshed payload carries, so leaving
+ * it stale made a saved status visibly snap back to the previous one.
+ */
+const statusPages = (projectId: string) => [page(projectId), `${page(projectId)}/edit`, '/projects'];
+
+/**
+ * On success this returns to the project page rather than staying on the form,
+ * for the reason `updateSiteAction` does: `FormState` carries an error and
+ * nothing else, so the rendered project — with its new status — is the only
+ * acknowledgement a save can give. It also unmounts the edit form, which is
+ * what puts the `<select>` beyond doubt.
+ */
 export async function updateProjectAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
   const name = optional(form, 'name');
   const clientName = optional(form, 'clientName');
   const phase = optional(form, 'phase');
   const status = optional(form, 'status');
-  return settle(await updateProject(projectId, {
+  const state = await settle(await updateProject(projectId, {
     ...(name === undefined ? {} : { name }),
     ...(clientName === undefined ? {} : { clientName }),
     ...(phase === undefined ? {} : { phase }),
     ...(status === undefined ? {} : { status: status as ProjectStatus }),
-  }), page(projectId));
+  }), statusPages(projectId));
+  if (state.error) return state;
+  redirect(page(projectId));
 }
 
 export async function archiveProjectAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
-  return settle(await archiveProject(projectId), page(projectId));
+  const state = await settle(await archiveProject(projectId), statusPages(projectId));
+  if (state.error) return state;
+  redirect(page(projectId));
 }
 
 /**
