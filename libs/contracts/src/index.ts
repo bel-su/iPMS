@@ -4,6 +4,7 @@ export * from './common/pagination.js';
 export * from './iam/auth.js';
 export * from './iam/role.js';
 export * from './iam/scope.js';
+export * from './iam/user.js';
 export * from './audit/query.js';
 export * from './project/project.js';
 export * from './project/site-import.js';
