@@ -11,7 +11,7 @@ const TEMPLATE = {
 };
 
 const SUBMISSION = {
-  taskId: 't-1', siteId: 's-1', projectId: 'p-1', templateId: 'tpl-1',
+  taskId: 't-1', siteId: 's-1', projectId: 'p-1', templateVersionId: 'tv-1',
   idempotencyKey: 'key-12345678', responses: [] as never[],
 };
 
