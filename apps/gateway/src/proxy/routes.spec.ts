@@ -62,6 +62,24 @@ describe('resolveUpstream — allowlist', () => {
     expect(isPublicPath('/api/v1/notifications')).toBe(false);
   });
 
+  it('routes the docs prefix to the docs service', () => {
+    const upstream = resolveUpstream('/api/v1/docs/getting-started');
+    expect(upstream?.service).toBe('docs');
+    expect(upstream?.port).toBe(3008);
+  });
+
+  /**
+   * "Platform documentation" sounds public. It is not: the documentation
+   * describes this system's internals to its operators. If a genuinely public
+   * subset is ever wanted it must be an explicit, narrow PUBLIC_PATHS entry
+   * argued on its own merits — never a prefix rule, for the reason the comment
+   * above PUBLIC_PATHS gives.
+   */
+  it('keeps the docs prefix authenticated', () => {
+    expect(isPublicPath('/api/v1/docs')).toBe(false);
+    expect(isPublicPath('/api/v1/docs/getting-started')).toBe(false);
+  });
+
   it('refuses a path on no declared prefix', () => {
     expect(resolveUpstream('/api/v1/billing')).toBeUndefined();
   });

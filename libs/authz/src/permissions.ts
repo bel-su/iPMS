@@ -75,6 +75,21 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   // Audit — deliberately no update or delete. The ledger is append-only.
   def('audit', 'view', 'View the audit ledger'),
   def('audit', 'verify', 'Verify audit chain integrity', ['audit.view']),
+
+  // DEFERRED — no `notification.*` or `docs.*` permissions (spec 2026-09-20 §6.4).
+  //
+  // `media` needs none added: `qc_evidence.upload` and `qc_evidence.export`
+  // above are already its permissions.
+  //
+  // A permission code is not free. Each one must be seeded, considered for
+  // every system role in apps/iam/prisma/seed.ts, and carried in the JWT
+  // `permissions` claim of every user who holds it. Codes that guard nothing
+  // dilute the catalog the access simulator reports against, and invite roles
+  // to be granted authority over behaviour that has not been designed.
+  //
+  // Define one in the same change as the `@RequirePermission` that uses it and
+  // the SYSTEM_ROLES grant that confers it — never before, so that the catalog
+  // always describes real authority.
 ] as const;
 
 export const PERMISSION_CODES: ReadonlySet<string> = new Set(PERMISSIONS.map((p) => p.code));

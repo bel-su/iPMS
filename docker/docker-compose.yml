@@ -257,6 +257,36 @@ services:
       retries: 5
       start_period: 20s
 
+  docs-migrate:
+    <<: *migrate-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      target: migrate
+      args: { SERVICE: docs }
+    environment:
+      DATABASE_URL: postgresql://ipms_docs:ipms_docs@postgres:5432/ipms_docs
+
+  docs:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      args: { SERVICE: docs }
+    depends_on:
+      <<: *infra-ready
+      docs-migrate: { condition: service_completed_successfully }
+    environment:
+      <<: *service-env
+      PORT: 3008
+      DOCS_DATABASE_URL: postgresql://ipms_docs:ipms_docs@postgres:5432/ipms_docs
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3008/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   gateway:
     <<: *service-defaults
     build:

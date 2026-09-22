@@ -1,0 +1,6 @@
+{
+  // Emit-only variant; see the note in any library's tsconfig.build.json for
+  // why the tests are excluded here rather than in tsconfig.json.
+  "extends": "./tsconfig.json",
+  "exclude": ["**/*.spec.ts", "**/*.test.ts"]
+}
