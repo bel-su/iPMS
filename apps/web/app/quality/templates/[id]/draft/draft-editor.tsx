@@ -1,26 +1,28 @@
 'use client';
-import { useEffect, useReducer, useState, useTransition } from 'react';
+import { useEffect, useReducer, useRef, useState, useTransition } from 'react';
 import type { ResponseType, Severity } from '@ipms/contracts';
 import { RESPONSE_TYPES, RESPONSE_TYPE_LABELS } from '../../labels';
 import { discardDraftAction, publishDraftAction, saveDraftAction, type EditorResult } from './actions';
-import { editorReducer, fieldKey, fromSections, toDocument, type EditorItem, type EditorSection, type ItemPatch, type WireSection } from './editor-state';
+import { editorReducer, fieldKey, fromSections, toDocument, type EditorAction, type EditorItem, type EditorSection, type ItemPatch, type WireSection } from './editor-state';
 
 interface Props {
   templateId: string; version: number; revision: number; sections: WireSection[];
-  previousVersion: number | null; neverPublished: boolean;
+  previousVersion: number | null; neverPublished: boolean; mayPublish: boolean;
 }
 
 function FieldError({ message }: { message: string | undefined }) {
   return message ? <span className="field-error" role="alert">{message}</span> : null;
 }
 
-export function DraftEditor({ templateId, version, revision: initialRevision, sections, previousVersion, neverPublished }: Props) {
+export function DraftEditor({ templateId, version, revision: initialRevision, sections, previousVersion, neverPublished, mayPublish }: Props) {
   const [state, dispatch] = useReducer(editorReducer, sections, fromSections);
   const [revision, setRevision] = useState(initialRevision);
   const [result, setResult] = useState<EditorResult | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const errors = result?.fieldErrors ?? {};
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     if (!state.dirty) return undefined;
@@ -29,20 +31,28 @@ export function DraftEditor({ templateId, version, revision: initialRevision, se
     return () => window.removeEventListener('beforeunload', warn);
   }, [state.dirty]);
 
-  function apply(next: EditorResult, success: string | null): void {
-    if (next.revision !== null) { setRevision(next.revision); dispatch({ type: 'saved' }); }
+  // sent is the document the request was made with; if the user kept editing before it returned, don't clear dirty.
+  function apply(next: EditorResult, success: string | null, sent?: ReturnType<typeof toDocument>): void {
+    if (next.revision !== null) {
+      setRevision(next.revision);
+      if (sent === undefined || JSON.stringify(toDocument(stateRef.current)) === JSON.stringify(sent)) dispatch({ type: 'saved' });
+    }
     setResult(next);
     setNotice(next.error ? null : success);
   }
 
-  const save = (): void => startTransition(async () => apply(await saveDraftAction(templateId, revision, toDocument(state)), 'Draft saved.'));
+  const save = (): void => {
+    const sent = toDocument(state);
+    startTransition(async () => apply(await saveDraftAction(templateId, revision, sent), 'Draft saved.', sent));
+  };
 
   const publish = (): void => {
     const message = previousVersion
       ? `v${version} will be used by all projects from now on, and v${previousVersion} retires. Publish?`
       : `v${version} will become available to all projects. Publish?`;
     if (!window.confirm(message)) return;
-    startTransition(async () => apply(await publishDraftAction(templateId, revision, toDocument(state)), null));
+    const sent = toDocument(state);
+    startTransition(async () => apply(await publishDraftAction(templateId, revision, sent), null, sent));
   };
 
   const discard = (): void => {
@@ -50,11 +60,14 @@ export function DraftEditor({ templateId, version, revision: initialRevision, se
       ? 'Discard this draft? The template itself will be deleted, because it has never been published.'
       : `Discard the v${version} draft? The published version is not affected.`;
     if (!window.confirm(message)) return;
-    startTransition(async () => { dispatch({ type: 'saved' }); apply(await discardDraftAction(templateId), null); });
+    startTransition(async () => apply(await discardDraftAction(templateId), null));
   };
 
   const updateItem = (section: EditorSection, item: EditorItem, patch: ItemPatch): void =>
     dispatch({ type: 'updateItem', sectionKey: section.key, itemKey: item.key, patch });
+
+  // Structural edits shift section/item indices, so index-keyed field errors from the last save would point at the wrong row.
+  const structural = (action: EditorAction): void => { setResult((prev) => (prev ? { ...prev, fieldErrors: {} } : prev)); dispatch(action); };
 
   return (
     <div className="editor">
@@ -83,9 +96,9 @@ export function DraftEditor({ templateId, version, revision: initialRevision, se
               <FieldError message={errors[fieldKey(s, null, 'title')]} />
             </label>
             <div className="editor-controls">
-              <button type="button" className="ghost-button" aria-label={`Move section ${section.number} up`} onClick={() => dispatch({ type: 'moveSection', sectionKey: section.key, direction: -1 })}>↑</button>
-              <button type="button" className="ghost-button" aria-label={`Move section ${section.number} down`} onClick={() => dispatch({ type: 'moveSection', sectionKey: section.key, direction: 1 })}>↓</button>
-              <button type="button" className="danger-button" onClick={() => { if (section.items.length === 0 || window.confirm(`Remove section ${section.number} and its ${section.items.length} items?`)) dispatch({ type: 'removeSection', sectionKey: section.key }); }}>Remove</button>
+              <button type="button" className="ghost-button" aria-label={`Move section ${section.number} up`} onClick={() => structural({ type: 'moveSection', sectionKey: section.key, direction: -1 })}>↑</button>
+              <button type="button" className="ghost-button" aria-label={`Move section ${section.number} down`} onClick={() => structural({ type: 'moveSection', sectionKey: section.key, direction: 1 })}>↓</button>
+              <button type="button" className="danger-button" onClick={() => { if (section.items.length === 0 || window.confirm(`Remove section ${section.number} and its ${section.items.length} items?`)) structural({ type: 'removeSection', sectionKey: section.key }); }}>Remove</button>
             </div>
           </div>
           <FieldError message={errors[fieldKey(s, null, 'items')]} />
@@ -116,6 +129,7 @@ export function DraftEditor({ templateId, version, revision: initialRevision, se
                     </label>
                     <label className="field">Min photos
                       <input type="number" min={0} max={20} value={item.minPhotos} onChange={(e) => updateItem(section, item, { minPhotos: Number(e.target.value) })} />
+                      <FieldError message={err('minPhotos')} />
                     </label>
                     <label className="field">Max photos
                       <input type="number" min={0} max={20} value={item.maxPhotos} onChange={(e) => updateItem(section, item, { maxPhotos: Number(e.target.value) })} />
@@ -136,26 +150,27 @@ export function DraftEditor({ templateId, version, revision: initialRevision, se
                   ) : null}
                   <label className="field">Guidance for the field engineer
                     <textarea rows={1} value={item.guidanceText} maxLength={2000} onChange={(e) => updateItem(section, item, { guidanceText: e.target.value })} />
+                    <FieldError message={err('guidanceText')} />
                   </label>
                   <div className="editor-controls">
-                    <button type="button" className="ghost-button" aria-label={`Move item ${item.number} up`} onClick={() => dispatch({ type: 'moveItem', sectionKey: section.key, itemKey: item.key, direction: -1 })}>↑</button>
-                    <button type="button" className="ghost-button" aria-label={`Move item ${item.number} down`} onClick={() => dispatch({ type: 'moveItem', sectionKey: section.key, itemKey: item.key, direction: 1 })}>↓</button>
-                    <button type="button" className="danger-button" onClick={() => dispatch({ type: 'removeItem', sectionKey: section.key, itemKey: item.key })}>Remove item</button>
+                    <button type="button" className="ghost-button" aria-label={`Move item ${item.number} up`} onClick={() => structural({ type: 'moveItem', sectionKey: section.key, itemKey: item.key, direction: -1 })}>↑</button>
+                    <button type="button" className="ghost-button" aria-label={`Move item ${item.number} down`} onClick={() => structural({ type: 'moveItem', sectionKey: section.key, itemKey: item.key, direction: 1 })}>↓</button>
+                    <button type="button" className="danger-button" onClick={() => structural({ type: 'removeItem', sectionKey: section.key, itemKey: item.key })}>Remove item</button>
                   </div>
                 </div>
               </div>
             );
           })}
-          <button type="button" className="ghost-button" onClick={() => dispatch({ type: 'addItem', sectionKey: section.key })}>Add item</button>
+          <button type="button" className="ghost-button" onClick={() => structural({ type: 'addItem', sectionKey: section.key })}>Add item</button>
         </section>
       ))}
 
       <div className="editor-bar">
-        <button type="button" className="ghost-button" onClick={() => dispatch({ type: 'addSection' })}>Add section</button>
-        <button type="button" className="ghost-button" onClick={() => dispatch({ type: 'renumber' })}>Renumber</button>
+        <button type="button" className="ghost-button" onClick={() => structural({ type: 'addSection' })}>Add section</button>
+        <button type="button" className="ghost-button" onClick={() => structural({ type: 'renumber' })}>Renumber</button>
         <span className="subtle">{state.dirty ? 'Unsaved changes' : `Saved · revision ${revision}`}</span>
         <button type="button" className="primary-button" disabled={pending} onClick={save}>{pending ? 'Working…' : 'Save draft'}</button>
-        <button type="button" className="primary-button" disabled={pending} onClick={publish}>Publish v{version}</button>
+        {mayPublish ? <button type="button" className="primary-button" disabled={pending} onClick={publish}>Publish v{version}</button> : null}
         <button type="button" className="danger-button" disabled={pending} onClick={discard}>Discard draft</button>
       </div>
     </div>

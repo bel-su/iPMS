@@ -44,7 +44,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
               </div>
             </div>
             <div className="toolbar-actions">
-              {draft ? <a className="primary-button" href={`/quality/templates/${id}/draft`}>Continue draft v{draft.version}</a> : null}
+              {draft && may('qc_template.update') ? <a className="primary-button" href={`/quality/templates/${id}/draft`}>Continue draft v{draft.version}</a> : null}
               {!draft && published && may('qc_template.update') ? <RowAction action={startDraftAction} hidden={hidden} label="New version" className="primary-button" /> : null}
               {published ? <a className="ghost-button" href={`/api/qc/templates/${id}/versions/${published.version}/export`}>Export v{published.version}</a> : null}
               {may('qc_template.update') ? <RenameTemplateForm templateId={id} name={template.name} category={template.category} /> : null}

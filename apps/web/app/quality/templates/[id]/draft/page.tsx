@@ -25,6 +25,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
     return <StatePage title="The draft could not be loaded"><p>{loaded.state === 'unauthenticated' ? 'Sign in again.' : loaded.message}</p></StatePage>;
   }
   const previous = template.versions.find((version) => version.status === 'PUBLISHED')?.version ?? null;
+  const mayPublish = viewer.state === 'ready' && hasPermission(viewer.data, 'qc_template.publish') && !template.disabledAt;
 
   return (
     <main className="app-shell">
@@ -45,6 +46,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
             sections={loaded.data.version.sections}
             previousVersion={previous}
             neverPublished={template.currentVersionId === null}
+            mayPublish={mayPublish}
           />
         </div>
       </section>
