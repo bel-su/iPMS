@@ -25,7 +25,8 @@ const scopeProvider: ScopeProvider = { async for(): Promise<AuthzScope> { return
 
 const projectInternalUrl = (): string => process.env['PROJECT_INTERNAL_URL'] ?? 'http://project:3004';
 function graceDays(): number {
-  const value = Number(process.env['QC_RETIRED_VERSION_GRACE_DAYS'] ?? 7);
+  const raw = process.env['QC_RETIRED_VERSION_GRACE_DAYS']?.trim();
+  const value = raw ? Number(raw) : 7;
   if (!Number.isInteger(value) || value < 0) throw new Error('QC_RETIRED_VERSION_GRACE_DAYS must be a whole number of days');
   return value;
 }
