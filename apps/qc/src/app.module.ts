@@ -12,6 +12,8 @@ import { OutboxDrainer } from './outbox/outbox.drainer.js';
 import { SiteGeofenceClient } from './submissions/site-geofence.client.js';
 import { SubmissionController } from './submissions/submission.controller.js';
 import { SubmissionService } from './submissions/submission.service.js';
+import { TaskChecklistController } from './tasks/task-checklist.controller.js';
+import { TaskLookupClient } from './tasks/task-lookup.client.js';
 import { TemplateController } from './templates/template.controller.js';
 import { TemplateImportController } from './templates/template-import.controller.js';
 import { TemplateImportService } from './templates/template-import.service.js';
@@ -32,7 +34,7 @@ function requireEnv(name: string): string {
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [TemplateImportController, TemplateController, SubmissionController, HealthController, MetricsController],
+  controllers: [TemplateImportController, TemplateController, SubmissionController, TaskChecklistController, HealthController, MetricsController],
   providers: [
     // Order matters: JwtUserGuard must populate request.user before AuthzGuard reads it.
     { provide: APP_GUARD, useClass: JwtUserGuard },
@@ -48,6 +50,7 @@ function requireEnv(name: string): string {
       },
     },
     { provide: SiteGeofenceClient, useFactory: () => new SiteGeofenceClient(projectInternalUrl()) },
+    { provide: TaskLookupClient, useFactory: () => new TaskLookupClient(projectInternalUrl()) },
     {
       provide: SubmissionService,
       useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient) => new SubmissionService(prisma.db, geofence, graceDays()),
