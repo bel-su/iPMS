@@ -34,6 +34,7 @@ function NavItem({ section, active, href, icon, children }: {
 export async function Sidebar({ active }: { active: Section }) {
   const viewer = await getCurrentUser();
   const mayViewUsers = viewer.state === 'ready' && hasPermission(viewer.data, 'user.view');
+  const mayViewTemplates = viewer.state === 'ready' && hasPermission(viewer.data, 'qc_template.view');
 
   return (
     <aside className="sidebar">
@@ -42,7 +43,7 @@ export async function Sidebar({ active }: { active: Section }) {
       <nav aria-label="Primary navigation">
         <NavItem section="overview" active={active} href="/" icon="▦">Overview</NavItem>
         <NavItem section="projects" active={active} href="/projects" icon="◫">Projects</NavItem>
-        <NavItem section="quality" active={active} href="/#quality" icon="✓">Quality</NavItem>
+        {mayViewTemplates ? <NavItem section="quality" active={active} href="/quality/templates" icon="✓">Quality &amp; EHS</NavItem> : null}
         {mayViewUsers ? <NavItem section="users" active={active} href="/users" icon="◉">Users</NavItem> : null}
       </nav>
       <div className="sidebar-bottom"><a className="nav-item" href="/#settings"><Icon>⚙</Icon>Settings</a></div>
