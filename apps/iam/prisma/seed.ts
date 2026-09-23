@@ -22,7 +22,7 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
       'site.view', 'site.create', 'site.update', 'site.import',
       'milestone.view', 'milestone.create', 'milestone.update', 'milestone.declare',
       'task.view', 'task.create', 'task.update', 'task.assign', 'task.generate', 'task.cancel',
-      'qc_template.view', 'qc_template.create', 'qc_template.update', 'qc_template.publish', 'qc_template.import',
+      'qc_template.view',
       'qc_submission.view', 'qc_review.view', 'qc_review.approve', 'qc_review.reject',
       'qc_evidence.export', 'audit.view', 'user.view', 'scope.view',
       // Managing their own team: creating field engineers and QC managers, and
@@ -49,7 +49,7 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
     description: 'Executes assigned checklists and submits evidence. No approval authority by design.',
     permissions: [
       'project.view', 'site.view', 'task.view', 'task.update',
-      'qc_template.view', 'qc_submission.view', 'qc_submission.create',
+      'qc_submission.view', 'qc_submission.create',
       'qc_submission.update', 'qc_submission.submit', 'qc_evidence.upload',
     ],
   },
