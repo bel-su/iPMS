@@ -10,6 +10,7 @@ import { ProjectService } from './project.service.js';
   @Get('dashboard') @RequirePermission('project.view') dashboard(){ return this.service.dashboard(); }
   /** Service-to-service only: the gateway refuses every '/internal/' path. Still permission-checked, because the caller forwards the submitting user's own token. */
   @Get('internal/sites/:id/geofence') @RequirePermission('site.view') siteGeofence(@Param('id') id:string){ return this.service.siteGeofence(UuidSchema.parse(id)); }
+  @Get('internal/tasks/:id') @RequirePermission('task.view') internalTask(@Param('id') id:string){ return this.service.internalTask(UuidSchema.parse(id)); }
   @Get('projects') @RequirePermission('project.view') list(){ return this.service.listProjects(); }
   @Get('projects/:id') @RequirePermission('project.view') get(@Param('id') id:string){ return this.service.getProject(UuidSchema.parse(id)); }
   @Get('projects/:id/tasks') @RequirePermission('task.view') tasks(@Param('id') id:string,@Query() query:unknown){ return this.service.listTasks(UuidSchema.parse(id),ListTasksQuerySchema.parse(query)); }

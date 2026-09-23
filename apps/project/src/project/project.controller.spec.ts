@@ -19,6 +19,7 @@ describe('permissions on the destructive routes', () => {
     ['removeMilestone', 'milestone.update'],
     ['removeTask', 'task.delete'],
     ['tasks', 'task.view'],
+    ['internalTask', 'task.view'],
   ];
 
   for (const [method, permission] of EXPECTED) {

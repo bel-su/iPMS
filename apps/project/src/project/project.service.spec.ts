@@ -328,3 +328,23 @@ describe('siteGeofence', () => {
     await expect(service(prisma).siteGeofence('s-1')).rejects.toThrow(NotFoundException);
   });
 });
+
+describe('internalTask', () => {
+  let prisma: Prisma;
+  beforeEach(() => { prisma = makePrisma(); });
+
+  it('returns only what qc needs to authorize a checklist request', async () => {
+    const task = { id: 't-1', projectId: 'p-1', siteId: 's-1', assigneeId: 'u-1', templateId: 'tpl-1', status: 'ONGOING' };
+    prisma.task.findUnique.mockResolvedValue(task);
+    await expect(service(prisma).internalTask('t-1')).resolves.toEqual(task);
+    expect(prisma.task.findUnique).toHaveBeenCalledWith({
+      where: { id: 't-1' },
+      select: { id: true, projectId: true, siteId: true, assigneeId: true, templateId: true, status: true },
+    });
+  });
+
+  it('refuses a task that does not exist', async () => {
+    prisma.task.findUnique.mockResolvedValue(null);
+    await expect(service(prisma).internalTask('t-1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});

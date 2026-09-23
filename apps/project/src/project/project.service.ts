@@ -48,6 +48,14 @@ export class ProjectService {
       ),
     };
   }
+  async internalTask(id: string): Promise<{ id: string; projectId: string; siteId: string; assigneeId: string | null; templateId: string | null; status: string }> {
+    const task = await this.prisma.task.findUnique({
+      where: { id },
+      select: { id: true, projectId: true, siteId: true, assigneeId: true, templateId: true, status: true },
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    return task;
+  }
   async dashboard() { const [projects, reviewCount, rectifying] = await Promise.all([this.prisma.project.findMany({ where: { status: 'ACTIVE' }, include: { _count: { select: { sites: true } } }, take: 12, orderBy: { updatedAt: 'desc' } }), this.prisma.task.count({ where: { status: 'REVIEWING' } }), this.prisma.task.count({ where: { status: 'RECTIFYING' } })]); return { activeProjectCount: projects.length, sitesInDelivery: projects.reduce((total, p) => total + p._count.sites, 0), pendingReviews: reviewCount, rectifyingTasks: rectifying, projects }; }
   private async requireProject(id: string) { if (!await this.prisma.project.findUnique({ where: { id } })) throw new NotFoundException('Project not found'); }
   private async requireSite(id:string){ const site=await this.prisma.site.findUnique({where:{id}}); if(!site) throw new NotFoundException('Site not found'); return site; }
