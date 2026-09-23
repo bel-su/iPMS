@@ -1,6 +1,6 @@
 # iPMS — QC Template Management Design
 
-**Status:** Draft — awaiting review
+**Status:** Implemented — end-to-end run pending the docker-compose fix
 **Date:** 2026-09-22
 **Parent spec:** `2026-09-15-ipms-microservices-architecture-design.md` §4 (IEPMS findings), §7.2 (`qc`)
 **Related specs:** `2026-09-20-site-bulk-import-and-geofence-design.md` (the preview/commit import this mirrors), `2026-09-22-user-management-design.md` (the web CRUD and audit shape this follows)
