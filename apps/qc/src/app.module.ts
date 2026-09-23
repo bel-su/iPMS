@@ -13,6 +13,8 @@ import { SiteGeofenceClient } from './submissions/site-geofence.client.js';
 import { SubmissionController } from './submissions/submission.controller.js';
 import { SubmissionService } from './submissions/submission.service.js';
 import { TemplateController } from './templates/template.controller.js';
+import { TemplateImportController } from './templates/template-import.controller.js';
+import { TemplateImportService } from './templates/template-import.service.js';
 import { TemplateQueries } from './templates/template.queries.js';
 import { TemplateService } from './templates/template.service.js';
 
@@ -30,7 +32,7 @@ function requireEnv(name: string): string {
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [TemplateController, SubmissionController, HealthController, MetricsController],
+  controllers: [TemplateImportController, TemplateController, SubmissionController, HealthController, MetricsController],
   providers: [
     // Order matters: JwtUserGuard must populate request.user before AuthzGuard reads it.
     { provide: APP_GUARD, useClass: JwtUserGuard },
@@ -64,6 +66,11 @@ function requireEnv(name: string): string {
     { provide: OutboxDrainer, useFactory: (prisma: PrismaService, bus: EventBus) => new OutboxDrainer(prisma.db, bus), inject: [PrismaService, EventBus] },
     { provide: TemplateService, useFactory: (prisma: PrismaService) => new TemplateService(prisma.db), inject: [PrismaService] },
     { provide: TemplateQueries, useFactory: (prisma: PrismaService) => new TemplateQueries(prisma.db), inject: [PrismaService] },
+    {
+      provide: TemplateImportService,
+      useFactory: (prisma: PrismaService, templates: TemplateService) => new TemplateImportService(prisma.db, templates),
+      inject: [PrismaService, TemplateService],
+    },
   ],
 })
 export class AppModule {}
