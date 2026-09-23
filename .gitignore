@@ -16,3 +16,7 @@ apps/mobile/build/
 apps/mobile/.flutter-plugins
 apps/mobile/.flutter-plugins-dependencies
 apps/mobile/.packages
+
+# Local secrets & tokens
+github
+githubaccess
