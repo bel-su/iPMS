@@ -113,6 +113,24 @@ describe('seedIam', () => {
     }
   });
 
+  it('leaves the template library to QC managers: project managers may only view it', async () => {
+    const role = await prisma.role.findUniqueOrThrow({
+      where: { code: 'PROJECT_MANAGER' }, include: { permissions: { include: { permission: true } } },
+    });
+    const codes = role.permissions.map((rp) => rp.permission.code);
+    expect(codes).toContain('qc_template.view');
+    for (const code of ['qc_template.create', 'qc_template.update', 'qc_template.publish', 'qc_template.import']) {
+      expect(codes).not.toContain(code);
+    }
+  });
+
+  it('keeps field engineers out of the template library', async () => {
+    const role = await prisma.role.findUniqueOrThrow({
+      where: { code: 'FIELD_ENGINEER' }, include: { permissions: { include: { permission: true } } },
+    });
+    expect(role.permissions.map((rp) => rp.permission.code).filter((code) => code.startsWith('qc_template.'))).toEqual([]);
+  });
+
   it('is idempotent', async () => {
     await seedIam(prisma);
     expect(await prisma.permission.count()).toBe(PERMISSIONS.length);

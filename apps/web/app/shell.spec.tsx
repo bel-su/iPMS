@@ -51,4 +51,11 @@ describe('Sidebar', () => {
     });
     expect(hrefs(await Sidebar({ active: 'projects' }))).not.toContain('/users');
   });
+
+  it('offers Quality & EHS to a viewer who may see templates, and hides it otherwise', async () => {
+    getCurrentUser.mockResolvedValue(user(['qc_template.view']));
+    expect(hrefs(await Sidebar({ active: 'projects' }))).toContain('/quality/templates');
+    getCurrentUser.mockResolvedValue(user(['project.view']));
+    expect(hrefs(await Sidebar({ active: 'projects' }))).not.toContain('/quality/templates');
+  });
 });

@@ -1,121 +1,171 @@
 generator client {
   provider = "prisma-client-js"
-  output = "../node_modules/@prisma-clients/qc"
+  output   = "../node_modules/@prisma-clients/qc"
 }
+
 datasource db {
   provider = "postgresql"
 }
 
 model ChecklistTemplate {
-  id String @id @db.Uuid
-  projectId String @db.Uuid
-  code String @db.VarChar(50)
-  name String @db.VarChar(250)
-  category String @db.VarChar(20)
-  version Int
-  status String @default("DRAFT") @db.VarChar(20)
-  publishedAt DateTime? @db.Timestamptz(6)
-  createdBy String @db.Uuid
-  source String @default("WEB") @db.VarChar(20)
-  sections ChecklistSection[]
-  submissions Submission[]
-  @@unique([projectId,code,version])
+  id               String            @id @db.Uuid
+  code             String            @unique @db.VarChar(50)
+  name             String            @db.VarChar(250)
+  category         String            @db.VarChar(20)
+  currentVersionId String?           @unique @db.Uuid
+  disabledAt       DateTime?         @db.Timestamptz(6)
+  createdBy        String            @db.Uuid
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(6)
+  currentVersion   TemplateVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions         TemplateVersion[] @relation("TemplateVersions")
+  submissions      Submission[]
+
   @@map("checklist_template")
 }
+
+model TemplateVersion {
+  id          String             @id @db.Uuid
+  templateId  String             @db.Uuid
+  version     Int
+  status      String             @db.VarChar(20)
+  revision    Int                @default(1)
+  source      String             @db.VarChar(20)
+  createdBy   String             @db.Uuid
+  createdAt   DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime           @updatedAt @db.Timestamptz(6)
+  publishedAt DateTime?          @db.Timestamptz(6)
+  publishedBy String?            @db.Uuid
+  retiredAt   DateTime?          @db.Timestamptz(6)
+  template    ChecklistTemplate  @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
+  currentOf   ChecklistTemplate? @relation("CurrentVersion")
+  sections    ChecklistSection[]
+  submissions Submission[]
+
+  @@unique([templateId, version])
+  @@map("template_version")
+}
+
 model ChecklistSection {
-  id String @id @db.Uuid
-  templateId String @db.Uuid
-  number String @db.VarChar(30)
-  title String @db.VarChar(300)
-  order Int
-  template ChecklistTemplate @relation(fields:[templateId],references:[id],onDelete:Cascade)
-  items ChecklistItem[]
-  @@unique([templateId,number])
+  id        String          @id @db.Uuid
+  versionId String          @db.Uuid
+  number    String          @db.VarChar(30)
+  title     String          @db.VarChar(300)
+  order     Int
+  version   TemplateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  items     ChecklistItem[]
+
+  @@unique([versionId, number])
   @@map("checklist_section")
 }
+
 model ChecklistItem {
-  id String @id @db.Uuid
-  sectionId String @db.Uuid
-  number String @db.VarChar(30)
-  requirementText String @db.Text
-  severity String @db.VarChar(20)
-  responseType String @db.VarChar(20)
-  requiresPhoto Boolean @default(false)
-  minPhotos Int @default(0)
-  maxPhotos Int @default(0)
-  allowsNa Boolean @default(false)
-  isRequired Boolean @default(true)
-  guidanceText String? @db.Text
-  order Int
-  section ChecklistSection @relation(fields:[sectionId],references:[id],onDelete:Cascade)
-  responses ItemResponse[]
-  @@unique([sectionId,number])
+  id              String           @id @db.Uuid
+  sectionId       String           @db.Uuid
+  number          String           @db.VarChar(30)
+  requirementText String           @db.Text
+  severity        String           @db.VarChar(20)
+  responseType    String           @db.VarChar(20)
+  selectOptions   String[]         @default([])
+  minPhotos       Int              @default(0)
+  maxPhotos       Int              @default(0)
+  allowsNa        Boolean          @default(false)
+  isRequired      Boolean          @default(true)
+  guidanceText    String?          @db.Text
+  order           Int
+  section         ChecklistSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  responses       ItemResponse[]
+
+  @@unique([sectionId, number])
   @@map("checklist_item")
 }
+
 model Submission {
-  id String @id @db.Uuid
-  taskId String @db.Uuid
-  siteId String @db.Uuid
-  projectId String @db.Uuid
-  templateId String @db.Uuid
-  templateVersion Int
-  attemptNo Int
-  status String @db.VarChar(30)
-  overallVerdict String? @db.VarChar(10)
-  submittedBy String @db.Uuid
-  submittedAt DateTime? @db.Timestamptz(6)
-  reviewedBy String? @db.Uuid
-  reviewedAt DateTime? @db.Timestamptz(6)
-  reviewComment String? @db.Text
-  integrityHash String @db.VarChar(64)
-  idempotencyKey String @unique @db.VarChar(255)
-  deviceId String? @db.VarChar(255)
-  latitude Decimal? @db.Decimal(10,7)
-  longitude Decimal? @db.Decimal(10,7)
+  id                String            @id @db.Uuid
+  taskId            String            @db.Uuid
+  siteId            String            @db.Uuid
+  projectId         String            @db.Uuid
+  templateId        String            @db.Uuid
+  templateVersionId String            @db.Uuid
+  templateVersion   Int
+  attemptNo         Int
+  status            String            @db.VarChar(30)
+  overallVerdict    String?           @db.VarChar(10)
+  submittedBy       String            @db.Uuid
+  submittedAt       DateTime?         @db.Timestamptz(6)
+  reviewedBy        String?           @db.Uuid
+  reviewedAt        DateTime?         @db.Timestamptz(6)
+  reviewComment     String?           @db.Text
+  integrityHash     String            @db.VarChar(64)
+  idempotencyKey    String            @unique @db.VarChar(255)
+  deviceId          String?           @db.VarChar(255)
+  latitude          Decimal?          @db.Decimal(10, 7)
+  longitude         Decimal?          @db.Decimal(10, 7)
   distanceFromSiteM Int?
-  geofenceStatus String @default("NOT_APPLICABLE") @db.VarChar(20)
-  template ChecklistTemplate @relation(fields:[templateId],references:[id])
-  responses ItemResponse[]
-  decisions ReviewDecision[]
-  @@unique([taskId,attemptNo])
+  geofenceStatus    String            @default("NOT_APPLICABLE") @db.VarChar(20)
+  template          ChecklistTemplate @relation(fields: [templateId], references: [id])
+  version           TemplateVersion   @relation(fields: [templateVersionId], references: [id])
+  responses         ItemResponse[]
+  decisions         ReviewDecision[]
+
+  @@unique([taskId, attemptNo])
   @@map("submission")
 }
+
 model ItemResponse {
-  id String @id @db.Uuid
-  submissionId String @db.Uuid
-  itemId String @db.Uuid
-  selfCheckResult String @db.VarChar(10)
-  selfCheckDescription String? @db.Text
-  textValue String? @db.Text
-  numberValue Decimal? @db.Decimal(18,4)
-  booleanValue Boolean?
-  selectValue String? @db.VarChar(500)
-  reviewResult String @default("PENDING") @db.VarChar(20)
-  reviewDescription String? @db.Text
-  reviewedBy String? @db.Uuid
-  reviewedAt DateTime? @db.Timestamptz(6)
-  submission Submission @relation(fields:[submissionId],references:[id],onDelete:Cascade)
-  item ChecklistItem @relation(fields:[itemId],references:[id])
-  photos ItemPhoto[]
-  @@unique([submissionId,itemId])
+  id                   String        @id @db.Uuid
+  submissionId         String        @db.Uuid
+  itemId               String        @db.Uuid
+  selfCheckResult      String        @db.VarChar(10)
+  selfCheckDescription String?       @db.Text
+  textValue            String?       @db.Text
+  numberValue          Decimal?      @db.Decimal(18, 4)
+  booleanValue         Boolean?
+  selectValue          String?       @db.VarChar(500)
+  reviewResult         String        @default("PENDING") @db.VarChar(20)
+  reviewDescription    String?       @db.Text
+  reviewedBy           String?       @db.Uuid
+  reviewedAt           DateTime?     @db.Timestamptz(6)
+  submission           Submission    @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  item                 ChecklistItem @relation(fields: [itemId], references: [id])
+  photos               ItemPhoto[]
+
+  @@unique([submissionId, itemId])
   @@map("item_response")
 }
+
 model ItemPhoto {
-  id String @id @db.Uuid
-  itemResponseId String @db.Uuid
-  mediaId String @db.Uuid
-  sequence Int
-  itemResponse ItemResponse @relation(fields:[itemResponseId],references:[id],onDelete:Cascade)
-  @@unique([itemResponseId,sequence])
+  id             String       @id @db.Uuid
+  itemResponseId String       @db.Uuid
+  mediaId        String       @db.Uuid
+  sequence       Int
+  itemResponse   ItemResponse @relation(fields: [itemResponseId], references: [id], onDelete: Cascade)
+
+  @@unique([itemResponseId, sequence])
   @@map("item_photo")
 }
+
 model ReviewDecision {
-  id String @id @db.Uuid
-  submissionId String @db.Uuid
-  reviewerId String @db.Uuid
-  decision String @db.VarChar(30)
-  comment String? @db.Text
-  decidedAt DateTime @default(now()) @db.Timestamptz(6)
-  submission Submission @relation(fields:[submissionId],references:[id],onDelete:Cascade)
+  id           String     @id @db.Uuid
+  submissionId String     @db.Uuid
+  reviewerId   String     @db.Uuid
+  decision     String     @db.VarChar(30)
+  comment      String?    @db.Text
+  decidedAt    DateTime   @default(now()) @db.Timestamptz(6)
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
   @@map("review_decision")
+}
+
+model OutboxEvent {
+  id            String    @id @db.Uuid
+  subject       String    @db.VarChar(100)
+  payload       Json
+  correlationId String    @db.VarChar(64)
+  actorId       String?   @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  publishedAt   DateTime? @db.Timestamptz(6)
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_event")
 }

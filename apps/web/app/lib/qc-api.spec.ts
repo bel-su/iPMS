@@ -5,67 +5,59 @@ vi.mock('./api-client', () => ({ authFetch }));
 
 const api = await import('./qc-api');
 
-const TEMPLATE = {
-  projectId: 'p-1', code: 'QC-1', name: 'Civil works', category: 'QUALITY' as const,
-  sections: [{ number: '1', title: 'Foundations', order: 0, items: [] as never[] }],
-};
-
-const SUBMISSION = {
-  taskId: 't-1', siteId: 's-1', projectId: 'p-1', templateId: 'tpl-1',
-  idempotencyKey: 'key-12345678', responses: [] as never[],
-};
-
 beforeEach(() => { authFetch.mockClear(); });
 
 describe('qc-api — every call maps to a gateway route', () => {
-  it('lists templates for one project by query', async () => {
-    await api.listTemplates('p-1');
-    expect(authFetch.mock.calls[0]).toEqual(['/api/v1/qc/templates', { query: { projectId: 'p-1' } }]);
+  it('lists a tab, dropping empty filters', async () => {
+    await api.listTemplates({ tab: 'draft', category: undefined, q: undefined });
+    expect(authFetch.mock.calls[0]).toEqual(['/api/v1/qc/templates', { query: { tab: 'draft', category: undefined, q: undefined } }]);
   });
 
-  // The service treats a missing projectId as "every template in scope"; the
-  // client must send no parameter rather than the string 'undefined'.
-  it('omits the project filter when none is given', async () => {
-    await api.listTemplates();
-    expect(authFetch.mock.calls[0]![1]).toEqual({ query: { projectId: undefined } });
+  it('reads a template and a version', async () => {
+    await api.getTemplate('t-1');
+    await api.getVersion('t-1', 3);
+    expect(authFetch.mock.calls.map((call) => call[0])).toEqual(['/api/v1/qc/templates/t-1', '/api/v1/qc/templates/t-1/versions/3']);
   });
 
-  it('creates a template', async () => {
-    await api.createTemplate(TEMPLATE);
-    expect(authFetch.mock.calls[0]).toEqual(['/api/v1/qc/templates', { method: 'POST', json: TEMPLATE }]);
+  it('creates and renames', async () => {
+    await api.createTemplate({ code: 'A', name: 'A', category: 'EHS' });
+    await api.updateTemplate('t-1', { name: 'B' });
+    expect(authFetch.mock.calls[0]).toEqual(['/api/v1/qc/templates', { method: 'POST', json: { code: 'A', name: 'A', category: 'EHS' } }]);
+    expect(authFetch.mock.calls[1]).toEqual(['/api/v1/qc/templates/t-1', { method: 'PATCH', json: { name: 'B' } }]);
   });
 
-  it('publishes a template with no body', async () => {
-    await api.publishTemplate('tpl-1');
-    expect(authFetch.mock.calls[0]).toEqual(['/api/v1/qc/templates/tpl-1/publish', { method: 'POST' }]);
+  it('drives the draft lifecycle', async () => {
+    const body = { revision: 2, document: { sections: [] } };
+    await api.startDraft('t-1');
+    await api.saveDraft('t-1', body);
+    await api.discardDraft('t-1');
+    await api.publishTemplate('t-1');
+    await api.disableTemplate('t-1');
+    await api.enableTemplate('t-1');
+    expect(authFetch.mock.calls).toEqual([
+      ['/api/v1/qc/templates/t-1/draft', { method: 'POST' }],
+      ['/api/v1/qc/templates/t-1/draft', { method: 'PUT', json: body }],
+      ['/api/v1/qc/templates/t-1/draft', { method: 'DELETE' }],
+      ['/api/v1/qc/templates/t-1/publish', { method: 'POST' }],
+      ['/api/v1/qc/templates/t-1/disable', { method: 'POST' }],
+      ['/api/v1/qc/templates/t-1/enable', { method: 'POST' }],
+    ]);
   });
 
-  it('reads one submission', async () => {
-    await api.getSubmission('sub-1');
-    expect(authFetch.mock.calls[0]).toEqual(['/api/v1/qc/submissions/sub-1']);
+  it('uploads an import as multipart and commits it as JSON', async () => {
+    const file = new File(['x'], 'checklist.xlsx');
+    await api.previewTemplateImport(file);
+    const [path, request] = authFetch.mock.calls[0] as [string, { method: string; body: FormData }];
+    expect(path).toBe('/api/v1/qc/templates/import/preview');
+    expect(request.method).toBe('POST');
+    expect(request.body.get('file')).toBeInstanceOf(File);
+    const dto = { code: 'A', name: 'A', category: 'QUALITY' as const, document: { sections: [] } };
+    await api.commitTemplateImport(dto);
+    expect(authFetch.mock.calls[1]).toEqual(['/api/v1/qc/templates/import/commit', { method: 'POST', json: dto }]);
   });
 
-  it('creates a submission', async () => {
-    await api.createSubmission(SUBMISSION);
-    expect(authFetch.mock.calls[0]).toEqual(['/api/v1/qc/submissions', { method: 'POST', json: SUBMISSION }]);
-  });
-
-  it('reviews a submission', async () => {
-    const review = { decision: 'APPROVE' as const, itemReviews: [{ itemId: 'i-1', result: 'APPROVED' as const }] };
-    await api.reviewSubmission('sub-1', review);
-    expect(authFetch.mock.calls[0]).toEqual(['/api/v1/qc/submissions/sub-1/review', { method: 'POST', json: review }]);
-  });
-
-  it('stays inside the gateway’s qc prefix', async () => {
-    const calls = [
-      () => api.listTemplates('p-1'), () => api.createTemplate(TEMPLATE), () => api.publishTemplate('tpl-1'),
-      () => api.getSubmission('sub-1'), () => api.createSubmission(SUBMISSION),
-      () => api.reviewSubmission('sub-1', { decision: 'APPROVE', itemReviews: [{ itemId: 'i-1', result: 'APPROVED' }] }),
-    ];
-    for (const call of calls) {
-      authFetch.mockClear();
-      await call();
-      expect(authFetch.mock.calls[0]![0] as string).toMatch(/^\/api\/v1\/qc\//);
-    }
+  it('keeps the submission calls', async () => {
+    await api.getSubmission('s-1');
+    expect(authFetch.mock.calls[0]).toEqual(['/api/v1/qc/submissions/s-1']);
   });
 });

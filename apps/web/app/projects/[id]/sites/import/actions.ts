@@ -3,6 +3,7 @@ import type { SiteImportCommitDto, SiteImportPreviewDto } from '@ipms/contracts'
 import { commitSiteImport, previewSiteImport } from '../../../../lib/project-api';
 import { type FormState } from '../../../../lib/form-state';
 import { settle } from '../../../../lib/settle';
+import { projectPages } from '../../paths';
 
 export interface ImportState extends FormState {
   preview?: SiteImportPreviewDto;
@@ -34,7 +35,7 @@ export async function commitImportAction(_previous: ImportState, form: FormData)
   if (!payload) return { error: 'Fix the file and preview it again before importing.' };
 
   const result = await commitSiteImport(projectId, payload);
-  const state = await settle(result, `/projects/${projectId}`);
+  const state = await settle(result, projectPages(projectId));
   if (state.error) return state;
   return result.state === 'ready' ? { committed: result.data } : state;
 }
