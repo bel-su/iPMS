@@ -35,13 +35,16 @@ export class TemplateImportController {
 
   @Post('import/preview') @RequirePermission('qc_template.import')
   async preview(@Req() req: FastifyRequest) {
+    if (!req.isMultipart()) throw new BadRequestException('Attach an .xlsx file in a "file" field');
     const file = await req.file();
     if (!file) throw new BadRequestException('Attach an .xlsx file in a "file" field');
     let buffer: Buffer;
     try {
       buffer = await file.toBuffer();
-    } catch {
-      throw new PayloadTooLargeException('The file is larger than 5 MB');
+    } catch (error) {
+      // Only the size-limit error maps to 413; anything else is a genuine failure worth surfacing as-is.
+      if ((error as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') throw new PayloadTooLargeException('The file is larger than 5 MB');
+      throw error;
     }
     return this.imports.preview(buffer);
   }

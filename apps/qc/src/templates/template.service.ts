@@ -32,8 +32,7 @@ export class TemplateService {
 
   async rename(id: string, dto: UpdateTemplateDto, actorId: string) {
     return this.prisma.$transaction(async (tx) => {
-      // Lock the row first so a concurrent rename can't slip between this read and the update.
-      await tx.$queryRaw`SELECT "id" FROM "checklist_template" WHERE "id" = ${id}::uuid FOR UPDATE`;
+      await this.lockTemplate(tx, id);
       const template = await this.requireTemplate(tx, id);
       const updated = await tx.checklistTemplate.update({
         where: { id },
@@ -51,6 +50,7 @@ export class TemplateService {
   async startDraft(id: string, actorId: string): Promise<CreatedDraft> {
     try {
       return await this.prisma.$transaction(async (tx) => {
+        await this.lockTemplate(tx, id);
         await this.requireTemplate(tx, id);
         const existing = await tx.templateVersion.findFirst({ where: { templateId: id, status: 'DRAFT' } });
         if (existing) throw new ConflictException(`A draft (v${existing.version}) already exists`);
@@ -70,6 +70,7 @@ export class TemplateService {
   async saveDraft(id: string, dto: SaveDraftDto): Promise<DraftSummary> {
     try {
       return await this.prisma.$transaction(async (tx) => {
+        await this.lockTemplate(tx, id);
         const draft = await this.requireDraft(tx, id);
         const saved = await this.replaceDraftTree(tx, draft.id, dto.revision, dto.document, {}, STALE_SAVE);
         return summary(saved);
@@ -84,6 +85,7 @@ export class TemplateService {
   async importIntoDraft(id: string, doc: TemplateDocument, expectedRevision: number | undefined, actorId: string): Promise<CreatedDraft> {
     try {
       return await this.prisma.$transaction(async (tx) => {
+        await this.lockTemplate(tx, id);
         await this.requireTemplate(tx, id);
         const existing = await tx.templateVersion.findFirst({ where: { templateId: id, status: 'DRAFT' } });
         let draft: TemplateVersion;
@@ -110,20 +112,22 @@ export class TemplateService {
 
   async discardDraft(id: string, actorId: string): Promise<{ templateDeleted: boolean }> {
     return this.prisma.$transaction(async (tx) => {
+      await this.lockTemplate(tx, id);
+      // Re-read under the lock: a concurrent publish may have just filled currentVersionId.
       const template = await this.requireTemplate(tx, id);
       const draft = await this.requireDraft(tx, id);
       const templateDeleted = template.currentVersionId === null;
+      const removed = await tx.templateVersion.deleteMany({ where: { id: draft.id, status: 'DRAFT' } });
+      if (removed.count === 0) throw new ConflictException('This template has no draft');
       await recordAudit(tx, { actorId, action: 'qc_template.draft_discarded', objectId: id, previousState: { version: draft.version }, newState: {} });
       if (templateDeleted) await tx.checklistTemplate.delete({ where: { id } });
-      else await tx.templateVersion.delete({ where: { id: draft.id } });
       return { templateDeleted };
     });
   }
 
   async publish(id: string, actorId: string): Promise<TemplateVersion> {
     return this.prisma.$transaction(async (tx) => {
-      // Serializes publishes of one template; the partial unique index is the backstop.
-      await tx.$queryRaw`SELECT "id" FROM "checklist_template" WHERE "id" = ${id}::uuid FOR UPDATE`;
+      await this.lockTemplate(tx, id);
       const template = await this.requireTemplate(tx, id);
       if (template.disabledAt) throw new ConflictException('Enable this template before publishing');
       const draft = await tx.templateVersion.findFirst({ where: { templateId: id, status: 'DRAFT' }, include: TREE_INCLUDE });
@@ -148,6 +152,7 @@ export class TemplateService {
 
   async disable(id: string, actorId: string) {
     return this.prisma.$transaction(async (tx) => {
+      await this.lockTemplate(tx, id);
       const template = await this.requireTemplate(tx, id);
       if (template.disabledAt) throw new ConflictException('This template is already disabled');
       if (!template.currentVersionId) throw new ConflictException('Only a published template can be disabled');
@@ -159,6 +164,7 @@ export class TemplateService {
 
   async enable(id: string, actorId: string) {
     return this.prisma.$transaction(async (tx) => {
+      await this.lockTemplate(tx, id);
       const template = await this.requireTemplate(tx, id);
       if (!template.disabledAt) throw new ConflictException('This template is not disabled');
       const updated = await tx.checklistTemplate.update({ where: { id }, data: { disabledAt: null } });
@@ -211,6 +217,11 @@ export class TemplateService {
     await clearTree(tx, versionId);
     await writeTree(tx, versionId, doc);
     return tx.templateVersion.findUniqueOrThrow({ where: { id: versionId } });
+  }
+
+  // Serializes mutations of one template; the partial unique indexes on templateVersion are the backstop.
+  private async lockTemplate(tx: Tx, id: string): Promise<void> {
+    await tx.$queryRaw`SELECT "id" FROM "checklist_template" WHERE "id" = ${id}::uuid FOR UPDATE`;
   }
 
   private async requireTemplate(tx: Tx, id: string) {

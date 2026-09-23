@@ -7,7 +7,7 @@ import { acceptVersion } from './version-acceptance.js';
 
 const REFUSAL = {
   DISABLED: () => new ConflictException('This checklist has been disabled'),
-  NOT_PUBLISHED: () => new BadRequestException('This checklist version has not been published'),
+  NOT_PUBLISHED: () => new ConflictException('This checklist version has not been published'),
   SUPERSEDED: () => new ConflictException('This checklist has been updated. Refresh to get the latest version.'),
 } as const;
 

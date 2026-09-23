@@ -24,7 +24,11 @@ import { TemplateService } from './templates/template.service.js';
 const scopeProvider: ScopeProvider = { async for(): Promise<AuthzScope> { return { global: false, projectIds: [], siteIds: [] }; } };
 
 const projectInternalUrl = (): string => process.env['PROJECT_INTERNAL_URL'] ?? 'http://project:3004';
-const graceDays = (): number => Number(process.env['QC_RETIRED_VERSION_GRACE_DAYS'] ?? 7);
+function graceDays(): number {
+  const value = Number(process.env['QC_RETIRED_VERSION_GRACE_DAYS'] ?? 7);
+  if (!Number.isInteger(value) || value < 0) throw new Error('QC_RETIRED_VERSION_GRACE_DAYS must be a whole number of days');
+  return value;
+}
 
 function requireEnv(name: string): string {
   const value = process.env[name];

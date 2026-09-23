@@ -27,6 +27,7 @@ const INSTRUCTIONS = [
   'Fill Section No and Section Title on the first row of a section. Leave them blank on the rows below to stay in that section.',
   'Section numbers must be unique, and a section\'s rows must be together. Item numbers must be unique within their section.',
   'Item No and Requirement are required on every item row.',
+  'Section No and Item No are text: 1.10 stays 1.10.',
   'Severity: Normal or Critical. Blank means Normal.',
   'Response Type: Result only, Text, Number, Yes/No or Select. Blank means Result only.',
   'Options: only for Select items. Separate 2 to 50 choices with a semicolon, e.g. "Pole; Wall; Tower".',
@@ -76,6 +77,9 @@ export async function buildWorkbook(source: WorkbookSource): Promise<Buffer> {
     });
   }
   for (let row = 2; row <= VALIDATED_ROWS + 1; row += 1) {
+    // '@' keeps values like "1.10" as text so Excel doesn't coerce them to the number 1.1.
+    sheet.getCell(row, columnNumber('sectionNo')).numFmt = '@';
+    sheet.getCell(row, columnNumber('itemNo')).numFmt = '@';
     sheet.getCell(row, columnNumber('severity')).dataValidation = listOf(Object.values(SEVERITY_LABELS));
     sheet.getCell(row, columnNumber('responseType')).dataValidation = listOf(Object.values(RESPONSE_TYPE_LABELS));
     sheet.getCell(row, columnNumber('allowNa')).dataValidation = listOf(['Yes', 'No']);

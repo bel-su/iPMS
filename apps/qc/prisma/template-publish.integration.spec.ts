@@ -64,6 +64,17 @@ describe('publish', () => {
     expect(await prisma.templateVersion.count({ where: { templateId, status: 'PUBLISHED' } })).toBe(1);
     expect(await prisma.templateVersion.count({ where: { templateId, status: 'RETIRED' } })).toBe(1);
   });
+
+  it('does not let a concurrent discard delete the version a publish just created', async () => {
+    const { templateId } = await seedPublishedTemplate(prisma);
+    await service.startDraft(templateId, ACTOR);
+    await Promise.allSettled([service.publish(templateId, ACTOR), service.discardDraft(templateId, ACTOR)]);
+    expect(await prisma.templateVersion.count({ where: { templateId, status: 'PUBLISHED' } })).toBe(1);
+    const template = await prisma.checklistTemplate.findUniqueOrThrow({ where: { id: templateId } });
+    expect(template.currentVersionId).not.toBeNull();
+    const current = await prisma.templateVersion.findUnique({ where: { id: template.currentVersionId! } });
+    expect(current?.status).toBe('PUBLISHED');
+  });
 });
 
 describe('disable and enable', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import ExcelJS from 'exceljs';
 import { TemplateDocumentSchema, type TemplateDocument } from '@ipms/contracts';
+import { COLUMNS } from './columns.js';
 import { EXAMPLE_DOCUMENT, buildWorkbook } from './workbook.js';
 import { parseWorkbook } from './parse.js';
 
@@ -116,6 +117,32 @@ describe('values', () => {
   it('skips blank rows', async () => {
     const parsed = await parseWorkbook(await workbookOf([['1', 'EHS', '1.1', 'PPE'], ['', '', '', ''], ['', '', '1.2', 'Barricade']]));
     expect(parsed.document!.sections[0]!.items).toHaveLength(2);
+  });
+});
+
+describe('number columns stay text', () => {
+  it('keeps item numbers like "1.10" as text, and formats the Item No and Section No columns as text', async () => {
+    const doc: TemplateDocument = TemplateDocumentSchema.parse({
+      sections: [{
+        number: '1', title: 'Section',
+        items: Array.from({ length: 10 }, (_, i) => ({ number: `1.${i + 1}`, requirementText: `Item ${i + 1}` })),
+      }],
+    });
+    const file = await buildWorkbook({ metadata: { code: 'X', name: 'X', category: 'OTHER' }, version: null, document: doc });
+
+    const parsed = await parseWorkbook(file);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.document!.sections[0]!.items.map((item) => item.number)).toEqual(doc.sections[0]!.items.map((item) => item.number));
+    expect(parsed.document!.sections[0]!.items.map((item) => item.number)).toContain('1.10');
+
+    const workbook = new ExcelJS.Workbook();
+    // exceljs ships an older, non-generic Buffer type; identical at runtime.
+    await workbook.xlsx.load(file as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    const sheet = workbook.getWorksheet('Checklist')!;
+    const itemNoColumn = COLUMNS.findIndex((column) => column.key === 'itemNo') + 1;
+    const sectionNoColumn = COLUMNS.findIndex((column) => column.key === 'sectionNo') + 1;
+    expect(sheet.getCell(2, itemNoColumn).numFmt).toBe('@');
+    expect(sheet.getCell(2, sectionNoColumn).numFmt).toBe('@');
   });
 });
 
