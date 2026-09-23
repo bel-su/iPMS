@@ -167,3 +167,14 @@ describe('authFetch — outcomes', () => {
     expect(result.state).toBe('unavailable');
   });
 });
+
+describe('authFetch — validation details', () => {
+  it('keeps the string-valued details of a validation failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(422, {
+      error: { code: 'VALIDATION_FAILED', message: 'Request validation failed', correlationId: 'c-1', details: { 'sections.0.title': 'Required', odd: 5 } },
+    })));
+    const result = await authFetch('/api/v1/qc/templates/t/draft');
+    expect(result).toMatchObject({ state: 'unavailable', status: 422, details: { 'sections.0.title': 'Required' } });
+    expect((result as { details: Record<string, unknown> }).details).not.toHaveProperty('odd');
+  });
+});

@@ -26,7 +26,7 @@ export type ApiResult<T> =
   /** Signed in, but this user may not do this. Sending them to sign in again would not help. */
   | { state: 'forbidden'; message: string; correlationId?: string }
   /** Anything else: unreachable, 5xx, a rejected request body, an undecodable answer. */
-  | { state: 'unavailable'; status: number | null; message: string; code?: ErrorCode; correlationId?: string };
+  | { state: 'unavailable'; status: number | null; message: string; code?: ErrorCode; correlationId?: string; details?: Record<string, string> };
 
 export interface ApiRequest {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
@@ -63,15 +63,21 @@ function buildQuery(query: ApiRequest['query']): string {
  * raw body instead would hand a page whatever an upstream produced — a stack
  * trace, a proxy's HTML error page — as something renderable.
  */
-async function describeFailure(response: Response): Promise<{ message: string; code?: ErrorCode; correlationId?: string }> {
+async function describeFailure(response: Response): Promise<{ message: string; code?: ErrorCode; correlationId?: string; details?: Record<string, string> }> {
   try {
     const payload: unknown = await response.json();
     const envelope = (payload as { error?: Record<string, unknown> } | null)?.error;
     if (envelope && typeof envelope['message'] === 'string' && envelope['message'].length > 0) {
+      const rawDetails = envelope['details'];
+      // Only strings survive: a field path mapped to its message is all a form can render.
+      const details = rawDetails && typeof rawDetails === 'object'
+        ? Object.fromEntries(Object.entries(rawDetails as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+        : undefined;
       return {
         message: envelope['message'],
         ...(typeof envelope['code'] === 'string' ? { code: envelope['code'] as ErrorCode } : {}),
         ...(typeof envelope['correlationId'] === 'string' ? { correlationId: envelope['correlationId'] } : {}),
+        ...(details && Object.keys(details).length > 0 ? { details } : {}),
       };
     }
   } catch {
