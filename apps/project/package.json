@@ -13,6 +13,7 @@
     "@fastify/multipart": "10.1.1",
     "@ipms/authz": "workspace:*",
     "@ipms/contracts": "workspace:*",
+    "@ipms/events": "workspace:*",
     "@ipms/geo": "workspace:*",
     "@ipms/observability": "workspace:*",
     "@ipms/persistence": "workspace:*",
