@@ -34,7 +34,8 @@ describe('id parsing', () => {
     const service = { deleteProject: vi.fn() };
     // The import service is irrelevant to id parsing, but the constructor takes it.
     const controller = new ProjectController(service as unknown as ProjectService, {} as unknown as SiteImportService);
-    expect(() => controller.remove('not-a-uuid')).toThrow();
+    const scope = { global: true, projectIds: [], siteIds: [] };
+    expect(() => controller.remove(scope, 'not-a-uuid')).toThrow();
     expect(service.deleteProject).not.toHaveBeenCalled();
   });
 });

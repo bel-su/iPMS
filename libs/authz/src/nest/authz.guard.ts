@@ -71,7 +71,9 @@ export class AuthzGuard implements CanActivate {
     ]);
     if (!metadata) return true;
 
-    const request = context.switchToHttp().getRequest<{ user?: AuthzUser; authzDecision?: unknown }>();
+    const request = context.switchToHttp().getRequest<{
+      user?: AuthzUser; authzDecision?: unknown; authzScope?: AuthzScope;
+    }>();
     const user = request.user;
     if (!user) throw new UnauthorizedException('Authentication required');
 
@@ -91,6 +93,20 @@ export class AuthzGuard implements CanActivate {
     });
 
     request.authzDecision = decision;
+
+    /**
+     * The guard has already resolved this user's replicated scope to answer the
+     * permission question. Handlers need the same value to constrain their
+     * queries -- `scopeWhere(scope)` is the platform's actual authorization
+     * boundary, because `check()` returns allowed as soon as the permission is
+     * held when no resource is passed, and this guard passes none.
+     *
+     * Stashed rather than re-read, so a handler cannot see a different scope
+     * from the one the guard just decided on. Two independent reads either side
+     * of a concurrent revocation would disagree, and the handler's read is the
+     * one that governs what data leaves the process.
+     */
+    request.authzScope = scope;
 
     // The reason is recorded server-side but never returned to the client.
     if (!decision.allowed) throw new ForbiddenException('Forbidden');

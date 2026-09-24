@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma-clients/project';
+import type { AuthzScope } from '@ipms/authz';
 import { ProjectService } from './project.service.js';
 
 const PROJECT = { id: 'p-1', code: 'ALPHA', name: 'Alpha' };
+
+/**
+ * These tests are about behaviour other than scoping, so they run as an
+ * unrestricted caller. Scoping itself is covered in scope.integration.spec.ts
+ * and by the per-model rules in scope/project-scope.spec.ts.
+ */
+const GLOBAL: AuthzScope = { global: true, projectIds: [], siteIds: [] };
 
 /**
  * A hand-written Prisma double.
@@ -15,17 +23,22 @@ const PROJECT = { id: 'p-1', code: 'ALPHA', name: 'Alpha' };
 function makePrisma() {
   return {
     project: {
-      findUnique: vi.fn().mockResolvedValue(PROJECT),
+      // findFirst, not findUnique: the scope filter is part of the lookup, so
+      // the service can no longer address a row by primary key alone.
+      findFirst: vi.fn().mockResolvedValue(PROJECT),
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn(), update: vi.fn(), delete: vi.fn(),
     },
+    // findUnique as well as findFirst: siteGeofence and internalTask are the
+    // two service-to-service reads that are deliberately NOT scoped, so they
+    // still address a row by primary key.
     site: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    taskType: { findFirst: vi.fn(), findUnique: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    milestone: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    taskType: { findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    milestone: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     milestoneRequirement: { deleteMany: vi.fn(), createMany: vi.fn() },
     task: {
       findMany: vi.fn().mockResolvedValue([]),
-      findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn().mockResolvedValue(0),
+      findFirst: vi.fn(), findUnique: vi.fn(), count: vi.fn().mockResolvedValue(0),
       create: vi.fn(), update: vi.fn(), delete: vi.fn(),
     },
     region: { upsert: vi.fn() },
@@ -44,22 +57,24 @@ describe('listTasks', () => {
   beforeEach(() => { prisma = makePrisma(); });
 
   it("lists a project's tasks newest first", async () => {
-    await service(prisma).listTasks('p-1', {});
+    await service(prisma).listTasks(GLOBAL, 'p-1', {});
     expect(prisma.task.findMany).toHaveBeenCalledWith({
-      where: { projectId: 'p-1' },
+      // AND, not a spread: scopeWhere contributes an `OR` key, and a sibling
+      // `OR` from a caller filter would collide and silently drop one of them.
+      where: { AND: [{ projectId: 'p-1' }, {}] },
       orderBy: { id: 'desc' },
     });
   });
 
   it('narrows by site and status when asked', async () => {
-    await service(prisma).listTasks('p-1', { siteId: 's-1', status: 'ONGOING' });
+    await service(prisma).listTasks(GLOBAL, 'p-1', { siteId: 's-1', status: 'ONGOING' });
     expect(prisma.task.findMany.mock.calls[0]![0].where)
-      .toEqual({ projectId: 'p-1', siteId: 's-1', status: 'ONGOING' });
+      .toEqual({ AND: [{ projectId: 'p-1' }, {}, { siteId: 's-1' }, { status: 'ONGOING' }] });
   });
 
   it('refuses a project that does not exist', async () => {
-    prisma.project.findUnique.mockResolvedValue(null);
-    await expect(service(prisma).listTasks('missing', {})).rejects.toBeInstanceOf(NotFoundException);
+    prisma.project.findFirst.mockResolvedValue(null);
+    await expect(service(prisma).listTasks(GLOBAL, 'missing', {})).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -67,19 +82,19 @@ describe('updateSite', () => {
   let prisma: Prisma;
   beforeEach(() => {
     prisma = makePrisma();
-    prisma.site.findUnique.mockResolvedValue({ id: 's-1', projectId: 'p-1', siteCode: 'S-1' });
+    prisma.site.findFirst.mockResolvedValue({ id: 's-1', projectId: 'p-1', siteCode: 'S-1' });
   });
 
   it('writes only the fields given', async () => {
     prisma.site.update.mockResolvedValue({ id: 's-1' });
-    await service(prisma).updateSite('s-1', { name: 'Renamed' });
+    await service(prisma).updateSite(GLOBAL, 's-1', { name: 'Renamed' });
     expect(prisma.site.update).toHaveBeenCalledWith({ where: { id: 's-1' }, data: { name: 'Renamed' } });
   });
 
   it('upserts the region when one is named, and stores its id', async () => {
     prisma.region.upsert.mockResolvedValue({ id: 'r-9' });
     prisma.site.update.mockResolvedValue({ id: 's-1' });
-    await service(prisma).updateSite('s-1', { regionName: 'North' });
+    await service(prisma).updateSite(GLOBAL, 's-1', { regionName: 'North' });
     expect(prisma.region.upsert).toHaveBeenCalledWith({
       where: { projectId_name: { projectId: 'p-1', name: 'North' } },
       update: {}, create: { id: expect.any(String), projectId: 'p-1', name: 'North' },
@@ -89,26 +104,26 @@ describe('updateSite', () => {
 
   it('clears the region when regionName is explicitly null, and upserts nothing', async () => {
     prisma.site.update.mockResolvedValue({ id: 's-1' });
-    await service(prisma).updateSite('s-1', { regionName: null });
+    await service(prisma).updateSite(GLOBAL, 's-1', { regionName: null });
     expect(prisma.region.upsert).not.toHaveBeenCalled();
     expect(prisma.site.update.mock.calls[0]![0].data).toEqual({ regionId: null });
   });
 
   it('leaves the region alone when regionName is absent', async () => {
     prisma.site.update.mockResolvedValue({ id: 's-1' });
-    await service(prisma).updateSite('s-1', { name: 'Renamed' });
+    await service(prisma).updateSite(GLOBAL, 's-1', { name: 'Renamed' });
     expect(prisma.site.update.mock.calls[0]![0].data).toEqual({ name: 'Renamed' });
   });
 
   it('writes nulls straight through for the other clearable fields', async () => {
     prisma.site.update.mockResolvedValue({ id: 's-1' });
-    await service(prisma).updateSite('s-1', { latitude: null, longitude: null, city: null });
+    await service(prisma).updateSite(GLOBAL, 's-1', { latitude: null, longitude: null, city: null });
     expect(prisma.site.update.mock.calls[0]![0].data).toEqual({ latitude: null, longitude: null, city: null });
   });
 
   it('refuses a site that does not exist', async () => {
-    prisma.site.findUnique.mockResolvedValue(null);
-    await expect(service(prisma).updateSite('missing', { name: 'x' })).rejects.toBeInstanceOf(NotFoundException);
+    prisma.site.findFirst.mockResolvedValue(null);
+    await expect(service(prisma).updateSite(GLOBAL, 'missing', { name: 'x' })).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -116,17 +131,17 @@ describe('updateTask', () => {
   let prisma: Prisma;
   beforeEach(() => {
     prisma = makePrisma();
-    prisma.task.findUnique.mockResolvedValue({ id: 't-1', projectId: 'p-1' });
+    prisma.task.findFirst.mockResolvedValue({ id: 't-1', projectId: 'p-1' });
     prisma.task.update.mockResolvedValue({ id: 't-1' });
   });
 
   it('unassigns when assigneeId is explicitly null', async () => {
-    await service(prisma).updateTask('t-1', { assigneeId: null });
+    await service(prisma).updateTask(GLOBAL, 't-1', { assigneeId: null });
     expect(prisma.task.update.mock.calls[0]![0].data).toEqual({ assigneeId: null });
   });
 
   it('leaves the assignee alone when the field is absent', async () => {
-    await service(prisma).updateTask('t-1', { title: 'Renamed' });
+    await service(prisma).updateTask(GLOBAL, 't-1', { title: 'Renamed' });
     expect(prisma.task.update.mock.calls[0]![0].data).toEqual({ title: 'Renamed' });
   });
 });
@@ -135,14 +150,14 @@ describe('updateMilestone', () => {
   let prisma: Prisma;
   beforeEach(() => {
     prisma = makePrisma();
-    prisma.milestone.findUnique.mockResolvedValue({ id: 'm-1', projectId: 'p-1' });
+    prisma.milestone.findFirst.mockResolvedValue({ id: 'm-1', projectId: 'p-1' });
     prisma.milestone.update.mockResolvedValue({ id: 'm-1' });
     prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
   });
 
   it('replaces the requirement set wholesale when taskTypeIds is given', async () => {
     prisma.taskType.count.mockResolvedValue(2);
-    await service(prisma).updateMilestone('m-1', { taskTypeIds: ['tt-1', 'tt-2'] });
+    await service(prisma).updateMilestone(GLOBAL, 'm-1', { taskTypeIds: ['tt-1', 'tt-2'] });
     expect(prisma.milestoneRequirement.deleteMany).toHaveBeenCalledWith({ where: { milestoneId: 'm-1' } });
     expect(prisma.milestoneRequirement.createMany).toHaveBeenCalledWith({
       data: [{ milestoneId: 'm-1', taskTypeId: 'tt-1' }, { milestoneId: 'm-1', taskTypeId: 'tt-2' }],
@@ -150,13 +165,13 @@ describe('updateMilestone', () => {
   });
 
   it('leaves the requirement set alone when taskTypeIds is absent', async () => {
-    await service(prisma).updateMilestone('m-1', { name: 'Handover' });
+    await service(prisma).updateMilestone(GLOBAL, 'm-1', { name: 'Handover' });
     expect(prisma.milestoneRequirement.deleteMany).not.toHaveBeenCalled();
   });
 
   it('refuses a task type from another project', async () => {
     prisma.taskType.count.mockResolvedValue(1);
-    await expect(service(prisma).updateMilestone('m-1', { taskTypeIds: ['tt-1', 'other'] }))
+    await expect(service(prisma).updateMilestone(GLOBAL, 'm-1', { taskTypeIds: ['tt-1', 'other'] }))
       .rejects.toBeInstanceOf(BadRequestException);
   });
 });
@@ -165,7 +180,7 @@ describe('archiveProject', () => {
   it('sets the status to CANCELLED without touching anything else', async () => {
     const prisma = makePrisma();
     prisma.project.update.mockResolvedValue({ id: 'p-1', status: 'CANCELLED' });
-    await service(prisma).archiveProject('p-1');
+    await service(prisma).archiveProject(GLOBAL, 'p-1');
     expect(prisma.project.update).toHaveBeenCalledWith({ where: { id: 'p-1' }, data: { status: 'CANCELLED' } });
   });
 });
@@ -176,24 +191,24 @@ describe('deleteProject', () => {
 
   it('deletes a project that has no tasks', async () => {
     prisma.task.count.mockResolvedValue(0);
-    await service(prisma).deleteProject('p-1');
+    await service(prisma).deleteProject(GLOBAL, 'p-1');
     expect(prisma.project.delete).toHaveBeenCalledWith({ where: { id: 'p-1' } });
   });
 
   it('refuses while any task remains, because the cascade would take them all', async () => {
     prisma.task.count.mockResolvedValue(3);
-    await expect(service(prisma).deleteProject('p-1')).rejects.toBeInstanceOf(ConflictException);
+    await expect(service(prisma).deleteProject(GLOBAL, 'p-1')).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.project.delete).not.toHaveBeenCalled();
   });
 
   it('says how many tasks are in the way, so the message is actionable', async () => {
     prisma.task.count.mockResolvedValue(3);
-    await expect(service(prisma).deleteProject('p-1')).rejects.toThrow(/3 task/);
+    await expect(service(prisma).deleteProject(GLOBAL, 'p-1')).rejects.toThrow(/3 task/);
   });
 
   it('refuses a project that does not exist', async () => {
-    prisma.project.findUnique.mockResolvedValue(null);
-    await expect(service(prisma).deleteProject('missing')).rejects.toBeInstanceOf(NotFoundException);
+    prisma.project.findFirst.mockResolvedValue(null);
+    await expect(service(prisma).deleteProject(GLOBAL, 'missing')).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -201,17 +216,17 @@ describe('deleteSite', () => {
   let prisma: Prisma;
   beforeEach(() => {
     prisma = makePrisma();
-    prisma.site.findUnique.mockResolvedValue({ id: 's-1', projectId: 'p-1' });
+    prisma.site.findFirst.mockResolvedValue({ id: 's-1', projectId: 'p-1' });
   });
 
   it('refuses while a task references the site', async () => {
     prisma.task.count.mockResolvedValue(1);
-    await expect(service(prisma).deleteSite('s-1')).rejects.toBeInstanceOf(ConflictException);
+    await expect(service(prisma).deleteSite(GLOBAL, 's-1')).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('deletes a site with no tasks', async () => {
     prisma.task.count.mockResolvedValue(0);
-    await service(prisma).deleteSite('s-1');
+    await service(prisma).deleteSite(GLOBAL, 's-1');
     expect(prisma.site.delete).toHaveBeenCalledWith({ where: { id: 's-1' } });
   });
 });
@@ -219,9 +234,9 @@ describe('deleteSite', () => {
 describe('deleteTaskType', () => {
   it('refuses while a task uses it, rather than letting Prisma raise a restrict error', async () => {
     const prisma = makePrisma();
-    prisma.taskType.findUnique.mockResolvedValue({ id: 'tt-1', projectId: 'p-1' });
+    prisma.taskType.findFirst.mockResolvedValue({ id: 'tt-1', projectId: 'p-1' });
     prisma.task.count.mockResolvedValue(2);
-    await expect(service(prisma).deleteTaskType('tt-1')).rejects.toBeInstanceOf(ConflictException);
+    await expect(service(prisma).deleteTaskType(GLOBAL, 'tt-1')).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.taskType.delete).not.toHaveBeenCalled();
   });
 });
@@ -229,8 +244,8 @@ describe('deleteTaskType', () => {
 describe('deleteMilestone', () => {
   it('deletes, letting the requirements cascade', async () => {
     const prisma = makePrisma();
-    prisma.milestone.findUnique.mockResolvedValue({ id: 'm-1', projectId: 'p-1' });
-    await service(prisma).deleteMilestone('m-1');
+    prisma.milestone.findFirst.mockResolvedValue({ id: 'm-1', projectId: 'p-1' });
+    await service(prisma).deleteMilestone(GLOBAL, 'm-1');
     expect(prisma.milestone.delete).toHaveBeenCalledWith({ where: { id: 'm-1' } });
   });
 });
@@ -240,13 +255,13 @@ describe('deleteTask', () => {
   beforeEach(() => { prisma = makePrisma(); });
 
   it('refuses a task that carries QC evidence', async () => {
-    prisma.task.findUnique.mockResolvedValue({ id: 't-1', currentSubmissionId: 'sub-1' });
-    await expect(service(prisma).deleteTask('t-1')).rejects.toBeInstanceOf(ConflictException);
+    prisma.task.findFirst.mockResolvedValue({ id: 't-1', currentSubmissionId: 'sub-1' });
+    await expect(service(prisma).deleteTask(GLOBAL, 't-1')).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('deletes a task with no submission', async () => {
-    prisma.task.findUnique.mockResolvedValue({ id: 't-1', currentSubmissionId: null });
-    await service(prisma).deleteTask('t-1');
+    prisma.task.findFirst.mockResolvedValue({ id: 't-1', currentSubmissionId: null });
+    await service(prisma).deleteTask(GLOBAL, 't-1');
     expect(prisma.task.delete).toHaveBeenCalledWith({ where: { id: 't-1' } });
   });
 });
@@ -254,7 +269,7 @@ describe('deleteTask', () => {
 describe('createSite geofence', () => {
   it('stores the mode and radius', async () => {
     const prisma = makePrisma();
-    await service(prisma).createSite('p-1', {
+    await service(prisma).createSite(GLOBAL, 'p-1', {
       siteCode: 'S1', name: 'One', geofenceMode: 'CUSTOM', geofenceRadiusM: 250,
     } as never);
     expect(prisma.site.create).toHaveBeenCalledWith({
@@ -264,7 +279,7 @@ describe('createSite geofence', () => {
 
   it('defaults an unspecified site to INHERIT with a null radius', async () => {
     const prisma = makePrisma();
-    await service(prisma).createSite('p-1', { siteCode: 'S1', name: 'One', geofenceMode: 'INHERIT' } as never);
+    await service(prisma).createSite(GLOBAL, 'p-1', { siteCode: 'S1', name: 'One', geofenceMode: 'INHERIT' } as never);
     expect(prisma.site.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ geofenceMode: 'INHERIT', geofenceRadiusM: null }),
     });

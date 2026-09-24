@@ -6,7 +6,7 @@ import {
   type OverrideProvider, type ScopeProvider,
 } from './authz.guard.js';
 import { PERMISSION_KEY } from './require-permission.decorator.js';
-import type { AuthzOverride } from '../types.js';
+import type { AuthzOverride, AuthzScope } from '../types.js';
 
 function ctx(user: unknown): ExecutionContext {
   return {
@@ -20,7 +20,7 @@ const activeUser = { id: 'u-1', roles: [], permissions: ['task.view'], tokenVers
 
 function guardWith(
   metadata: unknown,
-  scope = { global: true, projectIds: [], siteIds: [] },
+  scope: AuthzScope = { global: true, projectIds: [], siteIds: [] },
   overrides: AuthzOverride[] = [],
 ) {
   const reflector = { getAllAndOverride: vi.fn().mockReturnValue(metadata) };
@@ -64,6 +64,37 @@ describe('AuthzGuard', () => {
     } as unknown as ExecutionContext;
     await guard.canActivate(context);
     expect(request['authzDecision']).toMatchObject({ allowed: true, reason: 'ALLOWED' });
+  });
+
+  it('attaches the resolved scope, so handlers can constrain their queries', async () => {
+    // The guard has already paid for this read. Without stashing it, every
+    // handler that needs to constrain a query resolves the same scope a second
+    // time, and the two reads can disagree across a concurrent revocation --
+    // with the handler's read governing what data leaves the process.
+    const scope = { global: false, projectIds: ['p-1'], siteIds: ['s-9'] };
+    const guard = guardWith({ permission: 'task.view' }, scope);
+    const request: Record<string, unknown> = { user: activeUser };
+    const context = {
+      switchToHttp: () => ({ getRequest: () => request }),
+      getHandler: () => () => undefined,
+      getClass: () => class {},
+    } as unknown as ExecutionContext;
+    await guard.canActivate(context);
+    expect(request['authzScope']).toEqual(scope);
+  });
+
+  it('does not attach a scope when the route has no permission metadata', async () => {
+    // The guard short-circuits before resolving one. A handler that reads the
+    // scope on such a route must fail loudly rather than silently see undefined
+    // and fall back to something permissive.
+    const request: Record<string, unknown> = { user: activeUser };
+    const context = {
+      switchToHttp: () => ({ getRequest: () => request }),
+      getHandler: () => () => undefined,
+      getClass: () => class {},
+    } as unknown as ExecutionContext;
+    await guardWith(undefined).canActivate(context);
+    expect(request['authzScope']).toBeUndefined();
   });
 });
 

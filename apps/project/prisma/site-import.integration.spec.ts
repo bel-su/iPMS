@@ -46,8 +46,11 @@ const row = (over: Record<string, unknown>) => ({ rowNumber: 2, siteCode: 'S1', 
  * Deliberate: these tests exercise what Postgres enforces, so one of them
  * sends a name longer than the schema would ever allow through the endpoint.
  */
+/** Unrestricted: these tests are about what Postgres enforces, not about scope. */
+const GLOBAL = { global: true, projectIds: [], siteIds: [] };
+
 const commit = (payload: { columns: string[]; rows: Array<Record<string, unknown>> }) =>
-  imports.commit(projectId, payload as never);
+  imports.commit(GLOBAL, projectId, payload as never);
 
 describe('commit', () => {
   it('creates every row in one go', async () => {
