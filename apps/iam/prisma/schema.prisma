@@ -35,6 +35,7 @@ model User {
   updatedAt    DateTime  @updatedAt @db.Timestamptz(6)
 
   roles         UserRole[]
+  globalScopes  UserGlobalScope[]
   projectScopes UserProjectScope[]
   siteScopes    UserSiteScope[]
   overrides     UserPermissionOverride[]
@@ -112,6 +113,34 @@ model UserRole {
   // `migrate dev`), so introspection is intentionally left without one.
   @@index([userId])
   @@map("user_role")
+}
+
+/// Global reach: this user sees every project and every site.
+///
+/// A table rather than a flag on User, and rather than being inferred from a
+/// role code, because scope is replicated to other services over NATS and must
+/// never travel in the JWT (architecture §6). A row here emits
+/// `iam.scope.granted` with level GLOBAL — a level the `IamScopeGranted`
+/// payload already declared; only the producer was missing.
+///
+/// Before this table existed, `toScope` hardcoded `global: false` and nothing
+/// in the platform ever had global reach. That went unnoticed because no
+/// service enforced scope at query level; `project` is the first that does,
+/// and without a row here the SUPER_ADMIN holds every permission and can see
+/// nothing at all.
+///
+/// A plain `@@unique` is safe here, unlike on UserRole: `userId` is NOT NULL,
+/// so the NULL-distinctness hazard that forced partial indexes there does not
+/// apply.
+model UserGlobalScope {
+  id        String   @id @db.Uuid
+  userId    String   @unique @db.Uuid
+  createdBy String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_global_scope")
 }
 
 model UserProjectScope {

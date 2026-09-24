@@ -21,7 +21,20 @@ export const STREAMS: Record<'IAM' | 'AUDIT', StreamDefinition> = {
     name: 'IAM',
     subjects: ['iam.>'],
     maxAgeMs: 7 * 24 * 60 * 60 * 1000,
-    durableConsumers: ['project-scope-cache', 'qc-scope-cache'],
+    /**
+     * One durable per subject, not one per consumer.
+     *
+     * A JetStream durable carries a single `filter_subject`. Creating one
+     * durable and subscribing it to several subjects silently keeps only the
+     * first filter -- `consumers.add` reports "consumer already exists" for the
+     * rest -- so the other subjects are never delivered at all. `project` hit
+     * exactly that: revocations and deactivations went nowhere while grants
+     * flowed, which fails open.
+     */
+    durableConsumers: [
+      'project-scope-granted', 'project-scope-revoked', 'project-scope-deactivated',
+      'qc-scope-cache',
+    ],
   },
   AUDIT: {
     name: 'AUDIT',

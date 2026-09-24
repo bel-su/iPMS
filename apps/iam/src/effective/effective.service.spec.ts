@@ -6,9 +6,10 @@ const USER = uuidv7();
 const FUTURE = new Date('2027-01-01T00:00:00Z');
 const PAST = new Date('2026-01-01T00:00:00Z');
 
-function build(overrides: unknown[] = []) {
+function build(overrides: unknown[] = [], globalScopes: unknown[] = []) {
   const user = {
     id: USER, isActive: true, tokenVersion: 0,
+    globalScopes,
     roles: [{
       role: { code: 'FIELD_ENGINEER', isActive: true, permissions: [
         { permission: { code: 'task.view' } }, { permission: { code: 'task.update' } },
@@ -151,7 +152,7 @@ describe('EffectiveService.simulate', () => {
   it('denies a deactivated user before anything else', async () => {
     const { service, prisma } = build();
     prisma.user.findUnique.mockResolvedValue({
-      id: USER, isActive: false, tokenVersion: 0, roles: [], projectScopes: [], siteScopes: [], overrides: [],
+      id: USER, isActive: false, tokenVersion: 0, roles: [], globalScopes: [], projectScopes: [], siteScopes: [], overrides: [],
     });
     const result = await service.simulate({ userId: USER, permissionCode: 'task.view' });
     expect(result.reason).toBe('USER_INACTIVE');

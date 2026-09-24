@@ -19,6 +19,8 @@ interface BuildOptions {
   projectScope?: unknown;
   permission?: unknown;
   existingOverride?: unknown;
+  existingGlobalScope?: unknown;
+  globalScopeRow?: unknown;
   cascadedSites?: unknown[];
   overrides?: unknown[];
 }
@@ -45,6 +47,11 @@ function build(opts: BuildOptions = {}) {
       delete: vi.fn().mockResolvedValue({}),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    userGlobalScope: {
+      findUnique: vi.fn().mockResolvedValue(opts.existingGlobalScope ?? null),
+      create: vi.fn().mockImplementation(({ data }) => Promise.resolve(data)),
+      deleteMany: vi.fn().mockResolvedValue({ count: opts.existingGlobalScope ? 1 : 0 }),
+    },
     userPermissionOverride: {
       create: vi.fn().mockImplementation(({ data }) => Promise.resolve(data)),
       findUnique: vi.fn().mockResolvedValue(
@@ -56,6 +63,7 @@ function build(opts: BuildOptions = {}) {
   };
   const prisma = {
     $transaction: vi.fn().mockImplementation((fn) => fn(tx)),
+    userGlobalScope: { findUnique: vi.fn().mockResolvedValue(opts.globalScopeRow ?? null) },
     userProjectScope: { findMany: vi.fn().mockResolvedValue([{ projectId: PROJECT }]) },
     userSiteScope: { findMany: vi.fn().mockResolvedValue([{ siteId: SITE }]) },
     userPermissionOverride: { findMany: vi.fn().mockResolvedValue(opts.overrides ?? []) },
@@ -474,7 +482,7 @@ describe('ScopesService.revokeOverride', () => {
 describe('ScopesService.listForUser', () => {
   it('returns the project and site ids the user holds', async () => {
     const { service } = build();
-    await expect(service.listForUser(USER)).resolves.toEqual({ projectIds: [PROJECT], siteIds: [SITE] });
+    await expect(service.listForUser(USER)).resolves.toEqual({ global: false, projectIds: [PROJECT], siteIds: [SITE] });
   });
 
   /**
@@ -530,5 +538,91 @@ describe('ScopesService.listOverridesForUser', () => {
   it('returns an empty list for a user with no overrides', async () => {
     const { service } = build({ overrides: [] });
     await expect(service.listOverridesForUser(USER)).resolves.toEqual([]);
+  });
+});
+
+describe('ScopesService.grantGlobal', () => {
+  it('creates the row and emits a GLOBAL scope event', async () => {
+    const { service, tx } = build();
+    await service.grantGlobal(USER, ACTOR);
+    expect(tx.userGlobalScope.create).toHaveBeenCalled();
+    expect(payloadsOf(tx, 'iam.scope.granted')).toEqual([
+      { userId: USER, level: 'GLOBAL', projectId: null, siteId: null },
+    ]);
+  });
+
+  it('audits the grant', async () => {
+    const { service, tx } = build();
+    await service.grantGlobal(USER, ACTOR);
+    expect(subjectsOf(tx)).toContain('audit.event.recorded');
+  });
+
+  it('bumps the token version so the change takes effect immediately', async () => {
+    // Global scope changes the answer to every authorization question at once.
+    // Unlike a project grant -- which each service re-reads from its own
+    // projection on the next request -- an outstanding token must not survive
+    // this for up to its full TTL.
+    const { service, versions } = build();
+    await service.grantGlobal(USER, ACTOR);
+    expect(versions.publish).toHaveBeenCalled();
+  });
+
+  it('is idempotent: a second grant writes no row and emits nothing', async () => {
+    const { service, tx } = build({ existingGlobalScope: { id: uuidv7() } });
+    await service.grantGlobal(USER, ACTOR);
+    expect(tx.userGlobalScope.create).not.toHaveBeenCalled();
+    expect(subjectsOf(tx)).toEqual([]);
+  });
+
+  it('refuses an actor granting global scope to their own account', async () => {
+    // The same self-escalation rule createOverride enforces. Granting yourself
+    // global reach is the single largest privilege escalation available.
+    const { service } = build();
+    await expect(service.grantGlobal(ACTOR, ACTOR)).rejects.toThrow(/own account/i);
+  });
+
+  it('refuses a user that does not exist', async () => {
+    const { service } = build({ user: null });
+    await expect(service.grantGlobal(USER, ACTOR)).rejects.toThrow(/not found/i);
+  });
+});
+
+describe('ScopesService.revokeGlobal', () => {
+  it('emits a GLOBAL revocation and bumps the token version', async () => {
+    const { service, tx, versions } = build({ existingGlobalScope: { id: uuidv7() } });
+    await service.revokeGlobal(USER, ACTOR);
+    expect(payloadsOf(tx, 'iam.scope.revoked')).toEqual([
+      { userId: USER, level: 'GLOBAL', projectId: null, siteId: null },
+    ]);
+    expect(versions.publish).toHaveBeenCalled();
+  });
+
+  it('does nothing when the user had no global scope', async () => {
+    const { service, tx, versions } = build();
+    await service.revokeGlobal(USER, ACTOR);
+    expect(subjectsOf(tx)).toEqual([]);
+    expect(versions.publish).not.toHaveBeenCalled();
+  });
+
+  it('refuses an actor revoking global scope from their own account', async () => {
+    const { service } = build({ existingGlobalScope: { id: uuidv7() } });
+    await expect(service.revokeGlobal(ACTOR, ACTOR)).rejects.toThrow(/own account/i);
+  });
+});
+
+describe('ScopesService.listForUser', () => {
+  it('reports global reach as its own flag, not as empty lists', async () => {
+    // Empty project and site lists mean "granted nothing", which is the
+    // opposite of global reach. A scope screen that inferred one from the other
+    // would tell an operator the reverse of the truth.
+    const { service } = build({ globalScopeRow: { id: uuidv7() } });
+    expect(await service.listForUser(USER)).toEqual({
+      global: true, projectIds: [PROJECT], siteIds: [SITE],
+    });
+  });
+
+  it('reports no global reach when there is no grant', async () => {
+    const { service } = build();
+    expect(await service.listForUser(USER)).toMatchObject({ global: false });
   });
 });
