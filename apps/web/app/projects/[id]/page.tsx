@@ -4,6 +4,7 @@ import type { ApiResult } from '../../lib/api-client';
 import { StatePage } from '../../shell';
 import { ProjectFrame, projectProblem } from './frame';
 import { STATUS_LABEL, formatDay, landingFor, myTasks, summarizeProject } from './summary';
+import { taskKind } from './work-orders/labels';
 
 function Metric({ icon, label, value, detail, tone }: { icon: string; label: string; value: number; detail: string; tone: string }) {
   return <article className="metric-card"><div className="metric-heading"><span className={`metric-icon ${tone}`}>{icon}</span><span>{label}</span></div><strong>{value}</strong><p>{detail}</p></article>;
@@ -152,7 +153,7 @@ function EngineerTasks({ project, tasks, user }: { project: ProjectDetail; tasks
                   <tr key={task.id}>
                     <td>{task.title}</td>
                     <td><code>{siteCode.get(task.siteId) ?? '—'}</code></td>
-                    <td>{taskType.get(task.taskTypeId) ?? '—'}</td>
+                    <td>{taskKind(task, taskType)}</td>
                     <td><span className={`badge ${STATUS_LABEL[task.status].tone}`}>{STATUS_LABEL[task.status].label}</span></td>
                     <td>{task.plannedCompletionAt ? formatDay(task.plannedCompletionAt) : '—'}</td>
                   </tr>

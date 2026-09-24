@@ -9,6 +9,7 @@ const ACTOR = uuidv7();
 function build() {
   const users = {
     list: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 }),
+    directory: vi.fn().mockResolvedValue([]),
     get: vi.fn().mockResolvedValue({ id: ID }),
     create: vi.fn().mockResolvedValue({ id: ID }),
     update: vi.fn().mockResolvedValue({ id: ID }),
@@ -31,6 +32,8 @@ describe('UsersController permissions', () => {
   it('guards every route with the permission the catalog defines for it', () => {
     expect(permissionOf('list')).toBe('user.view');
     expect(permissionOf('get')).toBe('user.view');
+    // Anyone who works with tasks needs assignee names; see UsersService.directory.
+    expect(permissionOf('directory')).toBe('task.view');
     expect(permissionOf('create')).toBe('user.create');
     expect(permissionOf('update')).toBe('user.update');
     expect(permissionOf('deactivate')).toBe('user.deactivate');

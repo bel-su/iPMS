@@ -24,6 +24,18 @@ export class UsersController {
   }
 
   /**
+   * Names for task assignment and display. `task.view`, not `user.view`: see
+   * `UsersService.directory` for why the response is narrower than `list`.
+   * Declared before `users/:id`, though the router prefers the static segment
+   * regardless.
+   */
+  @Get('users/directory')
+  @RequirePermission('task.view')
+  async directory() {
+    return this.users.directory();
+  }
+
+  /**
    * Not object-gated: `user.view` grants the directory, and a project manager
    * needs an administrator's name to know who to ask. What they cannot do is
    * change one.

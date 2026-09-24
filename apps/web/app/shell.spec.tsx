@@ -58,4 +58,11 @@ describe('Sidebar', () => {
     getCurrentUser.mockResolvedValue(user(['project.view']));
     expect(hrefs(await Sidebar({ active: 'projects' }))).not.toContain('/quality/templates');
   });
+
+  it('offers Work orders to anyone who may see tasks', async () => {
+    getCurrentUser.mockResolvedValue(user(['task.view']));
+    expect(hrefs(await Sidebar({ active: 'projects' }))).toContain('/quality/work-orders');
+    getCurrentUser.mockResolvedValue(user(['qc_template.view']));
+    expect(hrefs(await Sidebar({ active: 'projects' }))).not.toContain('/quality/work-orders');
+  });
 });

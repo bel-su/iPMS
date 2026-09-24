@@ -45,6 +45,19 @@ const CALLS: { name: string; call: () => Promise<unknown>; path: string; method?
     path: '/api/v1/tasks/task-1/assign', method: 'POST', json: { assigneeId: 'u-1' },
   },
   { name: 'listTasks', call: () => api.listTasks('p-1'), path: '/api/v1/projects/p-1/tasks' },
+  { name: 'listWorkOrders', call: () => api.listWorkOrders('p-1'), path: '/api/v1/projects/p-1/work-orders' },
+  {
+    name: 'createWorkOrder',
+    call: () => api.createWorkOrder('p-1', {
+      workOrderType: 'QUALITY_SELF_CHECK', templateId: 'tpl-1', siteId: 's-1', assigneeId: 'u-1',
+      plannedCompletionAt: new Date('2026-09-30T23:59:59Z'), title: '[Quality Self-check]S1',
+    }),
+    path: '/api/v1/projects/p-1/work-orders', method: 'POST',
+    json: {
+      workOrderType: 'QUALITY_SELF_CHECK', templateId: 'tpl-1', siteId: 's-1', assigneeId: 'u-1',
+      plannedCompletionAt: new Date('2026-09-30T23:59:59Z'), title: '[Quality Self-check]S1',
+    },
+  },
   {
     name: 'updateSite', call: () => api.updateSite('s-1', { name: 'Renamed' }),
     path: '/api/v1/sites/s-1', method: 'PATCH', json: { name: 'Renamed' },
@@ -105,6 +118,15 @@ describe('project-api — results pass through untouched', () => {
     authFetch.mockResolvedValueOnce({ state: 'forbidden', message: 'Permission project.create is required' });
     expect(await api.createProject({ code: 'ALPHA', name: 'Alpha' }))
       .toEqual({ state: 'forbidden', message: 'Permission project.create is required' });
+  });
+});
+
+describe('listWorkOrders filtering', () => {
+  it('sends paging as strings and drops what was not given', async () => {
+    await api.listWorkOrders('p-1', { status: 'COMPLETED', page: 2, q: 'KOS' });
+    expect(authFetch).toHaveBeenCalledWith('/api/v1/projects/p-1/work-orders', {
+      query: { status: 'COMPLETED', workOrderType: undefined, q: 'KOS', page: '2', limit: undefined },
+    });
   });
 });
 

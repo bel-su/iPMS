@@ -95,8 +95,13 @@ model Task {
   id String @id @db.Uuid
   projectId String @db.Uuid
   siteId String @db.Uuid
-  taskTypeId String @db.Uuid
+  /// Null for a work order: it is raised against a checklist template, not one of the project's task types.
+  taskTypeId String? @db.Uuid
   templateId String? @db.Uuid
+  /// QUALITY_SELF_CHECK | QUALITY_SPOT_CHECK | EHS_SELF_CHECK | EHS_SPOT_CHECK, or null for a task that is not a work order.
+  workOrderType String? @db.VarChar(30)
+  /// The template's name when the work order was raised. qc owns templates; a snapshot lets the list render without a cross-service join.
+  templateName String? @db.VarChar(250)
   title String @db.VarChar(250)
   status String @default("NOT_STARTED") @db.VarChar(30)
   assigneeId String? @db.Uuid
@@ -107,8 +112,9 @@ model Task {
   createdBy String @db.Uuid
   project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
   site Site @relation(fields:[siteId],references:[id],onDelete:Cascade)
-  taskType TaskType @relation(fields:[taskTypeId],references:[id],onDelete:Restrict)
+  taskType TaskType? @relation(fields:[taskTypeId],references:[id],onDelete:Restrict)
   @@index([projectId,status])
+  @@index([projectId,workOrderType])
   @@index([siteId])
   @@map("task")
 }

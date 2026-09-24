@@ -6,6 +6,7 @@ import type {
   CreateSiteInput,
   CreateTaskDto,
   CreateTaskTypeDto,
+  CreateWorkOrderDto,
   SiteImportCommitDto,
   SiteImportPreviewDto,
   UpdateMilestoneDto,
@@ -13,6 +14,8 @@ import type {
   UpdateSiteDto,
   UpdateTaskDto,
   UpdateTaskTypeDto,
+  WorkOrderPage,
+  WorkOrderType,
 } from '@ipms/contracts';
 import { authFetch, type ApiResult } from './api-client';
 
@@ -83,10 +86,24 @@ export interface Milestone {
 }
 
 export interface Task {
-  id: string; projectId: string; siteId: string; taskTypeId: string; templateId: string | null;
+  /** Null for a work order, which is raised against a checklist template instead of a task type. */
+  id: string; projectId: string; siteId: string; taskTypeId: string | null; templateId: string | null;
+  /** Set only on a work order; `templateName` is the template's name when it was raised. */
+  workOrderType: WorkOrderType | null; templateName: string | null;
   title: string; status: TaskStatus; assigneeId: string | null;
   plannedCompletionAt: string | null; actualCompletionAt: string | null;
   currentSubmissionId: string | null; origin: 'PLANNED' | 'AD_HOC'; createdBy: string;
+}
+
+/** A work order as the list returns it: the task with the site columns the list shows. */
+export type WorkOrder = Task & { site: { siteCode: string; name: string; city: string | null; area: string | null } };
+
+export interface WorkOrderFilter {
+  status?: TaskStatus | undefined;
+  workOrderType?: WorkOrderType | undefined;
+  q?: string | undefined;
+  page?: number | undefined;
+  limit?: number | undefined;
 }
 
 /** `listProjects` counts sites and tasks rather than returning them. */
@@ -163,6 +180,23 @@ export async function assignTask(taskId: string, assignment: AssignTaskDto): Pro
 
 export async function listTasks(projectId: string, filter: { siteId?: string; status?: TaskStatus } = {}): Promise<ApiResult<Task[]>> {
   return authFetch<Task[]>(`/api/v1/projects/${projectId}/tasks`, { query: filter });
+}
+
+export async function listWorkOrders(projectId: string, filter: WorkOrderFilter = {}): Promise<ApiResult<WorkOrderPage<WorkOrder>>> {
+  return authFetch<WorkOrderPage<WorkOrder>>(`/api/v1/projects/${projectId}/work-orders`, {
+    query: {
+      status: filter.status,
+      workOrderType: filter.workOrderType,
+      q: filter.q,
+      page: filter.page === undefined ? undefined : String(filter.page),
+      limit: filter.limit === undefined ? undefined : String(filter.limit),
+    },
+  });
+}
+
+/** Creates the work order already assigned; the service checks the template is published, enabled and of the right category. */
+export async function createWorkOrder(projectId: string, workOrder: CreateWorkOrderDto): Promise<ApiResult<WorkOrder>> {
+  return authFetch<WorkOrder>(`/api/v1/projects/${projectId}/work-orders`, { method: 'POST', json: workOrder });
 }
 
 export async function updateSite(id: string, changes: UpdateSiteDto): Promise<ApiResult<Site>> {

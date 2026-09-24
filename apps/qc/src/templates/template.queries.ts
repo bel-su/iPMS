@@ -9,6 +9,13 @@ export interface TemplateListEntry {
   draft: { version: number; revision: number; updatedAt: Date; source: string } | null;
 }
 
+export interface TemplateReference {
+  id: string; code: string; name: string; category: string;
+  disabled: boolean;
+  /** The current published version, or null for a template never published. */
+  publishedVersion: number | null;
+}
+
 const VERSION_SELECT = {
   id: true, version: true, status: true, revision: true, source: true, createdBy: true,
   createdAt: true, updatedAt: true, publishedAt: true, publishedBy: true, retiredAt: true,
@@ -71,6 +78,22 @@ export class TemplateQueries {
     });
     if (!found) throw new NotFoundException('Template version not found');
     return { template, version: found };
+  }
+
+  /**
+   * What another service needs to decide whether a task may use this template:
+   * identity, category, and whether it is usable right now. No tree — the
+   * caller validates a reference, it does not render a checklist.
+   */
+  async reference(id: string): Promise<TemplateReference | null> {
+    const template = await this.prisma.checklistTemplate.findUnique({
+      where: { id }, include: { currentVersion: { select: { version: true } } },
+    });
+    if (!template) return null;
+    return {
+      id: template.id, code: template.code, name: template.name, category: template.category,
+      disabled: template.disabledAt !== null, publishedVersion: template.currentVersion?.version ?? null,
+    };
   }
 
   async currentTree(templateId: string) {

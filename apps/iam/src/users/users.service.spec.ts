@@ -96,6 +96,21 @@ describe('UsersService.list', () => {
   });
 });
 
+describe('UsersService.directory', () => {
+  // Granted by task.view rather than user.view, so it must stay narrower than list.
+  it('selects names and nothing that identifies a login', async () => {
+    const { service, prisma } = build();
+    await service.directory();
+    expect(prisma.user.findMany.mock.calls[0]![0].select).toEqual({ id: true, fullName: true, employeeCode: true, isActive: true });
+  });
+
+  it('keeps inactive users, so an old assignee still has a name', async () => {
+    const { service, prisma } = build();
+    await service.directory();
+    expect(prisma.user.findMany.mock.calls[0]![0].where).toBeUndefined();
+  });
+});
+
 describe('UsersService.get', () => {
   it('reports a missing user as not found', async () => {
     const { service } = build(null);

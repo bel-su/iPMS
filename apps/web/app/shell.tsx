@@ -8,7 +8,7 @@ import { getCurrentUser, hasPermission } from './lib/iam-api';
 
 function Icon({ children }: { children: React.ReactNode }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
-type Section = 'overview' | 'projects' | 'quality' | 'users';
+type Section = 'overview' | 'projects' | 'quality' | 'work-orders' | 'users';
 
 function NavItem({ section, active, href, icon, children }: {
   section: Section; active: Section; href: string; icon: string; children: React.ReactNode;
@@ -35,6 +35,7 @@ export async function Sidebar({ active }: { active: Section }) {
   const viewer = await getCurrentUser();
   const mayViewUsers = viewer.state === 'ready' && hasPermission(viewer.data, 'user.view');
   const mayViewTemplates = viewer.state === 'ready' && hasPermission(viewer.data, 'qc_template.view');
+  const mayViewTasks = viewer.state === 'ready' && hasPermission(viewer.data, 'task.view');
 
   return (
     <aside className="sidebar">
@@ -44,6 +45,7 @@ export async function Sidebar({ active }: { active: Section }) {
         <NavItem section="overview" active={active} href="/" icon="▦">Overview</NavItem>
         <NavItem section="projects" active={active} href="/projects" icon="◫">Projects</NavItem>
         {mayViewTemplates ? <NavItem section="quality" active={active} href="/quality/templates" icon="✓">Quality &amp; EHS</NavItem> : null}
+        {mayViewTasks ? <NavItem section="work-orders" active={active} href="/quality/work-orders" icon="☰">Work orders</NavItem> : null}
         {mayViewUsers ? <NavItem section="users" active={active} href="/users" icon="◉">Users</NavItem> : null}
       </nav>
       <div className="sidebar-bottom"><a className="nav-item" href="/#settings"><Icon>⚙</Icon>Settings</a></div>

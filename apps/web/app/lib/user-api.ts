@@ -93,6 +93,14 @@ export async function resetUserPassword(id: string, input: ResetPasswordDto): Pr
   return authFetch<User>(`/api/v1/users/${id}/reset-password`, { method: 'POST', json: input });
 }
 
+/** One entry of the name directory — see `UsersService.directory` in iam. */
+export interface DirectoryUser { id: string; fullName: string; employeeCode: string | null; isActive: boolean }
+
+/** Names for assignment pickers and assignee columns. Needs only `task.view`. */
+export async function listUserDirectory(): Promise<ApiResult<DirectoryUser[]>> {
+  return authFetch<DirectoryUser[]>('/api/v1/users/directory');
+}
+
 /** Feeds the role checkboxes. Needs `role.view`, which every user-managing role holds. */
 export async function listRoles(): Promise<ApiResult<Role[]>> {
   return authFetch<Role[]>('/api/v1/roles');

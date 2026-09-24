@@ -36,7 +36,7 @@ let seq = 0;
 function task(siteId: string, taskTypeId: string, status: Task['status'], extra: Partial<Task> = {}): Task {
   seq += 1;
   return {
-    id: `t-${seq}`, projectId: 'p-1', siteId, taskTypeId, templateId: null, title: `${taskTypeId} at ${siteId}`,
+    id: `t-${seq}`, projectId: 'p-1', siteId, taskTypeId, templateId: null, workOrderType: null, templateName: null, title: `${taskTypeId} at ${siteId}`,
     status, assigneeId: null, plannedCompletionAt: null, actualCompletionAt: null, currentSubmissionId: null,
     origin: 'PLANNED', createdBy: 'u-0', ...extra,
   };
@@ -68,6 +68,15 @@ describe('summarizeProject', () => {
     expect(summary.milestones.map((m) => [m.name, m.percent])).toEqual([['Survey', 67], ['Civil', 33]]);
     expect(summary.sitesComplete).toBe(1);
     expect(summary.completion).toBe(33);
+  });
+
+  // A work order is raised against a checklist, not a task type, so it has none to credit.
+  it('does not count a completed work order towards any milestone', () => {
+    const summary = summarizeProject(project(), [
+      task('s1', 'survey', 'COMPLETED'),
+      task('s2', 'ignored', 'COMPLETED', { taskTypeId: null, workOrderType: 'QUALITY_SELF_CHECK' }),
+    ], NOW);
+    expect(summary.milestones.map((m) => [m.name, m.percent])).toEqual([['Survey', 33], ['Civil', 0]]);
   });
 
   it('marks a milestone past its target date as overdue until every site meets it', () => {

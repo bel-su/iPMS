@@ -11,6 +11,9 @@ import { PrismaService } from './prisma.service.js';
 import { ProjectController } from './project/project.controller.js';
 import { ProjectService } from './project/project.service.js';
 import { SiteImportService } from './project/import/site-import.service.js';
+import { TemplateLookupClient } from './work-orders/template-lookup.client.js';
+import { WorkOrderController } from './work-orders/work-order.controller.js';
+import { WorkOrderService } from './work-orders/work-order.service.js';
 import { UserScopeRepository } from './scope/user-scope.repository.js';
 import { projectScopeProvider } from './scope/scope.provider.js';
 import { SCOPE_DEDUPE_PREFIX, ScopeConsumer } from './scope/scope.consumer.js';
@@ -73,7 +76,7 @@ class ScopeBootstrap implements OnModuleInit {
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [ProjectController, HealthController, MetricsController],
+  controllers: [ProjectController, WorkOrderController, HealthController, MetricsController],
   providers: [
     { provide: APP_GUARD, useClass: JwtUserGuard },
     { provide: APP_GUARD, useClass: AuthzGuard },
@@ -128,6 +131,12 @@ class ScopeBootstrap implements OnModuleInit {
       provide: ProjectService,
       useFactory: (prisma: PrismaService) => new ProjectService(prisma.db),
       inject: [PrismaService],
+    },
+    { provide: TemplateLookupClient, useFactory: () => new TemplateLookupClient(process.env['QC_INTERNAL_URL'] ?? 'http://qc:3005') },
+    {
+      provide: WorkOrderService,
+      useFactory: (prisma: PrismaService, templates: TemplateLookupClient) => new WorkOrderService(prisma.db, templates),
+      inject: [PrismaService, TemplateLookupClient],
     },
     {
       provide: SiteImportService,
