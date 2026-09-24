@@ -2,11 +2,29 @@ import { STREAMS, type EventBus } from '@ipms/events';
 import { createLogger } from '@ipms/observability';
 import type { PrismaClient } from '@prisma-clients/project';
 import type { UserScopeRepository } from './user-scope.repository.js';
-import { SCOPE_DURABLE } from './scope.consumer.js';
+import { SCOPE_DURABLES } from './scope.consumer.js';
 
 const log = createLogger('project');
 
 export const WATERMARK = 'user_scope';
+
+/**
+ * Clears this consumer's deduplication namespace.
+ *
+ * Deleting the durable makes JetStream redeliver from the start, but
+ * `DurableConsumer` checks the dedupe store before dispatching and the store
+ * outlives the process -- Redis is a separate container with a 24h TTL. So
+ * without this, every replayed event is dropped as a duplicate and a rebuilt
+ * projection is never actually rebuilt: the replay reports success and changes
+ * nothing.
+ *
+ * The distinction the dedupe store cannot make on its own is between "this
+ * message arrived twice" and "we deliberately asked for all of it again". Only
+ * the caller knows which, so the caller clears it.
+ */
+export interface DedupeReset {
+  clear(): Promise<void>;
+}
 
 /**
  * Rebuilds the scope projection when it has been lost.
@@ -35,6 +53,7 @@ export async function ensureProjectionReplay(
   bus: EventBus,
   prisma: PrismaClient,
   repo: UserScopeRepository,
+  dedupe: DedupeReset,
 ): Promise<boolean> {
   const watermark = await prisma.projectionWatermark.findUnique({ where: { name: WATERMARK } });
   if (watermark !== null) return false;
@@ -47,15 +66,24 @@ export async function ensureProjectionReplay(
     return false;
   }
 
-  log.warn({ durable: SCOPE_DURABLE }, 'scope projection is empty and unstamped; recreating the durable to replay');
-  try {
-    await bus.manager().consumers.delete(STREAMS.IAM.name, SCOPE_DURABLE);
-  } catch (err) {
-    // Not-found is the ordinary first-boot case: there is no durable to delete,
-    // and the subscribe that follows creates one that replays anyway. Anything
-    // else is a real broker fault and must not be mistaken for it.
-    if (!/not found|does not exist/i.test(String(err))) throw err;
+  const durables = [...new Set(Object.values(SCOPE_DURABLES))];
+  log.warn({ durables }, 'scope projection is empty and unstamped; recreating the durables to replay');
+
+  for (const durable of durables) {
+    try {
+      await bus.manager().consumers.delete(STREAMS.IAM.name, durable);
+    } catch (err) {
+      // Not-found is the ordinary first-boot case: there is no durable to
+      // delete, and the subscribe that follows creates one that replays anyway.
+      // Anything else is a real broker fault and must not be mistaken for it.
+      if (!/not found|does not exist/i.test(String(err))) throw err;
+    }
   }
+
+  // Before stamping, not after: if this throws, the watermark stays absent and
+  // the next boot retries the whole replay. Stamping first would record a
+  // rebuild that never happened.
+  await dedupe.clear();
 
   await stamp(prisma);
   return true;

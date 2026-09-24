@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SUBJECTS } from '@ipms/events';
-import { ScopeConsumer, SCOPE_DURABLE } from './scope.consumer.js';
+import { ScopeConsumer, SCOPE_DURABLES } from './scope.consumer.js';
 
 type Handler = (envelope: { eventId: string; payload: unknown }) => Promise<void>;
 
@@ -22,11 +22,27 @@ function build() {
 }
 
 describe('ScopeConsumer', () => {
-  it('subscribes on the durable STREAMS.IAM already declared', async () => {
+  it('uses a distinct durable per subject', async () => {
+    // A durable carries ONE filter_subject. Sharing one across subjects keeps
+    // only the first filter -- consumers.add reports "already exists" for the
+    // rest and DurableConsumer swallows it -- so the other subjects are never
+    // delivered. That is how revocations stopped replicating while grants kept
+    // working, leaving withdrawn access in place.
     const { subject, consumer, durables } = build();
     await subject.register(consumer as never);
-    expect(SCOPE_DURABLE).toBe('project-scope-cache');
-    expect(new Set(durables)).toEqual(new Set([SCOPE_DURABLE]));
+    expect(durables).toHaveLength(3);
+    expect(new Set(durables).size).toBe(3);
+  });
+
+  it('pairs each subject with its own durable', async () => {
+    const { subject, consumer } = build();
+    const pairs: Array<[string, string]> = [];
+    const spy = { subscribe: async (subj: string, durable: string) => { pairs.push([subj, durable]); } };
+    await subject.register(spy as never);
+    for (const [subj, durable] of pairs) {
+      expect(SCOPE_DURABLES[subj], subj).toBe(durable);
+    }
+    expect(consumer).toBeDefined();
   });
 
   it('does not consume role events', async () => {

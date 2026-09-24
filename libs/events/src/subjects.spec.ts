@@ -26,3 +26,23 @@ describe('subject catalog', () => {
     }
   });
 });
+
+describe('durable naming', () => {
+  it('gives each IAM subject project consumes its own durable', () => {
+    // A durable carries ONE filter_subject. Sharing a durable across subjects
+    // silently keeps only the first filter and drops the rest, which is how
+    // revocations stopped replicating while grants kept working.
+    for (const name of ['project-scope-granted', 'project-scope-revoked', 'project-scope-deactivated']) {
+      expect(STREAMS.IAM.durableConsumers).toContain(name);
+    }
+  });
+
+  it('no longer declares the single shared durable', () => {
+    expect(STREAMS.IAM.durableConsumers).not.toContain('project-scope-cache');
+  });
+
+  it('declares every durable name only once', () => {
+    const names = Object.values(STREAMS).flatMap((s) => s.durableConsumers);
+    expect(new Set(names).size).toBe(names.length);
+  });
+});

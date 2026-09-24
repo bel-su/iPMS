@@ -13,8 +13,8 @@ import { ProjectService } from './project/project.service.js';
 import { SiteImportService } from './project/import/site-import.service.js';
 import { UserScopeRepository } from './scope/user-scope.repository.js';
 import { projectScopeProvider } from './scope/scope.provider.js';
-import { ScopeConsumer } from './scope/scope.consumer.js';
-import { ensureProjectionReplay } from './scope/replay.js';
+import { SCOPE_DEDUPE_PREFIX, ScopeConsumer } from './scope/scope.consumer.js';
+import { ensureProjectionReplay, type DedupeReset } from './scope/replay.js';
 
 const log = createLogger('project');
 
@@ -41,11 +41,31 @@ class ScopeBootstrap implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    const replayed = await ensureProjectionReplay(this.bus, this.prisma.db, this.repo);
+    const redis = new Redis(requireEnv('REDIS_URL'));
+
+    /**
+     * Deletes every dedupe key in this consumer's namespace.
+     *
+     * `unlink` rather than `del` so a large namespace is reclaimed off Redis's
+     * main thread, and a cursor scan rather than `KEYS` so this never blocks it
+     * for the length of the keyspace.
+     */
+    const dedupeReset: DedupeReset = {
+      async clear(): Promise<void> {
+        let cursor = '0';
+        do {
+          const [next, keys] = await redis.scan(cursor, 'MATCH', `dedupe:${SCOPE_DEDUPE_PREFIX}:*`, 'COUNT', 500);
+          cursor = next;
+          if (keys.length > 0) await redis.unlink(...keys);
+        } while (cursor !== '0');
+      },
+    };
+
+    const replayed = await ensureProjectionReplay(this.bus, this.prisma.db, this.repo, dedupeReset);
     // The prefix namespaces dedupe keys per consumer, as audit does. Sharing one
     // namespace would let this consumer's ack of an eventId suppress a different
     // consumer's delivery of the same event.
-    const dedupe = new RedisDedupeStore(new Redis(requireEnv('REDIS_URL')) as never, 'project-scope');
+    const dedupe = new RedisDedupeStore(redis as never, SCOPE_DEDUPE_PREFIX);
     await this.consumer.register(new DurableConsumer(this.bus, dedupe));
     log.info({ replayed }, 'scope projection consumer started');
   }

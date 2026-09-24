@@ -2,6 +2,8 @@
 // `@prisma/client` package — see the `output` comment in schema.prisma.
 import type { PrismaClient } from '@prisma-clients/iam';
 import { PERMISSIONS, expandDependencies } from '@ipms/authz';
+import { SUBJECTS } from '@ipms/events';
+import { buildOutboxRecord } from '@ipms/persistence';
 import { hashPassword } from '../src/auth/password.js';
 import { uuidv7 } from '@ipms/contracts';
 
@@ -167,11 +169,33 @@ export async function seedDemoUsers(prisma: PrismaClient): Promise<void> {
      * `POST /users/:id/projects`. They will see empty lists until someone does.
      */
     if (demo.role === 'SUPER_ADMIN') {
-      await prisma.userGlobalScope.upsert({
-        where: { userId: user.id },
-        update: {},
-        create: { id: uuidv7(), userId: user.id, createdBy: user.id },
-      });
+      /**
+       * Create-if-absent rather than upsert, because the row is only half the
+       * job: other services learn about scope from `iam.scope.granted`, never
+       * by reading this table. Writing the row alone leaves the seeded
+       * administrator holding every permission and able to see nothing, which
+       * is exactly the lockout this grant exists to prevent -- and it fails
+       * silently, because the row is present and looks correct.
+       *
+       * An upsert cannot tell a fresh grant from a re-seed, and re-emitting on
+       * every boot would be harmless but dishonest. Consumers deduplicate on
+       * eventId, so the cost of a duplicate is nil; the cost of a missing first
+       * event is a locked-out administrator.
+       */
+      const existing = await prisma.userGlobalScope.findUnique({ where: { userId: user.id } });
+      if (!existing) {
+        await prisma.$transaction(async (tx) => {
+          await tx.userGlobalScope.create({ data: { id: uuidv7(), userId: user.id, createdBy: user.id } });
+          await tx.outboxEvent.create({
+            data: buildOutboxRecord(
+              SUBJECTS.IAM_SCOPE_GRANTED,
+              { userId: user.id, level: 'GLOBAL', projectId: null, siteId: null },
+              'seed',
+              user.id,
+            ),
+          });
+        });
+      }
     }
   }
 }
