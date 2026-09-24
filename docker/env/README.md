@@ -12,5 +12,11 @@ This directory contains individual environment files for each microservice and i
 | **Project Service** | `project.env` | 3004 | Projects, sites, and tasks management service + migrations |
 | **QC Database** | `qc-db.env` | 5436 (mapped to 5432) | PostgreSQL credentials for Quality Control database (`ipms_qc`) |
 | **QC Service** | `qc.env` | 3005 | Quality Control inspections and checklists service + migrations |
+| **Media Database** | `media-db.env` | 5437 (mapped to 5432) | PostgreSQL credentials for Media database (`ipms_media`) |
+| **Media Service** | `media.env` | 3006 | Media (evidence uploads) service + migrations |
+| **Notification Database** | `notification-db.env` | 5438 (mapped to 5432) | PostgreSQL credentials for Notification database (`ipms_notification`) |
+| **Notification Service** | `notification.env` | 3007 | Notification service + migrations |
+| **Docs Database** | `docs-db.env` | 5439 (mapped to 5432) | PostgreSQL credentials for Docs database (`ipms_docs`) |
+| **Docs Service** | `docs.env` | 3008 | Documents service + migrations |
 | **API Gateway** | `gateway.env` | 3000 | Reverse proxy, authentication verification, rate limiter |
 | **Web Frontend** | `web.env` | 3100 | Next.js portfolio dashboard web application |
