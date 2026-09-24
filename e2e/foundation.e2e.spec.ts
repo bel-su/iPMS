@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { api, waitForReady } from './helpers/stack.js';
+import { DEMO_PASSWORD, api, waitForReady } from './helpers/stack.js';
 
-const ADMIN = { username: 'admin', password: 'demo12345' };
+const ADMIN = { username: 'admin', password: DEMO_PASSWORD };
 
 let adminToken: string;
 
@@ -45,18 +45,22 @@ describe('authorization', () => {
 
   it('denies a field engineer the roles endpoint with 403, not 401', async () => {
     const login = await api<{ accessToken: string }>('/api/v1/auth/login', {
-      method: 'POST', body: { username: 'engineer', password: 'demo12345' },
+      method: 'POST', body: { username: 'engineer', password: DEMO_PASSWORD },
     });
     const res = await api('/api/v1/roles', { token: login.body.accessToken });
     expect(res.status).toBe(403);
   });
 
   it('rejects a role whose permission set breaks a dependency', async () => {
-    const res = await api('/api/v1/roles', {
+    // qc_review.approve depends on qc_review.view and qc_submission.view.
+    const res = await api<{ message: string }>('/api/v1/roles', {
       method: 'POST', token: adminToken,
-      body: { name: 'Broken', code: 'BROKEN_ROLE', description: '', permissionCodes: ['approval.approve'] },
+      body: { name: 'Broken', code: 'BROKEN_ROLE', description: '', permissionCodes: ['qc_review.approve'] },
     });
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(400);
+    // An unknown code is also a 400, so the status alone cannot tell this
+    // rejection apart from a stale code in the request.
+    expect(res.body.message).toMatch(/Permission set is incomplete/);
   });
 
   it('refuses to delete a system role', async () => {
@@ -80,8 +84,10 @@ describe('access simulator', () => {
   });
 
   it('explains a denied decision by naming the failing gate', async () => {
-    const engineer = await api<Array<{ id: string; username: string }>>('/api/v1/users', { token: adminToken });
-    const target = engineer.body.find((u) => u.username === 'engineer')!;
+    const engineer = await api<{ items: Array<{ id: string; username: string }> }>(
+      '/api/v1/users?search=engineer', { token: adminToken },
+    );
+    const target = engineer.body.items.find((u) => u.username === 'engineer')!;
     const res = await api<{ allowed: boolean; reason: string }>('/api/v1/access/check', {
       method: 'POST', token: adminToken,
       body: { userId: target.id, permissionCode: 'role.delete' },
@@ -123,7 +129,7 @@ describe('audit ledger', () => {
 describe('revocation', () => {
   it('invalidates outstanding tokens on logout', async () => {
     const login = await api<{ accessToken: string }>('/api/v1/auth/login', {
-      method: 'POST', body: { username: 'manager', password: 'demo12345' },
+      method: 'POST', body: { username: 'manager', password: DEMO_PASSWORD },
     });
     const token = login.body.accessToken;
     expect((await api('/api/v1/auth/me', { token })).status).toBe(200);

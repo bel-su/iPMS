@@ -1,11 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { api, waitForReady } from './helpers/stack.js';
+import { DEMO_PASSWORD, api, waitForReady } from './helpers/stack.js';
 
 const BASE = process.env['E2E_GATEWAY_URL'] ?? 'http://localhost:3000';
-const PASSWORD = process.env['IAM_DEMO_PASSWORD'] ?? 'demo12345';
 
 async function login(username: string): Promise<string> {
-  const res = await api<{ accessToken: string }>('/api/v1/auth/login', { method: 'POST', body: { username, password: PASSWORD } });
+  const res = await api<{ accessToken: string }>('/api/v1/auth/login', { method: 'POST', body: { username, password: DEMO_PASSWORD } });
   expect(res.status).toBe(201);
   return res.body.accessToken;
 }

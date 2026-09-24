@@ -1,5 +1,14 @@
 const BASE = process.env['E2E_GATEWAY_URL'] ?? 'http://localhost:3000';
 
+/**
+ * The password iam-migrate seeds all four demo accounts with. Like BASE, the
+ * default is the Compose stack's own value (IAM_DEMO_PASSWORD in
+ * docker/env/iam.env), so the suite runs against `docker compose up` with no
+ * configuration. Read it from here rather than hardcoding one per spec: a
+ * spec that disagrees with the seed fails every test at login.
+ */
+export const DEMO_PASSWORD = process.env['IAM_DEMO_PASSWORD'] ?? 'password123';
+
 export interface ApiResponse<T> {
   status: number;
   body: T;
