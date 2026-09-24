@@ -25,6 +25,12 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   def('scope', 'view', 'View project and site access'),
   def('scope', 'grant', 'Grant project or site access', ['scope.view', 'user.view']),
   def('scope', 'revoke', 'Revoke project or site access', ['scope.view', 'user.view']),
+  // Separate from scope.grant on purpose. Global reach is qualitatively
+  // different from access to one project: it is the largest grant the system
+  // can make, and an administrator trusted to scope a PM onto a project is not
+  // thereby trusted to hand out the whole platform.
+  def('scope', 'grant_global', 'Grant global scope', ['scope.view', 'scope.grant', 'user.view']),
+  def('scope', 'revoke_global', 'Revoke global scope', ['scope.view', 'scope.revoke', 'user.view']),
   def('override', 'view', 'View permission overrides'),
   def('override', 'create', 'Create permission overrides', ['override.view', 'permission.view']),
   def('override', 'revoke', 'Revoke permission overrides', ['override.view']),

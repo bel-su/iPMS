@@ -15,6 +15,7 @@ interface LoadedUser {
     role: { code: string; isActive: boolean; permissions: Array<{ permission: { code: string } }> };
     validFrom: Date | null; validUntil: Date | null;
   }>;
+  globalScopes: Array<{ id: string }>;
   projectScopes: Array<{ projectId: string }>;
   siteScopes: Array<{ siteId: string }>;
   overrides: Array<{
@@ -39,6 +40,7 @@ export class EffectiveService {
       where: { id: userId },
       include: {
         roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
+        globalScopes: true,
         projectScopes: true,
         siteScopes: true,
         overrides: { include: { permission: true } },
@@ -61,7 +63,11 @@ export class EffectiveService {
 
   private toScope(user: LoadedUser): AuthzScope {
     return {
-      global: false,
+      // Was hardcoded `false`, which meant nothing in the platform ever had
+      // global reach. No service noticed because none enforced scope at query
+      // level; `project` is the first, and a hardcoded false locks the
+      // SUPER_ADMIN out of the system it administers.
+      global: user.globalScopes.length > 0,
       projectIds: user.projectScopes.map((s) => s.projectId),
       siteIds: user.siteScopes.map((s) => s.siteId),
     };

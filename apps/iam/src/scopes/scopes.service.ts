@@ -265,15 +265,67 @@ export class ScopesService {
   }
 
   /** Project and site scope only — see `listOverridesForUser` for the rest. */
-  async listForUser(userId: string): Promise<{ projectIds: string[]; siteIds: string[] }> {
-    const [projects, sites] = await Promise.all([
+  async listForUser(userId: string): Promise<{ global: boolean; projectIds: string[]; siteIds: string[] }> {
+    const [globalScope, projects, sites] = await Promise.all([
+      this.prisma.userGlobalScope.findUnique({ where: { userId } }),
       this.prisma.userProjectScope.findMany({ where: { userId } }),
       this.prisma.userSiteScope.findMany({ where: { userId } }),
     ]);
     return {
+      // Reported alongside the lists rather than inferred from them being
+      // empty. Empty lists mean "granted nothing", which is the opposite of
+      // global reach, and conflating the two is how a scope screen ends up
+      // telling an operator the reverse of the truth.
+      global: globalScope !== null,
       projectIds: projects.map((p) => p.projectId),
       siteIds: sites.map((s) => s.siteId),
     };
+  }
+
+  /**
+   * Global reach for one user: they see every project and every site.
+   *
+   * `revokeTokens` runs on both paths, unlike the project and site grants.
+   * Those only change replicated scope, which each service re-reads from its
+   * own projection on the next request. Global scope changes the answer to
+   * *every* authorization question at once, so leaving outstanding tokens alive
+   * for up to their full TTL after a revocation is not acceptable -- the same
+   * reasoning `createOverride` uses.
+   */
+  async grantGlobal(userId: string, actorId: string): Promise<void> {
+    if (userId === actorId) {
+      // The same self-escalation rule createOverride enforces, applied to the
+      // largest grant the system can make.
+      throw new ForbiddenException('An actor cannot grant global scope to their own account');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user) throw new NotFoundException('User not found');
+
+      const existing = await tx.userGlobalScope.findUnique({ where: { userId } });
+      if (existing) return;   // idempotent: no duplicate row, no duplicate event
+
+      await tx.userGlobalScope.create({ data: { id: uuidv7(), userId, createdBy: actorId } });
+      await this.revokeTokens(tx, userId);
+      await this.emit(tx, SUBJECTS.IAM_SCOPE_GRANTED, { userId, level: 'GLOBAL', projectId: null, siteId: null }, actorId);
+      await this.audit(tx, actorId, 'scope.global_granted', 'User', userId, {}, { level: 'GLOBAL' });
+    });
+  }
+
+  async revokeGlobal(userId: string, actorId: string): Promise<void> {
+    if (userId === actorId) {
+      // Symmetrical with grantGlobal, and with revokeOverride: an actor must
+      // never edit their own authorization in either direction.
+      throw new ForbiddenException('An actor cannot revoke global scope from their own account');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.userGlobalScope.deleteMany({ where: { userId } });
+      if (count === 0) return;
+
+      await this.revokeTokens(tx, userId);
+      await this.emit(tx, SUBJECTS.IAM_SCOPE_REVOKED, { userId, level: 'GLOBAL', projectId: null, siteId: null }, actorId);
+      await this.audit(tx, actorId, 'scope.global_revoked', 'User', userId, { level: 'GLOBAL' }, {});
+    });
   }
 
   /**

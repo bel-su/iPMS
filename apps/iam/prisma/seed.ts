@@ -152,5 +152,26 @@ export async function seedDemoUsers(prisma: PrismaClient): Promise<void> {
         data: { id: uuidv7(), userId: user.id, roleId: role.id, createdBy: user.id },
       });
     }
+
+    /**
+     * The SUPER_ADMIN needs global scope, not just every permission.
+     *
+     * Permissions answer "may you do this kind of thing"; scope answers "to
+     * which projects". Now that `project` enforces scope at query level, an
+     * account with every permission and no scope row sees nothing at all — so
+     * without this the seeded administrator cannot administer anything.
+     *
+     * Deliberately only `admin`. The other three demo accounts are left
+     * unscoped, which is the correct default and the whole point of the
+     * change: a PM is granted the projects they run, explicitly, through
+     * `POST /users/:id/projects`. They will see empty lists until someone does.
+     */
+    if (demo.role === 'SUPER_ADMIN') {
+      await prisma.userGlobalScope.upsert({
+        where: { userId: user.id },
+        update: {},
+        create: { id: uuidv7(), userId: user.id, createdBy: user.id },
+      });
+    }
   }
 }

@@ -58,6 +58,27 @@ export class ScopesController {
     return this.scopes.listOverridesForUser(UuidSchema.parse(id));
   }
 
+  /**
+   * Global reach, behind its own permission.
+   *
+   * `scope.grant_global` is deliberately not `scope.grant`: an administrator
+   * trusted to scope a PM onto a project is not thereby trusted to hand out
+   * the whole platform. Takes no body -- there is nothing to name.
+   */
+  @Post('users/:id/global-scope')
+  @RequirePermission('scope.grant_global')
+  async grantGlobal(@Param('id') id: string, @Req() req: { user: AuthzUser }) {
+    await this.scopes.grantGlobal(UuidSchema.parse(id), req.user.id);
+    return { status: 'ok' };
+  }
+
+  @Delete('users/:id/global-scope')
+  @RequirePermission('scope.revoke_global')
+  async revokeGlobal(@Param('id') id: string, @Req() req: { user: AuthzUser }) {
+    await this.scopes.revokeGlobal(UuidSchema.parse(id), req.user.id);
+    return { status: 'ok' };
+  }
+
   @Post('users/:id/projects')
   @RequirePermission('scope.grant')
   async grantProject(
