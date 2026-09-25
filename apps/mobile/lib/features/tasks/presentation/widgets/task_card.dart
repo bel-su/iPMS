@@ -75,9 +75,9 @@ class TaskCard extends StatelessWidget {
                     ),
                   ),
                   const Icon(
-                    Icons.edit_outlined,
-                    size: 18,
-                    color: AppColors.textSecondary,
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: AppColors.textTertiary,
                   ),
                 ],
               ),
@@ -148,11 +148,10 @@ class TaskCard extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // Bottom Row: Assignee Avatars, Date Pill, Checklist Count
+              // Bottom Row: Assignee Badge, Date Pill, Checklist Count
               Row(
                 children: [
-                  // Overlapping Avatars
-                  _buildAvatarStack(task.assigneeName),
+                  _buildAssigneeBadge(task.assigneeName),
                   const Spacer(),
                   // Date Chip
                   Container(
@@ -215,59 +214,35 @@ class TaskCard extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatarStack(String? assignee) {
-    return SizedBox(
-      height: 28,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundColor: AppColors.primaryLavender,
-            child: Text(
-              assignee != null && assignee.isNotEmpty ? assignee[0].toUpperCase() : 'A',
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: AppColors.darkSlate,
-              ),
+  Widget _buildAssigneeBadge(String? assignee) {
+    if (assignee == null || assignee.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircleAvatar(
+          radius: 12,
+          backgroundColor: AppColors.primaryLavender,
+          child: Text(
+            assignee[0].toUpperCase(),
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: AppColors.darkSlate,
             ),
           ),
-          Transform.translate(
-            offset: const Offset(-8, 0),
-            child: const CircleAvatar(
-              radius: 14,
-              backgroundColor: AppColors.softMint,
-              child: Text(
-                'E',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.mintDark,
-                ),
-              ),
-            ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          assignee,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkSlate,
           ),
-          Transform.translate(
-            offset: const Offset(-16, 0),
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                color: AppColors.darkSlate,
-                shape: BoxShape.circle,
-              ),
-              child: const Text(
-                '+2',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

@@ -5,7 +5,7 @@ import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/map/presentation/site_map_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
-import 'features/search/presentation/search_screen.dart';
+import 'features/projects/presentation/project_list_screen.dart';
 import 'features/tasks/presentation/task_list_screen.dart';
 import 'shared/layout/main_scaffold.dart';
 
@@ -26,7 +26,7 @@ class IpmsApp extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
 
     return MaterialApp(
-      title: 'iPMS Mobile',
+      title: 'iPMS Field App',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: authState.when(
@@ -37,8 +37,8 @@ class IpmsApp extends ConsumerWidget {
           return const MainScaffold(
             pages: [
               TaskListScreen(),
+              ProjectListScreen(),
               SiteMapScreen(),
-              SearchScreen(),
               ProfileScreen(),
             ],
           );
