@@ -210,6 +210,8 @@ export function taskKind(task: { taskTypeId: string | null; workOrderType: WorkO
 /** Where the work order pages live: under Quality & EHS, beside the checklist library. */
 export const WORK_ORDERS_PATH = '/quality/work-orders';
 export const workOrderPath = (id: string) => `${WORK_ORDERS_PATH}/${id}`;
+/** The work order queue filtered to one project: a project's work orders have no page under the project. */
+export const projectWorkOrdersPath = (projectId: string) => `${WORK_ORDERS_PATH}?projectId=${projectId}`;
 
 /** Page numbers around the current page, with `null` for a gap: 1 … 4 5 [6] 7 8 … 103. */
 export function pageWindow(page: number, pages: number, radius = 2): (number | null)[] {

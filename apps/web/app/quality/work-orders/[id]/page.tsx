@@ -5,8 +5,7 @@ import { getTemplate, getVersion, type ChecklistSection } from '../../../lib/qc-
 import { listUserDirectory } from '../../../lib/user-api';
 import { Sidebar, StatePage, TopActions } from '../../../shell';
 import { ChecklistOutline } from '../checklist-outline';
-import { STATUS_TEXT, WORK_ORDERS_PATH, dueText, eligiblePeople, formatDateTime, formatDay, isOpen, isoDay, personLabel, typeInfo } from '../labels';
-import { projectWorkOrders } from '../../../projects/[id]/paths';
+import { STATUS_TEXT, WORK_ORDERS_PATH, projectWorkOrdersPath, dueText, eligiblePeople, formatDateTime, formatDay, isOpen, isoDay, personLabel, typeInfo } from '../labels';
 import { ManageWorkOrder } from './manage';
 
 /** The checklist as it stands now: projects always use the latest published version. */
@@ -52,7 +51,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
       <Sidebar active="work-orders" />
       <section className="content">
         <header className="topbar">
-          <div className="crumbs"><a href="/quality">Quality &amp; EHS</a><b>/</b><a href={WORK_ORDERS_PATH}>Work orders</a><b>/</b><a href={projectWorkOrders(wo.project.id)}>{wo.project.code}</a><b>/</b><strong>{wo.site.siteCode}</strong></div>
+          <div className="crumbs"><a href="/quality">Quality &amp; EHS</a><b>/</b><a href={WORK_ORDERS_PATH}>Work orders</a><b>/</b><a href={projectWorkOrdersPath(wo.project.id)}>{wo.project.code}</a><b>/</b><strong>{wo.site.siteCode}</strong></div>
           <TopActions />
         </header>
         <div className="dashboard">
@@ -74,7 +73,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
               <section className="panel">
                 <h2 className="panel-title">Details</h2>
                 <dl className="facts">
-                  <div><dt>Project ID (DU)</dt><dd><a href={projectWorkOrders(wo.project.id)}><code>{wo.project.code}</code></a> {wo.project.name}</dd></div>
+                  <div><dt>Project ID (DU)</dt><dd><a href={projectWorkOrdersPath(wo.project.id)}><code>{wo.project.code}</code></a> {wo.project.name}</dd></div>
                   <div><dt>Site</dt><dd><b>{wo.site.siteCode}</b> {wo.site.name !== wo.site.siteCode ? wo.site.name : ''}<small>{[wo.site.city, wo.site.area].filter(Boolean).join(' · ')}</small></dd></div>
                   <div><dt>Checklist</dt><dd>{wo.templateId && may('qc_template.view') ? <a className="link" href={`/quality/templates/${wo.templateId}`}>{wo.templateName}</a> : wo.templateName ?? '—'}</dd></div>
                   <div><dt>Responsible</dt><dd>{name(wo.assigneeId)}</dd></div>
