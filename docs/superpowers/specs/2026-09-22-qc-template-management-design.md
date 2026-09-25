@@ -548,8 +548,9 @@ The reducer is a pure module (`editor-state.ts`) so it is unit-tested without a 
 
 1. Submission endpoints are not scope-filtered and do not check the task assignee.
    Sub-project 3 adds both; scope filtering needs the replicated scope projection.
-2. `Task.templateId` in `project` is not validated against `qc`. Sub-project 2 adds
-   write-time validation when it adds template selection to tasks.
+2. ~~`Task.templateId` in `project` is not validated against `qc`.~~ Resolved for work
+   orders by `2026-09-24-work-order-management-design.md`; the older `createTask`
+   path still does not validate.
 3. Template authorization is permission-only (T7). A QC Manager with a project-scoped
    role assignment can still change the library. Revisit when scope is replicated to
    `qc`.

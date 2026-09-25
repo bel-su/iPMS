@@ -1,3 +1,5 @@
+import { ForbiddenException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+
 export interface TaskRef {
   id: string; projectId: string; siteId: string;
   assigneeId: string | null; templateId: string | null; status: string;
@@ -30,5 +32,15 @@ export class TaskLookupClient {
     } catch {
       return { state: 'unavailable' };
     }
+  }
+}
+
+/** The lookup as an answer or the HTTP error that stands in for one. */
+export function requireTask(lookup: TaskLookup): TaskRef {
+  switch (lookup.state) {
+    case 'found': return lookup.task;
+    case 'not_found': throw new NotFoundException('Task not found');
+    case 'forbidden': throw new ForbiddenException('You cannot view this task');
+    case 'unavailable': throw new ServiceUnavailableException('The project service could not be reached. Try again shortly.');
   }
 }

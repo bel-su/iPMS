@@ -1,7 +1,11 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma-clients/qc';
 import { uuidv7, type CreateSubmissionDto, type ReviewSubmissionDto } from '@ipms/contracts';
+import { SUBJECTS, type QcSubmissionReviewed, type QcSubmissionSubmitted } from '@ipms/events';
+import { getCorrelationId } from '@ipms/observability';
+import { buildOutboxRecord } from '@ipms/persistence';
+import { requireTask, type TaskLookupClient } from '../tasks/task-lookup.client.js';
 import { resolveGeofence, type SiteGeofenceClient } from './site-geofence.client.js';
 import { acceptVersion } from './version-acceptance.js';
 
@@ -17,6 +21,7 @@ export class SubmissionService {
     private readonly prisma: PrismaClient,
     private readonly geofence: SiteGeofenceClient,
     private readonly graceDays: number,
+    private readonly tasks: TaskLookupClient,
   ) {}
 
   async getSubmission(id: string) {
@@ -32,6 +37,12 @@ export class SubmissionService {
   async createSubmission(dto: CreateSubmissionDto, actorId: string, bearer: string) {
     const duplicate = await this.prisma.submission.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
     if (duplicate) return this.getSubmission(duplicate.id);
+    // The task is what a submission moves, so it decides who may submit: the
+    // person it is assigned to, against the checklist it carries, while open.
+    const task = requireTask(await this.tasks.fetch(dto.taskId, bearer));
+    if (task.assigneeId !== actorId) throw new ForbiddenException('This task is not assigned to you');
+    if (task.status === 'CANCELLED') throw new ConflictException('This work order has been cancelled');
+    if (task.projectId !== dto.projectId || task.siteId !== dto.siteId) throw new BadRequestException('The submission does not match its task’s project and site');
     const version = await this.prisma.templateVersion.findUnique({
       where: { id: dto.templateVersionId },
       include: { template: true, sections: { include: { items: true } } },
@@ -39,6 +50,11 @@ export class SubmissionService {
     if (!version) throw new BadRequestException('Unknown checklist version');
     const acceptance = acceptVersion(version, version.template, new Date(), this.graceDays);
     if (!acceptance.ok) throw REFUSAL[acceptance.reason]();
+    if (task.templateId !== version.templateId) throw new BadRequestException('This is not the checklist assigned to this task');
+    const pending = await this.prisma.submission.findFirst({
+      where: { taskId: dto.taskId, status: { in: ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED'] } }, select: { status: true },
+    });
+    if (pending) throw new ConflictException(pending.status === 'APPROVED' ? 'This task has already been approved' : 'This task already has a submission awaiting review');
 
     const items = version.sections.flatMap((section) => section.items);
     const responses = new Map(dto.responses.map((response) => [response.itemId, response]));
@@ -60,6 +76,12 @@ export class SubmissionService {
         const itemResponse = await tx.itemResponse.create({ data: { id: uuidv7(), submissionId: submission.id, itemId: response.itemId, selfCheckResult: response.selfCheckResult, selfCheckDescription: response.selfCheckDescription ?? null, textValue: response.textValue ?? null, numberValue: response.numberValue ?? null, booleanValue: response.booleanValue ?? null, selectValue: response.selectValue ?? null } });
         if (response.photoMediaIds.length) await tx.itemPhoto.createMany({ data: response.photoMediaIds.map((mediaId, sequence) => ({ id: uuidv7(), itemResponseId: itemResponse.id, mediaId, sequence })) });
       }
+      const fact: QcSubmissionSubmitted = {
+        submissionId: submission.id, taskId: submission.taskId, projectId: submission.projectId,
+        attemptNo: submission.attemptNo, submittedBy: actorId, submittedAt: submission.submittedAt!.toISOString(),
+      };
+      // In the same transaction, so project hears of every submission that exists and of none that does not.
+      await tx.outboxEvent.create({ data: buildOutboxRecord(SUBJECTS.QC_SUBMISSION_SUBMITTED, { ...fact }, getCorrelationId() ?? 'unknown', actorId) });
       return submission;
     });
   }
@@ -76,7 +98,13 @@ export class SubmissionService {
       for (const response of submission.responses) { const review = reviews.get(response.itemId)!; await tx.itemResponse.update({ where: { id: response.id }, data: { reviewResult: review.result, reviewDescription: review.description ?? null, reviewedBy: actorId, reviewedAt: new Date() } }); }
       const approved = dto.decision === 'APPROVE';
       await tx.reviewDecision.create({ data: { id: uuidv7(), submissionId: id, reviewerId: actorId, decision: dto.decision, comment: dto.comment ?? null } });
-      return tx.submission.update({ where: { id }, data: { status: approved ? 'APPROVED' : 'REJECTED_REWORK', overallVerdict: approved ? 'PASS' : 'FAIL', reviewedBy: actorId, reviewedAt: new Date(), reviewComment: dto.comment ?? null } });
+      const reviewed = await tx.submission.update({ where: { id }, data: { status: approved ? 'APPROVED' : 'REJECTED_REWORK', overallVerdict: approved ? 'PASS' : 'FAIL', reviewedBy: actorId, reviewedAt: new Date(), reviewComment: dto.comment ?? null } });
+      const fact: QcSubmissionReviewed = {
+        submissionId: reviewed.id, taskId: reviewed.taskId, projectId: reviewed.projectId, attemptNo: reviewed.attemptNo,
+        decision: dto.decision, reviewedBy: actorId, reviewedAt: reviewed.reviewedAt!.toISOString(), comment: dto.comment ?? null,
+      };
+      await tx.outboxEvent.create({ data: buildOutboxRecord(SUBJECTS.QC_SUBMISSION_REVIEWED, { ...fact }, getCorrelationId() ?? 'unknown', actorId) });
+      return reviewed;
     });
   }
 }

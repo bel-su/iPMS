@@ -16,6 +16,7 @@ import { TaskChecklistController } from './tasks/task-checklist.controller.js';
 import { TaskLookupClient } from './tasks/task-lookup.client.js';
 import { TemplateController } from './templates/template.controller.js';
 import { TemplateImportController } from './templates/template-import.controller.js';
+import { TemplateReferenceController } from './templates/template-reference.controller.js';
 import { TemplateImportService } from './templates/template-import.service.js';
 import { TemplateQueries } from './templates/template.queries.js';
 import { TemplateService } from './templates/template.service.js';
@@ -39,7 +40,7 @@ function requireEnv(name: string): string {
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [TemplateImportController, TemplateController, SubmissionController, TaskChecklistController, HealthController, MetricsController],
+  controllers: [TemplateImportController, TemplateController, TemplateReferenceController, SubmissionController, TaskChecklistController, HealthController, MetricsController],
   providers: [
     // Order matters: JwtUserGuard must populate request.user before AuthzGuard reads it.
     { provide: APP_GUARD, useClass: JwtUserGuard },
@@ -58,8 +59,8 @@ function requireEnv(name: string): string {
     { provide: TaskLookupClient, useFactory: () => new TaskLookupClient(projectInternalUrl()) },
     {
       provide: SubmissionService,
-      useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient) => new SubmissionService(prisma.db, geofence, graceDays()),
-      inject: [PrismaService, SiteGeofenceClient],
+      useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient, tasks: TaskLookupClient) => new SubmissionService(prisma.db, geofence, graceDays(), tasks),
+      inject: [PrismaService, SiteGeofenceClient, TaskLookupClient],
     },
     {
       provide: EventBus,

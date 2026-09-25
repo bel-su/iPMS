@@ -112,6 +112,8 @@ export function summarizeProject(project: ProjectDetail, tasks: Task[], now: Dat
   // Which task types each site has completed: the currency milestones are paid in.
   const done = new Map<string, Set<string>>();
   for (const task of completed) {
+    // A work order has no task type, so it cannot count towards a milestone.
+    if (task.taskTypeId === null) continue;
     const set = done.get(task.siteId) ?? new Set<string>();
     set.add(task.taskTypeId);
     done.set(task.siteId, set);

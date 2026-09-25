@@ -71,15 +71,16 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Code</th><th>Name</th><th>Category</th>
-                    {tab === 'draft' ? <><th>Draft</th><th>Last saved</th></> : <><th>Version</th><th>Items</th><th>Last published</th></>}
+                    <th>No.</th><th>Template Name</th><th>Template No.</th><th>Template Type</th>
+                    {tab === 'draft' ? <><th>Draft</th><th>Updated On</th></> : <><th>Version</th><th>Items</th><th>Updated On</th></>}
                   </tr>
                 </thead>
                 <tbody>
-                  {templates.data.map((template) => (
+                  {templates.data.map((template, index) => (
                     <tr key={template.id}>
-                      <td><a href={`/quality/templates/${template.id}`}><strong>{template.code}</strong></a></td>
-                      <td>{template.name}</td>
+                      <td>{index + 1}</td>
+                      <td><a className="link" href={`/quality/templates/${template.id}`}><strong>{template.name}</strong></a></td>
+                      <td><code>{template.code}</code></td>
                       <td>{CATEGORY_LABELS[template.category]}</td>
                       {tab === 'draft' ? (
                         <>

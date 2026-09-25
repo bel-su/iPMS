@@ -15,6 +15,9 @@ import type { PasswordService } from '../auth/password.service.js';
 import type { TokenVersionStore } from '../auth/auth.service.js';
 import type { TokenService } from '../auth/token.service.js';
 
+/** A ceiling, not a page size: the directory is one list, and the platform's staff fits in it. */
+const DIRECTORY_LIMIT = 5000;
+
 type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
 
 /**
@@ -172,6 +175,24 @@ export class UsersService {
       throw new ForbiddenException('You may not manage this user');
     }
     return user as UserRow;
+  }
+
+  /**
+   * Names only, for anyone who works with tasks: the responsible-person picker
+   * on a work order, and the name printed where a task shows its assignee.
+   *
+   * Deliberately narrower than `list` — no username, email, roles or login
+   * history — because it is granted by `task.view` rather than `user.view`,
+   * and a QC Manager raising a spot check needs to name the engineer without
+   * being handed the staff directory. Inactive users are included, flagged, so
+   * a task assigned to someone who has since left still shows who it was.
+   */
+  async directory(): Promise<Array<{ id: string; fullName: string; employeeCode: string | null; isActive: boolean }>> {
+    return this.prisma.user.findMany({
+      select: { id: true, fullName: true, employeeCode: true, isActive: true },
+      orderBy: { fullName: 'asc' },
+      take: DIRECTORY_LIMIT,
+    });
   }
 
   async list(query: UserListQuery): Promise<{ items: UserResponse[]; total: number; page: number; limit: number }> {

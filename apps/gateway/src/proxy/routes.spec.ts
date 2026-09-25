@@ -20,6 +20,7 @@ describe('resolveUpstream — allowlist', () => {
     for (const path of [
       '/api/v1/dashboard', '/api/v1/projects', '/api/v1/projects/x/sites', '/api/v1/projects/x/tasks',
       '/api/v1/tasks/x/assign', '/api/v1/sites/x', '/api/v1/task-types/x', '/api/v1/milestones/x',
+      '/api/v1/work-orders', '/api/v1/work-orders/x/cancel',
     ]) {
       const upstream = resolveUpstream(path);
       expect(upstream?.service).toBe('project');

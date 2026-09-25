@@ -4,10 +4,12 @@ import { deleteTaskAction } from '../../actions';
 import { CreateTaskForm, RowAction } from '../../forms';
 import { ProjectFrame, projectProblem } from '../frame';
 import { STATUS_LABEL, formatDay } from '../summary';
+import { personLabel, taskKind } from '../../../work-orders/labels';
+import { listUserDirectory } from '../../../lib/user-api';
 
 export default async function ProjectTasksPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [project, tasks, user] = await Promise.all([getProject(id), listTasks(id), getCurrentUser()]);
+  const [project, tasks, user, people] = await Promise.all([getProject(id), listTasks(id), getCurrentUser(), listUserDirectory()]);
   if (project.state !== 'ready') return projectProblem(project);
 
   // For clarity only — the gateway and the service guards are what enforce this.
@@ -16,6 +18,7 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ i
   const taskList = tasks.state === 'ready' ? tasks.data : [];
   const siteCode = new Map(data.sites.map((site) => [site.id, site.siteCode]));
   const taskType = new Map(data.taskTypes.map((type) => [type.id, type.name]));
+  const name = new Map(people.state === 'ready' ? people.data.map((person) => [person.id, personLabel(person)]) : []);
 
   return (
     <ProjectFrame project={data} active="tasks">
@@ -32,10 +35,10 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ i
                     <tr key={task.id}>
                       <td>{task.title}</td>
                       <td>{siteCode.get(task.siteId) ?? '—'}</td>
-                      <td>{taskType.get(task.taskTypeId) ?? '—'}</td>
+                      <td>{taskKind(task, taskType)}</td>
                       <td><span className={`badge ${STATUS_LABEL[task.status].tone}`}>{STATUS_LABEL[task.status].label}</span></td>
                       <td>{task.plannedCompletionAt ? formatDay(task.plannedCompletionAt) : '—'}</td>
-                      <td>{task.assigneeId ?? 'Unassigned'}</td>
+                      <td>{task.assigneeId ? name.get(task.assigneeId) ?? task.assigneeId : 'Unassigned'}</td>
                       <td className="row-actions">
                         {may('task.delete')
                           ? <RowAction
