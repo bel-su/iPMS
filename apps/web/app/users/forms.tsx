@@ -1,12 +1,14 @@
 'use client';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import {
   createUserAction, deactivateUserAction, reactivateUserAction,
   resetUserPasswordAction, setUserRolesAction, updateUserAction,
 } from './actions';
+import { PasswordInput } from '../components/forms';
 import { EMPTY, type FormState } from '../lib/form-state';
-import type { Role, User, UserRoleSummary } from '../lib/user-api';
+import type { Permission, Role, User, UserRoleSummary } from '../lib/user-api';
+import { summarizeAccess, type RolePermissions } from './role-access';
 
 /** Disables itself while the action runs, so a slow API cannot be double-submitted. */
 function SubmitButton({ children, className = 'primary-button' }: { children: React.ReactNode; className?: string }) {
@@ -35,7 +37,7 @@ export function UserFilterBar({ search, status }: { search: string; status: stri
     <form className="filter-bar" action="/users" method="get">
       <label className="field">
         Search
-        <input name="search" defaultValue={search} placeholder="Name, username or email" maxLength={150} />
+        <input name="search" defaultValue={search} placeholder="Name or email" maxLength={150} />
       </label>
       <label className="field">
         Status
@@ -51,66 +53,117 @@ export function UserFilterBar({ search, status }: { search: string; status: stri
 }
 
 /**
- * The role checkboxes.
+ * What the chosen role allows, grouped by module. It sits between the role
+ * choice and the save button so the effect of a change is visible before it is
+ * made.
+ *
+ * Presentation only, and roles only: iam decides, and a user's real access also
+ * depends on per-user overrides and project scope.
+ */
+function RoleAccessSummary({ selected, roles, catalog }: {
+  selected: string | undefined; roles: RolePermissions[]; catalog: Permission[];
+}) {
+  const { total, groups } = summarizeAccess(selected === undefined ? [] : [selected], roles, catalog);
+  return (
+    <section className="role-access" aria-live="polite">
+      <div className="role-access-heading">
+        <strong>What this role allows</strong>
+        {total > 0
+          ? <span className="subtle">{total} permission{total === 1 ? '' : 's'} across {groups.length} area{groups.length === 1 ? '' : 's'}</span>
+          : null}
+      </div>
+      {total === 0 ? (
+        <p className="subtle">{selected === undefined ? 'Choose a role to see what it allows.' : 'This role grants no permissions.'}</p>
+      ) : (
+        <dl className="role-access-list">
+          {groups.map((group) => (
+            <div key={group.module}>
+              <dt>{group.label}</dt>
+              <dd className="chips">
+                {group.permissions.map((permission) => (
+                  <span key={permission.code} className="chip" title={permission.code}>{permission.description}</span>
+                ))}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The role choice. A user holds exactly one role, so this is a radio group and
+ * a role is required; iam refuses more than one as well.
  *
  * `grantable` is the set this viewer may confer, already filtered by the page
  * against the same table the service enforces — so this form cannot offer a
  * grant that would be refused on submit.
  *
- * `locked` are roles the target already holds that this viewer may *not*
- * confer. They render checked and disabled, with no `name`, so they are visible
- * but unsubmittable. A viewer who cannot see them at all would silently strip
- * them, because the endpoint takes the complete desired set.
+ * `locked` is a role the target already holds that this viewer may *not*
+ * confer. It renders selected and disabled, with no `name`, so it is visible
+ * but unsubmittable.
+ *
+ * `roles` is every role the page could read, locked ones included, so the
+ * summary can describe a locked role too.
  */
-function RoleCheckboxes({ grantable, held, locked }: {
-  grantable: Role[]; held: Set<string>; locked: UserRoleSummary[];
+function RolePicker({ grantable, held, locked, roles, catalog }: {
+  grantable: Role[]; held: string | undefined; locked: UserRoleSummary[];
+  roles: RolePermissions[]; catalog: Permission[];
 }) {
+  const [selected, setSelected] = useState<string | undefined>(held);
   return (
-    <fieldset className="checkbox-grid">
-      <legend>Roles</legend>
-      {grantable.map((role) => (
-        <label key={role.code} className="checkbox">
-          <input type="checkbox" name="roleCodes" value={role.code} defaultChecked={held.has(role.code)} />
-          {role.name}
-        </label>
-      ))}
-      {locked.map((role) => (
-        <label key={role.code} className="checkbox">
-          <input type="checkbox" checked disabled readOnly />
-          {role.name} <span className="subtle">(only an administrator can change this)</span>
-        </label>
-      ))}
-      {grantable.length === 0 && locked.length === 0
-        ? <p className="subtle">You cannot assign any roles.</p>
-        : null}
-    </fieldset>
+    <>
+      <fieldset className="checkbox-grid">
+        <legend>Role</legend>
+        {grantable.map((role) => (
+          <label key={role.code} className="checkbox">
+            <input
+              type="radio" name="roleCodes" value={role.code} required
+              defaultChecked={held === role.code}
+              onChange={() => setSelected(role.code)}
+            />
+            {role.name}
+          </label>
+        ))}
+        {locked.map((role) => (
+          <label key={role.code} className="checkbox">
+            <input type="radio" checked disabled readOnly />
+            {role.name} <span className="subtle">(only an administrator can change this)</span>
+          </label>
+        ))}
+        {grantable.length === 0 && locked.length === 0
+          ? <p className="subtle">You cannot assign any roles.</p>
+          : null}
+      </fieldset>
+      <RoleAccessSummary selected={selected} roles={roles} catalog={catalog} />
+    </>
   );
 }
 
-export function CreateUserForm({ grantable }: { grantable: Role[] }) {
+export function CreateUserForm({ grantable, catalog }: { grantable: Role[]; catalog: Permission[] }) {
   const [state, action] = useActionState(createUserAction, EMPTY);
   return (
     <form action={action} className="panel-form">
       <div className="form-grid">
         <label className="field">Full name<input name="fullName" required maxLength={200} /></label>
         <label className="field">
-          Username
-          <input name="username" required pattern="[A-Za-z][A-Za-z0-9._\-]+" maxLength={150} />
-          <span className="hint">Letters, digits, dot, underscore or hyphen. Cannot be changed later.</span>
+          Email
+          <input name="email" type="email" required maxLength={255} />
+          <span className="hint">The user signs in with this address.</span>
         </label>
-        <label className="field">Email<input name="email" type="email" required maxLength={255} /></label>
         <label className="field">Employee code<input name="employeeCode" maxLength={50} /></label>
         <label className="field">
           Temporary password
-          <input name="password" type="password" required minLength={12} maxLength={200} autoComplete="new-password" />
-          <span className="hint">At least 12 characters.</span>
+          <PasswordInput name="password" required minLength={8} maxLength={200} autoComplete="new-password" />
+          <span className="hint">At least 8 characters, with an uppercase letter, a lowercase letter, a digit and a symbol.</span>
         </label>
         <label className="field">
           Confirm password
-          <input name="confirmPassword" type="password" required minLength={12} maxLength={200} autoComplete="new-password" />
+          <PasswordInput name="confirmPassword" required minLength={8} maxLength={200} autoComplete="new-password" />
         </label>
       </div>
-      <RoleCheckboxes grantable={grantable} held={new Set()} locked={[]} />
+      <RolePicker grantable={grantable} held={undefined} locked={[]} roles={grantable} catalog={catalog} />
       <FormError state={state} />
       <p className="form-note">
         The new user must change this password the first time they sign in. Until they do, their
@@ -137,24 +190,29 @@ export function EditUserForm({ user }: { user: User }) {
       </div>
       <FormError state={state} />
       <p className="form-note">
-        The username is the login identifier and appears in the audit ledger, so it cannot be changed.
+        The email is what this user signs in with. Changing it changes their sign-in address.
       </p>
       <SubmitButton>Save changes</SubmitButton>
     </form>
   );
 }
 
-export function RoleAssignmentForm({ user, grantable }: { user: User; grantable: Role[] }) {
+export function RoleAssignmentForm({ user, grantable, roles, catalog }: {
+  user: User; grantable: Role[]; roles: Role[]; catalog: Permission[];
+}) {
   const [state, action] = useActionState(setUserRolesAction, EMPTY);
   const grantableCodes = new Set(grantable.map((role) => role.code));
   const locked = user.roles.filter((role) => !grantableCodes.has(role.code));
   return (
     <form action={action} className="panel-form">
       <input type="hidden" name="userId" value={user.id} />
-      <RoleCheckboxes grantable={grantable} held={new Set(user.roles.map((r) => r.code))} locked={locked} />
+      <RolePicker
+        grantable={grantable} held={user.roles[0]?.code} locked={locked}
+        roles={roles} catalog={catalog}
+      />
       <FormError state={state} />
-      <p className="form-note">Changing roles signs this user out of every device.</p>
-      <SubmitButton>Save roles</SubmitButton>
+      <p className="form-note">Changing the role signs this user out of every device.</p>
+      <SubmitButton>Save role</SubmitButton>
     </form>
   );
 }
@@ -196,12 +254,12 @@ export function ResetPasswordForm({ user }: { user: User }) {
       <div className="form-grid">
         <label className="field">
           New password
-          <input name="password" type="password" required minLength={12} maxLength={200} autoComplete="new-password" />
-          <span className="hint">At least 12 characters.</span>
+          <PasswordInput name="password" required minLength={8} maxLength={200} autoComplete="new-password" />
+          <span className="hint">At least 8 characters, with an uppercase letter, a lowercase letter, a digit and a symbol.</span>
         </label>
         <label className="field">
           Confirm password
-          <input name="confirmPassword" type="password" required minLength={12} maxLength={200} autoComplete="new-password" />
+          <PasswordInput name="confirmPassword" required minLength={8} maxLength={200} autoComplete="new-password" />
         </label>
       </div>
       <FormError state={state} />

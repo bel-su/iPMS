@@ -5,7 +5,7 @@ import { PERMISSIONS, expandDependencies } from '@ipms/authz';
 import { SUBJECTS } from '@ipms/events';
 import { buildOutboxRecord } from '@ipms/persistence';
 import { hashPassword } from '../src/auth/password.js';
-import { uuidv7 } from '@ipms/contracts';
+import { NewPasswordSchema, uuidv7 } from '@ipms/contracts';
 
 const ALL = PERMISSIONS.map((p) => p.code);
 
@@ -91,10 +91,10 @@ export async function seedIam(prisma: PrismaClient): Promise<void> {
 }
 
 const DEMO_USERS = [
-  { username: 'admin',    email: 'admin@ipms.local',    fullName: 'System Administrator', role: 'SUPER_ADMIN' },
-  { username: 'manager',  email: 'manager@ipms.local',  fullName: 'Project Manager',      role: 'PROJECT_MANAGER' },
-  { username: 'qc',       email: 'qc@ipms.local',       fullName: 'QC Manager',           role: 'QC_MANAGER' },
-  { username: 'engineer', email: 'engineer@ipms.local', fullName: 'Field Engineer',       role: 'FIELD_ENGINEER' },
+  { email: 'admin@ipms.local',    fullName: 'System Administrator', role: 'SUPER_ADMIN' },
+  { email: 'manager@ipms.local',  fullName: 'Project Manager',      role: 'PROJECT_MANAGER' },
+  { email: 'qc@ipms.local',       fullName: 'QC Manager',           role: 'QC_MANAGER' },
+  { email: 'engineer@ipms.local', fullName: 'Field Engineer',       role: 'FIELD_ENGINEER' },
 ];
 
 /**
@@ -104,7 +104,7 @@ const DEMO_USERS = [
  * Two deliberate choices here, both the opposite of the obvious one:
  *
  * The password has no default. A committed literal would put a known
- * SUPER_ADMIN credential in the repository, and `admin`/`demo12345` is the
+ * SUPER_ADMIN credential in the repository, and `admin@ipms.local`/`demo12345` is the
  * first pair any scanner tries. Requiring the variable means a deployment that
  * forgets it gets a loud failure rather than a silent back door.
  *
@@ -126,16 +126,23 @@ export async function seedDemoUsers(prisma: PrismaClient): Promise<void> {
   if (!password) {
     throw new Error('IAM_DEMO_PASSWORD is not set; refusing to seed demo accounts with a default password');
   }
+  // Held to the same policy as a password set through the API. Otherwise the
+  // demo accounts carry a password nobody could choose, and whoever changes
+  // one of them can never set it back.
+  const policy = NewPasswordSchema.safeParse(password);
+  if (!policy.success) {
+    throw new Error(`IAM_DEMO_PASSWORD does not meet the password policy: ${policy.error.issues.map((i) => i.message).join('; ')}`);
+  }
 
   const passwordHash = await hashPassword(password);
 
   for (const demo of DEMO_USERS) {
     const role = await prisma.role.findUniqueOrThrow({ where: { code: demo.role } });
     const user = await prisma.user.upsert({
-      where: { username: demo.username },
+      where: { email: demo.email },
       update: {},
       create: {
-        id: uuidv7(), username: demo.username, email: demo.email,
+        id: uuidv7(), email: demo.email,
         fullName: demo.fullName, passwordHash, isActive: true,
       },
     });

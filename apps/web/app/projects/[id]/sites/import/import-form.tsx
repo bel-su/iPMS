@@ -1,6 +1,6 @@
 'use client';
 import { useActionState } from 'react';
-import { SubmitButton } from '../../../forms';
+import { SubmitButton } from '../../../../components/forms';
 import { commitImportAction, previewImportAction, type ImportState } from './actions';
 
 const EMPTY: ImportState = {};

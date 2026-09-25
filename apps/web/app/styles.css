@@ -314,3 +314,67 @@ a.link { color: var(--blue); }
 .nav-item.nested { min-height: 36px; margin-left: 20px; padding-left: 12px; font-size: 13px; position: relative; }
 .nav-item.nested::before { content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px; border-left: 1px solid var(--line); }
 .nav-item.nested .icon { font-size: 14px; }
+/* Documentation */
+.manual { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; }
+.manual-toc { position: sticky; top: 20px; }
+.manual-toc ol { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 8px; font-size: 13px; }
+.manual-toc a { color: var(--blue); }
+.manual-body { display: grid; gap: 20px; min-width: 0; }
+.manual-body .panel + .panel { margin-top: 0; }
+.manual-chapter { scroll-margin-top: 20px; }
+.manual-chapter h2 { margin: 4px 0 6px; font-size: 18px; }
+.manual-steps { margin: 14px 0 0; padding-left: 20px; display: grid; gap: 8px; line-height: 1.5; }
+.manual-tip { margin: 16px 0 0; padding: 10px 14px; border-radius: 8px; background: var(--pale); font-size: 13px; }
+.manual-tip strong { margin-right: 6px; color: var(--blue); }
+@media (max-width:700px) { .manual { grid-template-columns: 1fr; } .manual-toc { position: static; } }
+/* Account menu in the topbar */
+.profile-menu { position: relative; }
+.profile-menu > summary { list-style: none; cursor: pointer; }
+.profile-menu > summary::-webkit-details-marker { display: none; }
+.profile-dropdown { position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; min-width: 180px; padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 30px #233a6b1f; display: grid; }
+.profile-dropdown a, .profile-dropdown button { display: block; width: 100%; text-align: left; padding: 9px 10px; border: 0; border-radius: 6px; background: none; color: var(--ink); font-size: 13px; }
+.profile-dropdown a:hover, .profile-dropdown button:hover { background: var(--pale); }
+.profile-dropdown form { margin: 0; }
+.profile-name { margin: 0; padding: 8px 10px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; font-size: 12px; font-weight: 650; color: var(--muted); }
+/* Profile page */
+.profile-grid { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px 24px; }
+.profile-grid dt { font-size: 11px; font-weight: 650; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; }
+.profile-grid dd { margin: 4px 0 0; font-size: 14px; }
+/* Password field with a show/hide toggle */
+.password-field { position: relative; display: block; }
+.password-field > input { width: 100%; padding-right: 42px; }
+.password-toggle { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.password-toggle:hover { color: var(--ink); background: var(--pale); }
+.password-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* Live summary under the role checkboxes of what the ticked roles allow. */
+.role-access { margin: 14px 0 4px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--pale); }
+.role-access-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.role-access-heading strong { font-size: 13px; }
+.role-access-heading .subtle { margin: 0; }
+.role-access > p.subtle { margin: 8px 0 0; }
+.role-access-list { display: grid; gap: 10px; margin: 12px 0 0; }
+.role-access-list > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px 14px; align-items: start; }
+.role-access-list dt { padding-top: 5px; color: var(--muted); font-size: 12px; font-weight: 650; }
+.role-access-list dd { margin: 0; }
+.role-access-list .chip { padding: 3px 9px; font-size: 11.5px; }
+@media (max-width: 700px) { .role-access-list > div { grid-template-columns: 1fr; gap: 6px; } .role-access-list dt { padding-top: 0; } }
+
+/* Filled checklist on the work order page */
+.filled { display: grid; gap: 18px; }
+.filled-head { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+.filled-head > div { padding: 8px 10px; border-radius: 8px; background: var(--pale); }
+.filled-head dt { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.filled-head dd { margin: 3px 0 0; font-size: 13px; }
+.filled-section h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.filled-items { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.filled-items > li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; padding: 12px 2px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.filled-items > li.critical { border-left: 2px solid var(--red); padding-left: 8px; }
+.filled-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.filled-row p { margin: 0; line-height: 1.45; }
+.filled-value, .filled-note, .filled-review { margin: 6px 0 0; font-size: 12px; color: #4a566b; }
+.filled-note { padding: 6px 9px; border-radius: 6px; background: var(--pale); white-space: pre-wrap; }
+.filled-photos { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.filled-photos li { width: 96px; height: 96px; display: grid; place-content: center; justify-items: center; gap: 4px; border: 1px dashed #cfd6e1; border-radius: 8px; background: var(--pale); color: var(--muted); }
+.filled-photos li span { font-size: 22px; }
+.filled-photos li small { font-size: 11px; }

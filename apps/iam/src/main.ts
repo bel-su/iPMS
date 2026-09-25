@@ -1,12 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
-import { createLogger } from '@ipms/observability';
+import { GlobalExceptionFilter, createLogger } from '@ipms/observability';
 import { AppModule } from './app.module.js';
 
 const log = createLogger('iam');
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { bufferLogs: true });
+  // The platform error envelope, `{ error: { code, message, correlationId } }`,
+  // which is the only shape the web client can read a message from. Without it
+  // every refusal from iam — "Your current password is incorrect" included —
+  // reached the user as "The iPMS API returned an unexpected error".
+  app.useGlobalFilters(new GlobalExceptionFilter('iam'));
   app.enableShutdownHooks();
 
   /**

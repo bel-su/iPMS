@@ -53,8 +53,8 @@ describe('UsersController parsing', () => {
   it('passes the actor id and roles through to the service', async () => {
     const { controller, users } = build();
     await controller.create({
-      username: 'new.one', email: 'new.one@ipms.local', fullName: 'New One',
-      password: 'a-long-enough-password', roleCodes: ['FIELD_ENGINEER'],
+      email: 'new.one@ipms.local', fullName: 'New One',
+      password: 'Correct-horse-1', roleCodes: ['FIELD_ENGINEER'],
     }, req);
     expect(users.create.mock.calls[0]![1]).toBe(ACTOR);
     expect(users.create.mock.calls[0]![2]).toEqual(['SUPER_ADMIN']);
@@ -67,15 +67,24 @@ describe('UsersController parsing', () => {
 
   it('refuses a body the schema rejects', async () => {
     const { controller } = build();
-    await expect(controller.create({ username: 'x' }, req)).rejects.toThrow();
+    await expect(controller.create({ email: 'x' }, req)).rejects.toThrow();
   });
 
   it('strips a client-supplied isActive rather than honouring it', async () => {
     const { controller, users } = build();
     await controller.create({
-      username: 'new.one', email: 'new.one@ipms.local', fullName: 'New One',
-      password: 'a-long-enough-password', roleCodes: [], isActive: false,
+      email: 'new.one@ipms.local', fullName: 'New One',
+      password: 'Correct-horse-1', roleCodes: [], isActive: false,
     }, req);
     expect(users.create.mock.calls[0]![0]).not.toHaveProperty('isActive');
+  });
+});
+
+describe('UsersController.me', () => {
+  it('reads the caller from the token, with no permission required', async () => {
+    const { controller, users } = build();
+    await controller.me(req);
+    expect(users.get).toHaveBeenCalledWith(ACTOR);
+    expect(permissionOf('me')).toBeUndefined();
   });
 });

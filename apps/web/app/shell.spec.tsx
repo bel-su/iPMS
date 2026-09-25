@@ -6,7 +6,10 @@ vi.mock('./lib/iam-api', async () => {
   return { ...actual, getCurrentUser };
 });
 
-const { Sidebar } = await import('./shell');
+const getMyProfile = vi.fn();
+vi.mock('./lib/user-api', () => ({ getMyProfile }));
+
+const { Sidebar, TopActions, initialsOf } = await import('./shell');
 
 function user(permissions: string[]) {
   return { state: 'ready', data: { id: 'u-1', roles: [], permissions, tokenVersion: 0, isActive: true } };
@@ -72,5 +75,33 @@ describe('Sidebar', () => {
     getCurrentUser.mockResolvedValue(user(['project.view']));
     const links = hrefs(await Sidebar({ active: 'projects' }));
     expect(links.some((href) => href.startsWith('/quality'))).toBe(false);
+  });
+
+  it('offers Documentation to a manager', async () => {
+    getCurrentUser.mockResolvedValue({ state: 'ready', data: { id: 'u-1', roles: ['QC_MANAGER'], permissions: [], tokenVersion: 0, isActive: true } });
+    expect(hrefs(await Sidebar({ active: 'projects' }))).toContain('/docs');
+  });
+
+  it('hides Documentation from staff below manager, and no longer links Settings', async () => {
+    getCurrentUser.mockResolvedValue({ state: 'ready', data: { id: 'u-1', roles: ['FIELD_ENGINEER'], permissions: [], tokenVersion: 0, isActive: true } });
+    const links = hrefs(await Sidebar({ active: 'projects' }));
+    expect(links).not.toContain('/docs');
+    expect(links.some((href) => href.includes('settings'))).toBe(false);
+  });
+});
+
+describe('TopActions', () => {
+  it('offers Profile and a POST sign-out in the account menu', async () => {
+    getMyProfile.mockResolvedValue({ state: 'ready', data: { fullName: 'Jane Doe' } });
+    const tree = await TopActions({});
+    expect(hrefs(tree)).toContain('/profile');
+    expect(JSON.stringify(tree)).toContain('/api/auth/logout');
+    expect(JSON.stringify(tree)).toContain('JD');
+  });
+});
+
+describe('initialsOf', () => {
+  it.each([['Jane Doe', 'JD'], ['Mary Ann Smith', 'MS'], ['Admin', 'AD'], ['  ', '?']])('%s → %s', (name, expected) => {
+    expect(initialsOf(name)).toBe(expected);
   });
 });

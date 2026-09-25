@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { UnauthorizedException } from '@nestjs/common';
-import { AuthService } from './auth.service.js';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { AuthService, CURRENT_PASSWORD_WRONG } from './auth.service.js';
 import { PasswordService } from './password.service.js';
 import { TokenService } from './token.service.js';
 import { uuidv7 } from '@ipms/contracts';
@@ -10,7 +10,7 @@ const tokens = new TokenService({ secret: 'a'.repeat(32), accessTtl: 900, refres
 
 async function build(userOverrides: Record<string, unknown> = {}) {
   const user = {
-    id: uuidv7(), username: 'engineer', isActive: true, tokenVersion: 0,
+    id: uuidv7(), email: 'engineer@ipms.local', isActive: true, tokenVersion: 0,
     passwordHash: await passwords.hash('demo12345'),
     roles: [{ role: { code: 'FIELD_ENGINEER', isActive: true, permissions: [{ permission: { code: 'task.view' } }] },
              validFrom: null, validUntil: null }],
@@ -30,40 +30,40 @@ async function build(userOverrides: Record<string, unknown> = {}) {
 describe('AuthService.login', () => {
   it('returns a token pair for valid credentials', async () => {
     const { service } = await build();
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(pair.accessToken).toBeTruthy();
   });
 
   it('embeds the permissions derived from active roles', async () => {
     const { service } = await build();
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(tokens.verifyAccess(pair.accessToken).permissions).toContain('task.view');
   });
 
   it('rejects a wrong password with 401', async () => {
     const { service } = await build();
-    await expect(service.login({ username: 'engineer', password: 'wrong-password' }))
+    await expect(service.login({ email: 'engineer@ipms.local', password: 'wrong-password' }))
       .rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('rejects an unknown user with 401', async () => {
     const { service, prisma } = await build();
     prisma.user.findUnique.mockResolvedValue(null);
-    await expect(service.login({ username: 'ghost', password: 'demo12345' }))
+    await expect(service.login({ email: 'ghost@ipms.local', password: 'demo12345' }))
       .rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('gives the same message for unknown user and wrong password, to avoid enumeration', async () => {
     const { service, prisma } = await build();
-    const wrongPassword = await service.login({ username: 'engineer', password: 'wrong-password' }).catch((e: Error) => e.message);
+    const wrongPassword = await service.login({ email: 'engineer@ipms.local', password: 'wrong-password' }).catch((e: Error) => e.message);
     prisma.user.findUnique.mockResolvedValue(null);
-    const unknownUser = await service.login({ username: 'ghost', password: 'demo12345' }).catch((e: Error) => e.message);
+    const unknownUser = await service.login({ email: 'ghost@ipms.local', password: 'demo12345' }).catch((e: Error) => e.message);
     expect(wrongPassword).toBe(unknownUser);
   });
 
   it('rejects a deactivated user', async () => {
     const { service } = await build({ isActive: false });
-    await expect(service.login({ username: 'engineer', password: 'demo12345' }))
+    await expect(service.login({ email: 'engineer@ipms.local', password: 'demo12345' }))
       .rejects.toBeInstanceOf(UnauthorizedException);
   });
 
@@ -74,7 +74,7 @@ describe('AuthService.login', () => {
         validFrom: null, validUntil: new Date('2026-01-01T00:00:00Z'),
       }],
     });
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(tokens.verifyAccess(pair.accessToken).permissions).not.toContain('qc_review.approve');
   });
 
@@ -85,7 +85,7 @@ describe('AuthService.login', () => {
         validFrom: null, validUntil: null,
       }],
     });
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(tokens.verifyAccess(pair.accessToken).permissions).toEqual([]);
   });
 });
@@ -109,13 +109,13 @@ function globalOverride(
 describe('AuthService — overrides in the permission claim', () => {
   it('drops a role-granted permission denied by a live global override', async () => {
     const { service } = await build({ overrides: [globalOverride('task.view', 'DENY')] });
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(tokens.verifyAccess(pair.accessToken).permissions).not.toContain('task.view');
   });
 
   it('adds a permission granted by a live global ALLOW override', async () => {
     const { service } = await build({ overrides: [globalOverride('qc_review.approve', 'ALLOW')] });
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(tokens.verifyAccess(pair.accessToken).permissions).toContain('qc_review.approve');
   });
 
@@ -126,7 +126,7 @@ describe('AuthService — overrides in the permission claim', () => {
         globalOverride('qc_review.approve', 'DENY'),
       ],
     });
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(tokens.verifyAccess(pair.accessToken).permissions).not.toContain('qc_review.approve');
   });
 
@@ -134,7 +134,7 @@ describe('AuthService — overrides in the permission claim', () => {
     const { service } = await build({
       overrides: [globalOverride('task.view', 'DENY', { validUntil: new Date('2026-01-01T00:00:00Z') })],
     });
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(tokens.verifyAccess(pair.accessToken).permissions).toContain('task.view');
   });
 
@@ -148,13 +148,13 @@ describe('AuthService — overrides in the permission claim', () => {
     const { service } = await build({
       overrides: [globalOverride('task.view', 'DENY', { projectId: 'p-1' })],
     });
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(tokens.verifyAccess(pair.accessToken).permissions).toContain('task.view');
   });
 
   it('applies overrides on refresh too, not only on login', async () => {
     const { service, prisma, user } = await build();
-    const { refreshToken } = await service.login({ username: 'engineer', password: 'demo12345' });
+    const { refreshToken } = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     prisma.user.findUnique.mockResolvedValue({ ...user, overrides: [globalOverride('task.view', 'DENY')] });
     const pair = await service.refresh(refreshToken);
     expect(tokens.verifyAccess(pair.accessToken).permissions).not.toContain('task.view');
@@ -188,13 +188,13 @@ describe('AuthService.revokeAll', () => {
 describe('AuthService — session version publication', () => {
   it('publishes the token version on login, not only on revocation', async () => {
     const { service, versions, user } = await build({ tokenVersion: 2 });
-    await service.login({ username: 'engineer', password: 'demo12345' });
+    await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(versions.publish).toHaveBeenCalledWith(user.id, 2, expect.any(Number));
   });
 
   it('publishes the token version on refresh too', async () => {
     const { service, versions, user } = await build({ tokenVersion: 2 });
-    const { refreshToken } = await service.login({ username: 'engineer', password: 'demo12345' });
+    const { refreshToken } = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     versions.publish.mockClear();
     await service.refresh(refreshToken);
     expect(versions.publish).toHaveBeenCalledWith(user.id, 2, expect.any(Number));
@@ -202,7 +202,7 @@ describe('AuthService — session version publication', () => {
 
   it('gives the entry a TTL at least as long as a refresh token lives', async () => {
     const { service, versions } = await build();
-    await service.login({ username: 'engineer', password: 'demo12345' });
+    await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     const ttl = versions.publish.mock.calls[0]?.[2] as number;
     expect(ttl).toBeGreaterThanOrEqual(2_592_000);
   });
@@ -211,27 +211,27 @@ describe('AuthService — session version publication', () => {
 describe('AuthService.refresh', () => {
   it('rejects an access token presented as a refresh token', async () => {
     const { service } = await build();
-    const { accessToken } = await service.login({ username: 'engineer', password: 'demo12345' });
+    const { accessToken } = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     await expect(service.refresh(accessToken)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('rejects a refresh token whose version no longer matches the user', async () => {
     const { service, prisma, user } = await build({ tokenVersion: 1 });
-    const { refreshToken } = await service.login({ username: 'engineer', password: 'demo12345' });
+    const { refreshToken } = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     prisma.user.findUnique.mockResolvedValue({ ...user, tokenVersion: 2 });
     await expect(service.refresh(refreshToken)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('rejects a refresh token for a user deactivated since it was issued', async () => {
     const { service, prisma, user } = await build();
-    const { refreshToken } = await service.login({ username: 'engineer', password: 'demo12345' });
+    const { refreshToken } = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     prisma.user.findUnique.mockResolvedValue({ ...user, isActive: false });
     await expect(service.refresh(refreshToken)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('issues a fresh pair for a valid refresh token', async () => {
     const { service } = await build();
-    const { refreshToken } = await service.login({ username: 'engineer', password: 'demo12345' });
+    const { refreshToken } = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     const pair = await service.refresh(refreshToken);
     expect(tokens.verifyAccess(pair.accessToken).permissions).toContain('task.view');
   });
@@ -247,7 +247,7 @@ describe('AuthService.refresh', () => {
 describe('AuthService and mustChangePassword', () => {
   it('issues a token with no roles and no permissions', async () => {
     const { service } = await build({ mustChangePassword: true });
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     const claims = tokens.verifyAccess(pair.accessToken);
     expect(claims.roles).toEqual([]);
     expect(claims.permissions).toEqual([]);
@@ -256,20 +256,20 @@ describe('AuthService and mustChangePassword', () => {
 
   it('reports the flag on the pair so the browser can redirect at login', async () => {
     const { service } = await build({ mustChangePassword: true });
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(pair.mustChangePassword).toBe(true);
   });
 
   it('keeps the branch on refresh, so the token cannot be rolled forward into a real one', async () => {
     const { service } = await build({ mustChangePassword: true });
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     const refreshed = await service.refresh(pair.refreshToken);
     expect(tokens.verifyAccess(refreshed.accessToken).permissions).toEqual([]);
   });
 
   it('issues a normal token once the flag is clear', async () => {
     const { service } = await build();
-    const pair = await service.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await service.login({ email: 'engineer@ipms.local', password: 'demo12345' });
     const claims = tokens.verifyAccess(pair.accessToken);
     expect(claims.permissions).toContain('task.view');
     expect(claims.mustChangePassword).toBeUndefined();
@@ -277,11 +277,12 @@ describe('AuthService and mustChangePassword', () => {
 });
 
 describe('AuthService.changePassword', () => {
+  // A 400 the form can show, not a 401 every client reads as an expired session.
   it('refuses a wrong current password without touching the row', async () => {
     const { service, prisma, user } = await build();
     await expect(service.changePassword(user.id as string, {
-      currentPassword: 'not-the-password', newPassword: 'a-long-enough-one',
-    })).rejects.toBeInstanceOf(UnauthorizedException);
+      currentPassword: 'not-the-password', newPassword: 'Long-enough-1',
+    })).rejects.toThrow(new BadRequestException(CURRENT_PASSWORD_WRONG));
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
@@ -296,11 +297,11 @@ describe('AuthService.changePassword', () => {
   it('stores a new hash and clears the flag', async () => {
     const { service, prisma, user } = await build({ mustChangePassword: true });
     await service.changePassword(user.id as string, {
-      currentPassword: 'demo12345', newPassword: 'a-long-enough-one',
+      currentPassword: 'demo12345', newPassword: 'Long-enough-1',
     });
     const data = prisma.user.update.mock.calls[0]![0].data;
     expect(data.mustChangePassword).toBe(false);
-    expect(await passwords.verify(data.passwordHash as string, 'a-long-enough-one')).toBe(true);
+    expect(await passwords.verify(data.passwordHash as string, 'Long-enough-1')).toBe(true);
   });
 
   // The bump kills the caller's own token, which is the point: the next sign-in
@@ -308,7 +309,7 @@ describe('AuthService.changePassword', () => {
   it('revokes every outstanding session', async () => {
     const { service, versions, user } = await build();
     await service.changePassword(user.id as string, {
-      currentPassword: 'demo12345', newPassword: 'a-long-enough-one',
+      currentPassword: 'demo12345', newPassword: 'Long-enough-1',
     });
     expect(versions.publish).toHaveBeenCalled();
   });
@@ -316,7 +317,7 @@ describe('AuthService.changePassword', () => {
   it('refuses a deactivated user', async () => {
     const { service, user } = await build({ isActive: false });
     await expect(service.changePassword(user.id as string, {
-      currentPassword: 'demo12345', newPassword: 'a-long-enough-one',
+      currentPassword: 'demo12345', newPassword: 'Long-enough-1',
     })).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

@@ -232,7 +232,7 @@ class ProfileScreen extends ConsumerWidget {
 
             // User Identity & Role
             Text(
-              user?.displayName ?? user?.username ?? 'Field Staff',
+              user?.displayName ?? user?.email ?? 'Field Staff',
               style: AppTypography.headingMedium,
             ),
             const SizedBox(height: 4),

@@ -17,14 +17,35 @@ import { clearable, optional, settle } from '../lib/settle';
  */
 
 /** Matches `NewPasswordSchema` in @ipms/contracts. Keep the two in step. */
-const MIN_PASSWORD = 12;
+const MIN_PASSWORD = 8;
+const PASSWORD_RULES: ReadonlyArray<[RegExp, string]> = [
+  [/[A-Z]/, 'an uppercase letter'],
+  [/[a-z]/, 'a lowercase letter'],
+  [/[0-9]/, 'a digit'],
+  [/[^A-Za-z0-9]/, 'a symbol'],
+];
+
+/**
+ * A password exactly as typed. Not `optional`, which trims: sign-in sends the
+ * value untrimmed, so a password stored trimmed and typed with its trailing
+ * space would never match again.
+ */
+function secret(form: FormData, field: string): string | undefined {
+  const value = form.get(field);
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
 
 /** Both password forms take the value twice; neither should reach the API disagreeing. */
 function readNewPassword(form: FormData): { password: string } | { error: string } {
-  const password = optional(form, 'password') ?? optional(form, 'newPassword');
-  const confirmation = optional(form, 'confirmPassword');
+  const password = secret(form, 'password') ?? secret(form, 'newPassword');
+  const confirmation = secret(form, 'confirmPassword');
   if (!password) return { error: 'A password is required.' };
   if (password.length < MIN_PASSWORD) return { error: `The password must be at least ${MIN_PASSWORD} characters.` };
+  const missing = PASSWORD_RULES.filter(([rule]) => !rule.test(password)).map(([, name]) => name);
+  if (missing.length > 0) {
+    const list = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}`;
+    return { error: `The password must contain ${list}.` };
+  }
   if (password !== confirmation) return { error: 'The two passwords do not match.' };
   return { password };
 }
@@ -32,23 +53,27 @@ function readNewPassword(form: FormData): { password: string } | { error: string
 /** A user's name is rendered on their own page and in the list, and both must refresh. */
 const pages = (userId: string) => [`/users/${userId}`, '/users'];
 
+/** The one role the form's radio group chose. A user holds exactly one. */
+function readRole(form: FormData): { roleCodes: string[] } | { error: string } {
+  const roleCodes = form.getAll('roleCodes').map(String);
+  return roleCodes.length === 1 ? { roleCodes } : { error: 'Choose a role for this user.' };
+}
+
 export async function createUserAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const username = optional(form, 'username');
   const email = optional(form, 'email');
   const fullName = optional(form, 'fullName');
-  if (!username || !email || !fullName) {
-    return { error: 'A username, an email address and a full name are required.' };
+  if (!email || !fullName) {
+    return { error: 'An email address and a full name are required.' };
   }
 
   const password = readNewPassword(form);
   if ('error' in password) return { error: password.error };
+  const role = readRole(form);
+  if ('error' in role) return { error: role.error };
 
   const employeeCode = optional(form, 'employeeCode');
   const result = await createUser({
-    username, email, fullName, password: password.password,
-    // An unchecked box sends nothing, so this is the empty set when no role
-    // was picked — which the API accepts and the service treats as "no roles".
-    roleCodes: form.getAll('roleCodes').map(String),
+    email, fullName, password: password.password, roleCodes: role.roleCodes,
     ...(employeeCode === undefined ? {} : { employeeCode }),
   });
 
@@ -80,9 +105,9 @@ export async function updateUserAction(_previous: FormState, form: FormData): Pr
 
 export async function setUserRolesAction(_previous: FormState, form: FormData): Promise<FormState> {
   const userId = String(form.get('userId'));
-  return settle(await setUserRoles(userId, {
-    roleCodes: form.getAll('roleCodes').map(String),
-  }), pages(userId));
+  const role = readRole(form);
+  if ('error' in role) return { error: role.error };
+  return settle(await setUserRoles(userId, role), pages(userId));
 }
 
 export async function deactivateUserAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -106,12 +131,13 @@ export async function resetUserPasswordAction(_previous: FormState, form: FormDa
  * Self-service, and the last thing this session does.
  *
  * The change bumps `tokenVersion`, so the cookie in this browser is dead by the
- * time the call returns — there is no authenticated page left to land on, and
- * signing in again is what hands the user a token carrying their real
- * permissions for the first time.
+ * time the call returns. Rather than redirecting straight to sign-in, which
+ * reads as being thrown out, it reports `done` and the form confirms the change
+ * before offering to sign in again (through the logout route, which clears the
+ * dead cookies).
  */
 export async function changePasswordAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const currentPassword = optional(form, 'currentPassword');
+  const currentPassword = secret(form, 'currentPassword');
   if (!currentPassword) return { error: 'Enter your current password.' };
 
   const password = readNewPassword(form);
@@ -125,5 +151,5 @@ export async function changePasswordAction(_previous: FormState, form: FormData)
     '/users',
   );
   if (state.error) return state;
-  redirect('/login?changed=1');
+  return { done: true };
 }

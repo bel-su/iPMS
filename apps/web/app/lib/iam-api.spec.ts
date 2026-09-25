@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const authFetch = vi.fn().mockResolvedValue({ state: 'ready', data: {} });
 vi.mock('./api-client', () => ({ authFetch }));
 
-const { getCurrentUser, hasPermission } = await import('./iam-api');
+const { getCurrentUser, hasPermission, mayReadDocs } = await import('./iam-api');
 
 const USER = { id: 'u-1', roles: ['ENGINEER'], permissions: ['project.view'], tokenVersion: 1, isActive: true };
 
@@ -37,5 +37,19 @@ describe('hasPermission', () => {
   // refuses them regardless, so the UI must not offer the control either.
   it('is false for every permission of a deactivated user', () => {
     expect(hasPermission({ ...USER, isActive: false }, 'project.view')).toBe(false);
+  });
+});
+
+describe('mayReadDocs', () => {
+  it.each(['SUPER_ADMIN', 'PROJECT_MANAGER', 'QC_MANAGER'])('lets a %s read the docs', (role) => {
+    expect(mayReadDocs({ ...USER, roles: [role] })).toBe(true);
+  });
+
+  it.each(['FIELD_ENGINEER', 'VIEWER', 'CUSTOM_ROLE'])('keeps the docs from a %s', (role) => {
+    expect(mayReadDocs({ ...USER, roles: [role] })).toBe(false);
+  });
+
+  it('keeps the docs from a deactivated manager', () => {
+    expect(mayReadDocs({ ...USER, roles: ['PROJECT_MANAGER'], isActive: false })).toBe(false);
   });
 });

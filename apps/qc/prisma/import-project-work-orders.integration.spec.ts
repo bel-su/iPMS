@@ -57,6 +57,8 @@ describe('importing project’s work orders', () => {
     const copied = await prisma.workOrder.findUniqueOrThrow({ where: { id: orderId }, include: { events: true } });
     expect(copied).toMatchObject({
       projectCode: 'TI-L2100', siteCode: 'KOS102X', siteName: 'SAKUWA GACHHI', siteCity: 'Biratnagar',
+      // Renamed to the site ID on the way in, as work orders are now named.
+      title: '[Quality Self-check]KOS102X',
       status: 'REVIEWING', templateId, assigneeId: ACTOR,
     });
     expect(copied.events).toEqual([expect.objectContaining({ id: eventId, kind: 'CREATED', detail: { templateVersion: 1 } })]);

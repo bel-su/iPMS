@@ -3,7 +3,7 @@ import { useActionState, useEffect, useMemo, useState, useTransition } from 'rea
 import { useFormStatus } from 'react-dom';
 import { EMPTY } from '../../../lib/form-state';
 import type { DirectoryUser } from '../../../lib/user-api';
-import { FormError } from '../../../projects/forms';
+import { FormError } from '../../../components/forms';
 import {
   createWorkOrdersAction, loadChecklistAction, loadProjectAction,
   type ChecklistPreview, type ProjectContext,
@@ -207,7 +207,7 @@ export function Composer({ projects, templates, directory, initialProjectId, ini
         </dl>
         {chosenSites.length > 0
           ? <ul className="summary-names">
-              {chosenSites.slice(0, NAME_PREVIEW).map((site) => <li key={site.id}>{previewTitle(type, site.name, note)}</li>)}
+              {chosenSites.slice(0, NAME_PREVIEW).map((site) => <li key={site.id}>{previewTitle(type, site.siteCode, note)}</li>)}
               {chosenSites.length > NAME_PREVIEW ? <li className="more">and {chosenSites.length - NAME_PREVIEW} more</li> : null}
             </ul>
           : null}

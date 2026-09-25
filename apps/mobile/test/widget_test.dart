@@ -19,7 +19,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('iPMS Field App'), findsOneWidget);
-    expect(find.text('Username'), findsOneWidget);
+    expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.text('Sign In'), findsOneWidget);
   });

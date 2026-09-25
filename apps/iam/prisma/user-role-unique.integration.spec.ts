@@ -44,7 +44,6 @@ beforeAll(async () => {
   await prisma.user.create({
     data: {
       id: userId,
-      username: 'unique-test-user',
       email: 'unique-test-user@example.com',
       fullName: 'Unique Test User',
       passwordHash: 'not-a-real-hash',

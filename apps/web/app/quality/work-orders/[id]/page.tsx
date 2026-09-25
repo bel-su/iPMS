@@ -1,12 +1,12 @@
 import { getCurrentUser, hasPermission } from '../../../lib/iam-api';
 import { listAssignable } from '../../../lib/project-api';
 import { getWorkOrder, type WorkOrderEvent } from '../../../lib/work-order-api';
-import { getTemplate, getVersion, type ChecklistSection } from '../../../lib/qc-api';
+import { getSubmission, getTemplate, getVersion, type ChecklistSection } from '../../../lib/qc-api';
 import { listUserDirectory } from '../../../lib/user-api';
 import { Sidebar, StatePage, TopActions } from '../../../shell';
 import { ChecklistOutline } from '../checklist-outline';
-import { STATUS_TEXT, WORK_ORDERS_PATH, dueText, eligiblePeople, formatDateTime, formatDay, isOpen, isoDay, personLabel, typeInfo } from '../labels';
-import { projectWorkOrders } from '../../../projects/[id]/paths';
+import { STATUS_TEXT, WORK_ORDERS_PATH, projectWorkOrdersPath, dueText, eligiblePeople, formatDateTime, formatDay, isOpen, isoDay, personLabel, typeInfo } from '../labels';
+import { FilledChecklist } from './filled-checklist';
 import { ManageWorkOrder } from './manage';
 
 /** The checklist as it stands now: projects always use the latest published version. */
@@ -17,6 +17,12 @@ async function currentChecklist(templateId: string): Promise<ChecklistSection[] 
   if (!published) return null;
   const version = await getVersion(templateId, published.version);
   return version.state === 'ready' ? version.data.version.sections : null;
+}
+
+/** The sections of the version a submission was made against, for grouping its answers. */
+async function versionSections(templateId: string, version: number): Promise<ChecklistSection[] | null> {
+  const detail = await getVersion(templateId, version);
+  return detail.state === 'ready' ? detail.data.version.sections : null;
 }
 
 export default async function WorkOrderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -37,10 +43,13 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
     const person = directory.find((p) => p.id === userId);
     return person ? personLabel(person) : 'Unknown user';
   };
-  const [assignable, sections] = await Promise.all([
+  const [assignable, sections, submitted] = await Promise.all([
     canAssign ? listAssignable(wo.projectId) : Promise.resolve(null),
     wo.templateId && may('qc_template.view') ? currentChecklist(wo.templateId) : Promise.resolve(null),
+    wo.currentSubmissionId && may('qc_submission.view') ? getSubmission(wo.currentSubmissionId) : Promise.resolve(null),
   ]);
+  const submission = submitted?.state === 'ready' ? submitted.data : null;
+  const submissionSections = submission && may('qc_template.view') ? await versionSections(submission.templateId, submission.templateVersion) : null;
   const candidates = assignable?.state === 'ready' ? eligiblePeople(assignable.data, directory, [wo.site.id]).people : [];
   const info = wo.workOrderType ? typeInfo(wo.workOrderType) : null;
   const status = STATUS_TEXT[wo.status];
@@ -52,7 +61,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
       <Sidebar active="work-orders" />
       <section className="content">
         <header className="topbar">
-          <div className="crumbs"><a href="/quality">Quality &amp; EHS</a><b>/</b><a href={WORK_ORDERS_PATH}>Work orders</a><b>/</b><a href={projectWorkOrders(wo.project.id)}>{wo.project.code}</a><b>/</b><strong>{wo.site.siteCode}</strong></div>
+          <div className="crumbs"><a href="/quality">Quality &amp; EHS</a><b>/</b><a href={WORK_ORDERS_PATH}>Work orders</a><b>/</b><a href={projectWorkOrdersPath(wo.project.id)}>{wo.project.code}</a><b>/</b><strong>{wo.site.siteCode}</strong></div>
           <TopActions />
         </header>
         <div className="dashboard">
@@ -74,7 +83,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
               <section className="panel">
                 <h2 className="panel-title">Details</h2>
                 <dl className="facts">
-                  <div><dt>Project ID (DU)</dt><dd><a href={projectWorkOrders(wo.project.id)}><code>{wo.project.code}</code></a> {wo.project.name}</dd></div>
+                  <div><dt>Project ID (DU)</dt><dd><a href={projectWorkOrdersPath(wo.project.id)}><code>{wo.project.code}</code></a> {wo.project.name}</dd></div>
                   <div><dt>Site</dt><dd><b>{wo.site.siteCode}</b> {wo.site.name !== wo.site.siteCode ? wo.site.name : ''}<small>{[wo.site.city, wo.site.area].filter(Boolean).join(' · ')}</small></dd></div>
                   <div><dt>Checklist</dt><dd>{wo.templateId && may('qc_template.view') ? <a className="link" href={`/quality/templates/${wo.templateId}`}>{wo.templateName}</a> : wo.templateName ?? '—'}</dd></div>
                   <div><dt>Responsible</dt><dd>{name(wo.assigneeId)}</dd></div>
@@ -85,20 +94,14 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                 </dl>
               </section>
 
-              <section className="panel">
-                <h2 className="panel-title">Timeline</h2>
-                <ol className="timeline">
-                  {timeline(wo).reverse().map((event) => (
-                    <li key={event.id} className={`tl ${event.kind.toLowerCase()}`}>
-                      <span className="tl-dot" aria-hidden="true" />
-                      <div>
-                        <p>{describe(event, name)}</p>
-                        <small>{formatDateTime(event.at)}{event.actorId ? ` · ${name(event.actorId)}` : ''}</small>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </section>
+              {may('qc_submission.view')
+                ? <section className="panel">
+                    <h2 className="panel-title">Filled checklist</h2>
+                    {submission
+                      ? <FilledChecklist submission={submission} sections={submissionSections} name={name} />
+                      : <p className="subtle">{submitted && 'message' in submitted ? submitted.message : 'Nothing submitted yet.'}</p>}
+                  </section>
+                : null}
             </div>
 
             <div className="wo-col">
@@ -118,6 +121,20 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                     <ChecklistOutline sections={sections} />
                   </section>
                 : null}
+              <section className="panel">
+                <h2 className="panel-title">Timeline</h2>
+                <ol className="timeline">
+                  {timeline(wo).reverse().map((event) => (
+                    <li key={event.id} className={`tl ${event.kind.toLowerCase()}`}>
+                      <span className="tl-dot" aria-hidden="true" />
+                      <div>
+                        <p>{describe(event, name)}</p>
+                        <small>{formatDateTime(event.at)}{event.actorId ? ` · ${name(event.actorId)}` : ''}</small>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
             </div>
           </div>
         </div>

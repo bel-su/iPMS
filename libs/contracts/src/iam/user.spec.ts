@@ -1,35 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import {
   AssignRolesSchema, ChangePasswordSchema, CreateUserSchema,
-  UpdateUserSchema, UserListQuerySchema, UsernameSchema,
+  EmailSchema, UpdateUserSchema, UserListQuerySchema,
 } from './user.js';
 
-describe('UsernameSchema', () => {
+describe('EmailSchema', () => {
   it('trims and lowercases, so the same person cannot register twice', () => {
-    expect(UsernameSchema.parse('  Field.Engineer_01  ')).toBe('field.engineer_01');
+    expect(EmailSchema.parse('  Field.Engineer@IPMS.local  ')).toBe('field.engineer@ipms.local');
   });
 
-  // The seeded `qc` account is two characters; a policy the repository's own
-  // seed violates is the wrong policy.
-  it('accepts a two-character username', () => {
-    expect(UsernameSchema.parse('qc')).toBe('qc');
-  });
-
-  it('refuses a single character, a leading digit, and a space', () => {
-    expect(UsernameSchema.safeParse('a').success).toBe(false);
-    expect(UsernameSchema.safeParse('1abc').success).toBe(false);
-    expect(UsernameSchema.safeParse('ab cd').success).toBe(false);
+  it('refuses something that is not an address', () => {
+    expect(EmailSchema.safeParse('engineer').success).toBe(false);
+    expect(EmailSchema.safeParse('').success).toBe(false);
   });
 });
 
 describe('CreateUserSchema', () => {
   const valid = {
-    username: 'new.engineer', email: 'new@ipms.local', fullName: 'New Engineer',
-    password: 'correct-horse-battery', roleCodes: ['FIELD_ENGINEER'],
+    email: 'new@ipms.local', fullName: 'New Engineer',
+    password: 'Correct-horse-1', roleCodes: ['FIELD_ENGINEER'],
   };
 
   it('accepts a complete body', () => {
-    expect(CreateUserSchema.parse(valid).username).toBe('new.engineer');
+    expect(CreateUserSchema.parse(valid).email).toBe('new@ipms.local');
+  });
+
+  it('refuses more than one role', () => {
+    expect(CreateUserSchema.safeParse({ ...valid, roleCodes: ['FIELD_ENGINEER', 'QC_MANAGER'] }).success).toBe(false);
   });
 
   it('defaults roleCodes to none', () => {
@@ -37,9 +34,18 @@ describe('CreateUserSchema', () => {
     expect(CreateUserSchema.parse(withoutRoles).roleCodes).toEqual([]);
   });
 
-  it('refuses a password under twelve characters', () => {
-    expect(CreateUserSchema.safeParse({ ...valid, password: 'short11chars' }).success).toBe(true);
-    expect(CreateUserSchema.safeParse({ ...valid, password: 'tooshort' }).success).toBe(false);
+  it('accepts eight characters with every character class', () => {
+    expect(CreateUserSchema.safeParse({ ...valid, password: 'Abcdef1!' }).success).toBe(true);
+  });
+
+  it.each([
+    ['under eight characters', 'Abcde1!'],
+    ['no uppercase letter', 'abcdef1!'],
+    ['no lowercase letter', 'ABCDEF1!'],
+    ['no digit', 'Abcdefg!'],
+    ['no symbol', 'Abcdefg1'],
+  ])('refuses a password with %s', (_why, password) => {
+    expect(CreateUserSchema.safeParse({ ...valid, password }).success).toBe(false);
   });
 
   it('refuses a malformed email', () => {
@@ -59,8 +65,8 @@ describe('CreateUserSchema', () => {
 });
 
 describe('UpdateUserSchema', () => {
-  it('has no username field: renaming would rewrite who past audit entries are about', () => {
-    expect(UpdateUserSchema.parse({ username: 'renamed' })).not.toHaveProperty('username');
+  it('normalizes a changed email the same way creation does', () => {
+    expect(UpdateUserSchema.parse({ email: ' Ann@IPMS.local ' }).email).toBe('ann@ipms.local');
   });
 
   it('has no password field: a credential change must revoke sessions, so it has its own endpoint', () => {
@@ -81,6 +87,10 @@ describe('AssignRolesSchema', () => {
     expect(AssignRolesSchema.parse({ roleCodes: ['QC_MANAGER'] }).roleCodes).toEqual(['QC_MANAGER']);
   });
 
+  it('refuses more than one role: a user holds a single role', () => {
+    expect(AssignRolesSchema.safeParse({ roleCodes: ['QC_MANAGER', 'VIEWER'] }).success).toBe(false);
+  });
+
   it('refuses a role code that is not UPPER_SNAKE_CASE', () => {
     expect(AssignRolesSchema.safeParse({ roleCodes: ['qc_manager'] }).success).toBe(false);
   });
@@ -88,7 +98,7 @@ describe('AssignRolesSchema', () => {
 
 describe('ChangePasswordSchema', () => {
   it('requires both halves, and holds only the new one to the policy', () => {
-    const parsed = ChangePasswordSchema.parse({ currentPassword: 'old8char', newPassword: 'a-long-enough-one' });
+    const parsed = ChangePasswordSchema.parse({ currentPassword: 'old8char', newPassword: 'Long-enough-1' });
     expect(parsed.currentPassword).toBe('old8char');
     expect(ChangePasswordSchema.safeParse({ currentPassword: 'old8char', newPassword: 'tooshort' }).success).toBe(false);
   });

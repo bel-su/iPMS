@@ -1,7 +1,7 @@
 'use client';
 import { useActionState } from 'react';
 import type { TemplateImportPreview } from '@ipms/contracts';
-import { FormError, SubmitButton } from '../../../projects/forms';
+import { FormError, SubmitButton } from '../../../components/forms';
 import { commitTemplateImportAction, previewTemplateImportAction, type TemplateImportState } from './actions';
 
 const START: TemplateImportState = {};

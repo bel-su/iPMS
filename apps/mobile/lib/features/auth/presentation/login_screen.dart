@@ -241,18 +241,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   color: AppColors.statusBlockedBg,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   children: [
-                                    Icon(
+                                    const Icon(
                                       Icons.error_outline,
                                       size: 18,
                                       color: AppColors.statusBlockedText,
                                     ),
-                                    SizedBox(width: 10),
+                                    const SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
-                                        'Invalid username or password. Please verify your credentials.',
-                                        style: TextStyle(
+                                        authState.error.toString().replaceAll('ApiException: ', ''),
+                                        style: const TextStyle(
                                           color: AppColors.statusBlockedText,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w500,

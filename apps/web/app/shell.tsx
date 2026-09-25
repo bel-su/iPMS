@@ -4,11 +4,12 @@
  * is laid out against an empty gutter.
  */
 
-import { getCurrentUser, hasPermission } from './lib/iam-api';
+import { getCurrentUser, hasPermission, mayReadDocs } from './lib/iam-api';
+import { getMyProfile } from './lib/user-api';
 
 function Icon({ children }: { children: React.ReactNode }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
-type Section = 'overview' | 'projects' | 'checklists' | 'work-orders' | 'users';
+type Section = 'overview' | 'projects' | 'checklists' | 'work-orders' | 'users' | 'docs' | 'profile';
 
 const QUALITY: readonly Section[] = ['checklists', 'work-orders'];
 
@@ -38,6 +39,7 @@ export async function Sidebar({ active }: { active: Section }) {
   const mayViewUsers = viewer.state === 'ready' && hasPermission(viewer.data, 'user.view');
   const mayViewTemplates = viewer.state === 'ready' && hasPermission(viewer.data, 'qc_template.view');
   const mayViewTasks = viewer.state === 'ready' && hasPermission(viewer.data, 'task.view');
+  const mayReadDocumentation = viewer.state === 'ready' && mayReadDocs(viewer.data);
 
   return (
     <aside className="sidebar">
@@ -58,25 +60,46 @@ export async function Sidebar({ active }: { active: Section }) {
           : null}
         {mayViewUsers ? <NavItem section="users" active={active} href="/users" icon="◉">Users</NavItem> : null}
       </nav>
-      <div className="sidebar-bottom"><a className="nav-item" href="/#settings"><Icon>⚙</Icon>Settings</a></div>
+      {mayReadDocumentation
+        ? <div className="sidebar-bottom"><NavItem section="docs" active={active} href="/docs" icon="?">Documentation</NavItem></div>
+        : null}
     </aside>
   );
 }
 
+/** "Jane Doe" → "JD"; falls back to the first two letters of a single name. */
+export function initialsOf(fullName: string): string {
+  const words = fullName.trim().split(/\s+/).filter(Boolean);
+  const first = words[0] ?? '';
+  const last = words.length > 1 ? words[words.length - 1] ?? '' : '';
+  const letters = last ? `${first.charAt(0)}${last.charAt(0)}` : first.slice(0, 2);
+  return letters.toUpperCase() || '?';
+}
+
 /**
  * The right-hand end of the topbar. Anything passed in sits before the profile
- * button; the wrapper is what pushes the group away from the breadcrumbs.
+ * menu; the wrapper is what pushes the group away from the breadcrumbs.
  *
- * Signing out is a POST so it works without client-side JavaScript, and cannot
- * be triggered by a link.
+ * The menu is a `<details>` so it opens without client-side JavaScript.
+ * Signing out stays a POST, so it cannot be triggered by a link. When the
+ * profile call fails the button shows "?" and the menu still works.
  */
-export function TopActions({ children }: { children?: React.ReactNode }) {
+export async function TopActions({ children }: { children?: React.ReactNode }) {
+  const me = await getMyProfile();
+  const name = me.state === 'ready' ? me.data.fullName : '';
   return (
     <div className="top-actions">
       {children}
-      <form action="/api/auth/logout" method="post">
-        <button className="profile" type="submit" aria-label="Sign out"><span>IP</span><i>⌄</i></button>
-      </form>
+      <details className="profile-menu">
+        <summary className="profile" aria-label="Account menu"><span>{initialsOf(name)}</span><i>⌄</i></summary>
+        <div className="profile-dropdown" role="menu">
+          {name ? <p className="profile-name">{name}</p> : null}
+          <a role="menuitem" href="/profile">Profile</a>
+          <form action="/api/auth/logout" method="post">
+            <button role="menuitem" type="submit">Sign out</button>
+          </form>
+        </div>
+      </details>
     </div>
   );
 }

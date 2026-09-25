@@ -6,7 +6,7 @@ set -uo pipefail
 
 CD="docker compose -f docker/docker-compose.yml"
 GW=http://localhost:3000
-PW=password123
+PW='P@ssw0rd1234'
 pass=0; fail=0
 
 ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; pass=$((pass+1)); }
@@ -17,7 +17,7 @@ jqp() { python3 -c "import sys,json;d=json.load(sys.stdin);$1" 2>/dev/null; }
 
 login() {
   curl -s -X POST "$GW/api/v1/auth/login" -H 'content-type: application/json' \
-    -d "{\"username\":\"$1\",\"password\":\"$PW\"}" --max-time 10 \
+    -d "{\"email\":\"$1@ipms.local\",\"password\":\"$PW\"}" --max-time 10 \
     | jqp 'print(d.get("accessToken",""))'
 }
 
@@ -40,7 +40,7 @@ idx=$(psqlq project "select count(*) from pg_indexes where tablename='user_scope
 [ "$idx" = "3" ] && ok "3 partial unique indexes on user_scope" || bad "expected 3 partial unique indexes, found $idx"
 
 step "2. Seed granted admin global scope"
-[ "$(psqlq iam "select count(*) from user_global_scope ugs join \"user\" u on u.id=ugs.\"userId\" where u.username='admin';")" = "1" ] \
+[ "$(psqlq iam "select count(*) from user_global_scope ugs join \"user\" u on u.id=ugs.\"userId\" where u.email='admin@ipms.local';")" = "1" ] \
   && ok "admin holds a global grant" || bad "admin has no global grant"
 
 # Revoke any leftover grant before asserting the fail-closed baseline. Without
@@ -61,14 +61,14 @@ ADMIN=$(login admin); ENG=$(login engineer)
 
 step "4. Global scope reads, unscoped user does not (fail-closed)"
 PROJ0=$(psqlq project "select id from project limit 1;")
-EID0=$(psqlq iam "select id from \"user\" where username='engineer';")
+EID0=$(psqlq iam "select id from \"user\" where email='engineer@ipms.local';")
 reset_engineer "$ADMIN" "$EID0" "$PROJ0"
 A=$(nprojects "$ADMIN"); E=$(nprojects "$ENG")
 [ "$A" -gt 0 ] 2>/dev/null && ok "admin sees $A project(s) via global grant" || bad "admin sees $A -- global grant not reaching project"
 [ "$E" = "0" ] && ok "engineer with no scope sees 0 (was $A before this branch)" || bad "engineer sees $E -- NOT fail-closed"
 
 PROJ=$(curl -s -H "authorization: Bearer $ADMIN" "$GW/api/v1/projects" --max-time 10 | jqp 'print(d[0]["id"])')
-EID=$(psqlq iam "select id from \"user\" where username='engineer';")
+EID=$(psqlq iam "select id from \"user\" where email='engineer@ipms.local';")
 printf '  (project=%s engineer=%s)\n' "${PROJ:0:8}" "${EID:0:8}"
 
 step "5. Grant replicates over NATS into the projection"
