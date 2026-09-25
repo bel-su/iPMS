@@ -48,9 +48,11 @@ const row = (over: Record<string, unknown>) => ({ rowNumber: 2, siteCode: 'S1', 
  */
 /** Unrestricted: these tests are about what Postgres enforces, not about scope. */
 const GLOBAL = { global: true, projectIds: [], siteIds: [] };
+/** These assert what Postgres enforces; the actor only has to be a valid uuid. */
+const ACTOR = '01a0d000-0000-7000-8000-00000000ac70';
 
 const commit = (payload: { columns: string[]; rows: Array<Record<string, unknown>> }) =>
-  imports.commit(GLOBAL, projectId, payload as never);
+  imports.commit(GLOBAL, projectId, payload as never, ACTOR);
 
 describe('commit', () => {
   it('creates every row in one go', async () => {

@@ -15,6 +15,7 @@ import { UserScopeRepository } from './scope/user-scope.repository.js';
 import { projectScopeProvider } from './scope/scope.provider.js';
 import { SCOPE_DEDUPE_PREFIX, ScopeConsumer } from './scope/scope.consumer.js';
 import { ensureProjectionReplay, type DedupeReset } from './scope/replay.js';
+import { OutboxDrainer } from './outbox/outbox.drainer.js';
 
 const log = createLogger('project');
 
@@ -133,6 +134,13 @@ class ScopeBootstrap implements OnModuleInit {
       provide: SiteImportService,
       useFactory: (prisma: PrismaService) => new SiteImportService(prisma.db),
       inject: [PrismaService],
+    },
+    {
+      // Publishes project's audit rows. Without it every mutation writes a row
+      // that is never drained, and the ledger stays silent about this service.
+      provide: OutboxDrainer,
+      useFactory: (prisma: PrismaService, bus: EventBus) => new OutboxDrainer(prisma.db, bus),
+      inject: [PrismaService, EventBus],
     },
     {
       provide: ScopeBootstrap,

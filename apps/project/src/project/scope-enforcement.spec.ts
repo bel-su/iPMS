@@ -4,6 +4,9 @@ import type { PrismaClient } from '@prisma-clients/project';
 import type { AuthzScope } from '@ipms/authz';
 import { ProjectService } from './project.service.js';
 
+/** Every mutation is now attributed; these tests assert behaviour, not attribution. */
+const ACTOR = '01a0d000-0000-7000-8000-00000000ac70';
+
 /**
  * These assert the boundary itself: that every read and write carries the
  * caller's scope into the query rather than checking it afterwards.
@@ -23,24 +26,36 @@ const ONLY_A: AuthzScope = { global: false, projectIds: [PROJECT_A], siteIds: []
 const ONLY_SITE: AuthzScope = { global: false, projectIds: [], siteIds: [SITE_IN_C] };
 
 function makePrisma() {
-  return {
+  const db = {
     project: {
       findFirst: vi.fn().mockResolvedValue({ id: PROJECT_A, defaultGeofenceRadiusM: 500 }),
       findMany: vi.fn().mockResolvedValue([]),
-      create: vi.fn(), update: vi.fn(), delete: vi.fn(),
+      create: vi.fn().mockResolvedValue({ id: 'created-1' }), update: vi.fn().mockResolvedValue({ id: 'created-1' }), delete: vi.fn(),
     },
-    site: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    taskType: { findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    milestone: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    site: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn().mockResolvedValue({ id: 'created-1' }), update: vi.fn().mockResolvedValue({ id: 'created-1' }), delete: vi.fn() },
+    taskType: { findFirst: vi.fn(), count: vi.fn(), create: vi.fn().mockResolvedValue({ id: 'created-1' }), update: vi.fn().mockResolvedValue({ id: 'created-1' }), delete: vi.fn() },
+    milestone: { findFirst: vi.fn(), create: vi.fn().mockResolvedValue({ id: 'created-1' }), update: vi.fn().mockResolvedValue({ id: 'created-1' }), delete: vi.fn() },
     milestoneRequirement: { deleteMany: vi.fn(), createMany: vi.fn() },
     task: {
       findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn(), findUnique: vi.fn(),
-      count: vi.fn().mockResolvedValue(0), create: vi.fn(), update: vi.fn(), delete: vi.fn(),
+      count: vi.fn().mockResolvedValue(0), create: vi.fn().mockResolvedValue({ id: 'created-1' }), update: vi.fn().mockResolvedValue({ id: 'created-1' }), delete: vi.fn(),
     },
     region: { upsert: vi.fn() },
+    outboxEvent: { create: vi.fn().mockResolvedValue({}) },
     $transaction: vi.fn(),
   };
+  /**
+   * Every mutation is now audited, which means every mutation runs inside
+   * `$transaction`. Running the callback against this same double is what keeps
+   * the assertions pointed at real spies -- a bare `vi.fn()` here swallows the
+   * whole mutation and the test passes on a call that never happened.
+   *
+   * Assigned after construction because the callback needs the object itself.
+   */
+  db.$transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(db));
+  return db;
 }
+
 type Prisma = ReturnType<typeof makePrisma>;
 const svc = (p: Prisma) => new ProjectService(p as unknown as PrismaClient);
 
@@ -108,12 +123,12 @@ describe('read-by-id is a scoped lookup, not a fetch-then-check', () => {
 
 describe('writes scope-check their parent before touching anything', () => {
   it.each([
-    ['createSite', (s: AuthzScope) => svc(prisma).createSite(s, 'p-other', { siteCode: 'X', name: 'X', geofenceMode: 'INHERIT' } as never)],
-    ['createTaskType', (s: AuthzScope) => svc(prisma).createTaskType(s, 'p-other', { code: 'X', name: 'X', category: 'QUALITY' } as never)],
-    ['createMilestone', (s: AuthzScope) => svc(prisma).createMilestone(s, 'p-other', { code: 'X', name: 'X', kind: 'PROJECT', sequence: 1, taskTypeIds: [] } as never)],
-    ['updateProject', (s: AuthzScope) => svc(prisma).updateProject(s, 'p-other', { name: 'X' } as never)],
-    ['archiveProject', (s: AuthzScope) => svc(prisma).archiveProject(s, 'p-other')],
-    ['deleteProject', (s: AuthzScope) => svc(prisma).deleteProject(s, 'p-other')],
+    ['createSite', (s: AuthzScope) => svc(prisma).createSite(s, 'p-other', { siteCode: 'X', name: 'X', geofenceMode: 'INHERIT' } as never, ACTOR)],
+    ['createTaskType', (s: AuthzScope) => svc(prisma).createTaskType(s, 'p-other', { code: 'X', name: 'X', category: 'QUALITY' } as never, ACTOR)],
+    ['createMilestone', (s: AuthzScope) => svc(prisma).createMilestone(s, 'p-other', { code: 'X', name: 'X', kind: 'PROJECT', sequence: 1, taskTypeIds: [] } as never, ACTOR)],
+    ['updateProject', (s: AuthzScope) => svc(prisma).updateProject(s, 'p-other', { name: 'X' } as never, ACTOR)],
+    ['archiveProject', (s: AuthzScope) => svc(prisma).archiveProject(s, 'p-other', ACTOR)],
+    ['deleteProject', (s: AuthzScope) => svc(prisma).deleteProject(s, 'p-other', ACTOR)],
     ['listTasks', (s: AuthzScope) => svc(prisma).listTasks(s, 'p-other', {} as never)],
   ])('%s refuses a project outside scope', async (_label, call) => {
     prisma.project.findFirst.mockResolvedValue(null);
@@ -125,8 +140,8 @@ describe('writes scope-check their parent before touching anything', () => {
   });
 
   it.each([
-    ['updateSite', (s: AuthzScope) => svc(prisma).updateSite(s, 's-other', { name: 'X' } as never)],
-    ['deleteSite', (s: AuthzScope) => svc(prisma).deleteSite(s, 's-other')],
+    ['updateSite', (s: AuthzScope) => svc(prisma).updateSite(s, 's-other', { name: 'X' } as never, ACTOR)],
+    ['deleteSite', (s: AuthzScope) => svc(prisma).deleteSite(s, 's-other', ACTOR)],
   ])('%s refuses a site outside scope', async (_label, call) => {
     prisma.site.findFirst.mockResolvedValue(null);
     await expect(call(ONLY_A)).rejects.toBeInstanceOf(NotFoundException);
@@ -135,9 +150,9 @@ describe('writes scope-check their parent before touching anything', () => {
   });
 
   it.each([
-    ['updateTask', (s: AuthzScope) => svc(prisma).updateTask(s, 't-other', { title: 'X' } as never)],
-    ['assignTask', (s: AuthzScope) => svc(prisma).assignTask(s, 't-other', { assigneeId: 'u-1' } as never)],
-    ['deleteTask', (s: AuthzScope) => svc(prisma).deleteTask(s, 't-other')],
+    ['updateTask', (s: AuthzScope) => svc(prisma).updateTask(s, 't-other', { title: 'X' } as never, ACTOR)],
+    ['assignTask', (s: AuthzScope) => svc(prisma).assignTask(s, 't-other', { assigneeId: 'u-1' } as never, ACTOR)],
+    ['deleteTask', (s: AuthzScope) => svc(prisma).deleteTask(s, 't-other', ACTOR)],
   ])('%s refuses a task outside scope', async (_label, call) => {
     prisma.task.findFirst.mockResolvedValue(null);
     await expect(call(ONLY_A)).rejects.toBeInstanceOf(NotFoundException);
