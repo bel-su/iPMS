@@ -161,6 +161,27 @@ class EvidenceGalleryCard extends StatelessWidget {
                     timeStr,
                     style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600),
                   ),
+                  if (evidence.checklistItemTitle != null && evidence.checklistItemTitle!.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        const Icon(Icons.checklist_rounded, size: 12, color: AppColors.primaryLavenderDark),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            evidence.checklistItemTitle!,
+                            style: AppTypography.caption.copyWith(
+                              fontSize: 10,
+                              color: AppColors.primaryLavenderDark,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Row(
                     children: [

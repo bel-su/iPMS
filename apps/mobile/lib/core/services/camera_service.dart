@@ -31,6 +31,8 @@ class CameraService {
     required String username,
     String? fullName,
     String? taskTitle,
+    String? checklistItemId,
+    String? checklistItemTitle,
   }) async {
     // 1. Launch native hardware camera
     final pickedFile = await _picker.pickImage(
@@ -98,6 +100,8 @@ class CameraService {
       accuracy: accuracy,
       timestamp: now,
       taskTitle: taskTitle,
+      checklistItemId: checklistItemId,
+      checklistItemTitle: checklistItemTitle,
     );
 
     // 5. Apply bottom-left watermark
@@ -119,6 +123,8 @@ class CameraService {
       accuracy: accuracy,
       capturedBy: username,
       capturedAt: now,
+      checklistItemId: checklistItemId,
+      checklistItemTitle: checklistItemTitle,
     );
 
     return CameraCaptureResult(

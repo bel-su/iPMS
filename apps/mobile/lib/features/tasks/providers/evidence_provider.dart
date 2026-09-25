@@ -47,3 +47,12 @@ final taskEvidenceListProvider =
   final allEvidence = ref.watch(taskEvidenceProvider);
   return allEvidence[taskId] ?? [];
 });
+
+/// Returns evidence specifically captured for a given checklist item
+final checklistItemEvidenceProvider =
+    Provider.family<List<TaskEvidence>, ({String taskId, String itemId})>(
+        (ref, arg) {
+  final allEvidence = ref.watch(taskEvidenceProvider);
+  final taskList = allEvidence[arg.taskId] ?? [];
+  return taskList.where((e) => e.checklistItemId == arg.itemId).toList();
+});

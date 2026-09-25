@@ -46,9 +46,21 @@ class AuthNotifier extends AsyncNotifier<AuthUser?> {
     });
   }
 
-  Future<void> logout() async {
+  Future<void> loginWithBiometrics(String username) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      return await ref
+          .read(authRepositoryProvider)
+          .getCurrentUser(username: username);
+    });
+  }
+
+  Future<void> logout({bool purgeBiometrics = false}) async {
     state = const AsyncValue.loading();
     await ref.read(authRepositoryProvider).logout();
+    if (purgeBiometrics) {
+      await ref.read(tokenStorageProvider).clearBiometric();
+    }
     state = const AsyncValue.data(null);
   }
 }

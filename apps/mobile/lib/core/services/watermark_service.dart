@@ -17,6 +17,8 @@ class WatermarkMetadata {
     required this.accuracy,
     required this.timestamp,
     this.taskTitle,
+    this.checklistItemId,
+    this.checklistItemTitle,
   });
 
   final String username;
@@ -29,6 +31,8 @@ class WatermarkMetadata {
   final double accuracy;
   final DateTime timestamp;
   final String? taskTitle;
+  final String? checklistItemId;
+  final String? checklistItemTitle;
 }
 
 /// GPU-accelerated graphic watermarking service that bakes tamper-evident
@@ -64,7 +68,7 @@ class WatermarkService {
     final marginLeft = scale * 24.0;
     final marginBottom = scale * 28.0;
     final cardWidth = (imgWidth * 0.76).clamp(scale * 420.0, imgWidth - (marginLeft * 2));
-    final cardHeight = scale * 200.0;
+    final cardHeight = metadata.checklistItemTitle != null ? scale * 226.0 : scale * 200.0;
 
     final cardRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(
@@ -172,6 +176,16 @@ class WatermarkService {
       color: const Color(0xFFBAC0D0),
       fontWeight: FontWeight.normal,
     );
+
+    // Line 4b: Checklist Item (if attached)
+    if (metadata.checklistItemTitle != null && metadata.checklistItemTitle!.isNotEmpty) {
+      drawLine(
+        'Checklist: ${metadata.checklistItemTitle}',
+        fontSize: 11.5,
+        color: const Color(0xFFDDD7F7),
+        fontWeight: FontWeight.w600,
+      );
+    }
 
     // Line 5: GPS Coordinates
     drawLine(
