@@ -1,10 +1,10 @@
 'use server';
 import { redirect } from 'next/navigation';
 import {
-  createMilestone, createProject, createSite, createTask, createTaskType,
-  deleteMilestone, deleteSite, deleteTask, deleteTaskType,
-  archiveProject, deleteProject, updateMilestone, updateProject, updateSite, updateTask, updateTaskType,
-  type ProjectStatus, type SiteStatus, type TaskStatus,
+  createMilestone, createProject, createSite, createTaskType,
+  deleteMilestone, deleteSite, deleteTaskType,
+  archiveProject, deleteProject, updateMilestone, updateProject, updateSite, updateTaskType,
+  type ProjectStatus, type SiteStatus,
 } from '../lib/project-api';
 import { type FormState } from '../lib/form-state';
 import { clearable, optional, settle } from '../lib/settle';
@@ -183,33 +183,6 @@ export async function updateMilestoneAction(_previous: FormState, form: FormData
 export async function deleteMilestoneAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
   return settle(await deleteMilestone(String(form.get('milestoneId'))), projectPages(projectId));
-}
-
-export async function createTaskAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const projectId = String(form.get('projectId'));
-  const siteId = optional(form, 'siteId');
-  const taskTypeId = optional(form, 'taskTypeId');
-  const title = optional(form, 'title');
-  if (!siteId || !taskTypeId || !title) return { error: 'A site, a task type and a title are required.' };
-  return settle(await createTask(projectId, { siteId, taskTypeId, title, origin: 'AD_HOC' }), projectPages(projectId));
-}
-
-export async function updateTaskAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const projectId = String(form.get('projectId'));
-  const title = optional(form, 'title');
-  const status = optional(form, 'status');
-  const assignee = optional(form, 'assigneeId');
-  return settle(await updateTask(String(form.get('taskId')), {
-    ...(title === undefined ? {} : { title }),
-    ...(status === undefined ? {} : { status: status as TaskStatus }),
-    // An empty assignee field means "unassign", which is null rather than absent.
-    ...(form.has('assigneeId') ? { assigneeId: assignee ?? null } : {}),
-  }), projectPages(projectId));
-}
-
-export async function deleteTaskAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const projectId = String(form.get('projectId'));
-  return settle(await deleteTask(String(form.get('taskId'))), projectPages(projectId));
 }
 
 /**

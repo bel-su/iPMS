@@ -31,8 +31,8 @@ export function WorkOrderQueue({ data, params, basePath, projects, names, now, c
   data: WorkOrderPage<WorkOrder>;
   params: QueueParams;
   basePath: string;
-  /** The project filter's choices; omitted when the queue belongs to one project. */
-  projects?: readonly { id: string; code: string; name: string }[] | undefined;
+  /** The project filter's choices — the project ID (DU) is how a site's work is told apart across projects. */
+  projects: readonly { id: string; code: string; name: string }[];
   names: ReadonlyMap<string, string>;
   now: Date;
   created?: number | undefined;
@@ -41,7 +41,7 @@ export function WorkOrderQueue({ data, params, basePath, projects, names, now, c
     const next = { ...params, page: 1, ...changes };
     const query = new URLSearchParams();
     if (next.filter !== 'open') query.set('filter', next.filter);
-    if (next.projectId && projects) query.set('projectId', next.projectId);
+    if (next.projectId) query.set('projectId', next.projectId);
     if (next.type) query.set('type', next.type);
     if (next.mine) query.set('mine', '1');
     if (next.q) query.set('q', next.q);
@@ -72,12 +72,10 @@ export function WorkOrderQueue({ data, params, basePath, projects, names, now, c
       <form className="queue-filters" method="get" action={basePath}>
         {params.filter !== 'open' ? <input type="hidden" name="filter" value={params.filter} /> : null}
         <input type="search" name="q" defaultValue={params.q ?? ''} placeholder="Search site, project ID, work order or checklist" aria-label="Search work orders" maxLength={100} />
-        {projects
-          ? <select name="projectId" defaultValue={params.projectId ?? ''} aria-label="Project">
-              <option value="">All projects</option>
-              {projects.map((project) => <option key={project.id} value={project.id}>{project.code} — {project.name}</option>)}
-            </select>
-          : null}
+        <select name="projectId" defaultValue={params.projectId ?? ''} aria-label="Project ID (DU)">
+          <option value="">All projects</option>
+          {projects.map((project) => <option key={project.id} value={project.id}>{project.code} — {project.name}</option>)}
+        </select>
         <select name="type" defaultValue={params.type ?? ''} aria-label="Type of check">
           <option value="">Any check</option>
           <option value="QUALITY_SELF_CHECK">Quality Self-check</option>

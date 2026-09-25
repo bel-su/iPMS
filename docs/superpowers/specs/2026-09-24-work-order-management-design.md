@@ -34,6 +34,7 @@ through `PATCH /tasks/:id` when work starts); a review UI (sub-project 3).
 | W10 | qc refuses a submission from anyone but the task's assignee, for another checklist, site or project, for a cancelled task, or while one is pending/approved | Submissions now move task status, so they must be the assignee's own |
 | W11 | Status sync is event-driven: qc writes `qc.submission.submitted` / `.reviewed` to its outbox; project consumes on one durable per subject | Same outbox → JetStream pattern as iam's scope events |
 | W12 | Sync writes are conditional on `attemptNo`, never on arrival order | The two subjects travel separately; a review can precede its submission, a redelivery can follow a newer fact |
+| W14 | Work orders and tasks are one list, on the workspace dashboard only | They are the same thing; a project tab repeating the dashboard would be a second place to look |
 | W13 | `iam GET /users/directory` (name, employee code, active) gated by `task.view` | QC Managers assign spot checks but lack `user.view`; narrower than `/users` |
 
 ## 3. Data
@@ -75,7 +76,11 @@ Open work is ordered by due date, closed work by completion. The gateway gains t
 Designed around the coordinator's questions — *what is late, what is next, where does
 everything stand* — rather than as a wide data grid.
 
-- **Queue** (`/work-orders`, and the project's *Work orders* tab pinned to it): a
+- **Work orders dashboard** (`/work-orders`): the one place work orders — a
+  project's tasks — are listed. A project has no *Tasks* or *Work orders* tab; its
+  overview links to the dashboard filtered by its project ID
+  (`/work-orders?projectId=…`), and the old `/projects/[id]/tasks` and
+  `/projects/[id]/work-orders` URLs redirect there. The dashboard has a
   completion bar across statuses; filter pills with counts (Open, Overdue, In review,
   Needs rework, Completed, Cancelled, All); search, project, check type and *Assigned to
   me*. Open views group rows by due date (Overdue, Due today, Next 7 days, Later). Each

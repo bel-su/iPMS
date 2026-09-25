@@ -11,12 +11,8 @@ export type QueueSearch = { filter?: string; projectId?: string; type?: string; 
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Reads the queue's URL into a list query and fetches it, with the names the
- * rows show. `fixedProjectId` pins the project for the project tab, whatever
- * the URL says.
- */
-export async function loadQueue(search: QueueSearch, fixedProjectId?: string): Promise<{
+/** Reads the queue's URL into a list query and fetches it, with the names the rows show. */
+export async function loadQueue(search: QueueSearch): Promise<{
   params: QueueParams;
   result: ApiResult<WorkOrderPage<WorkOrder>>;
   viewer: ApiResult<CurrentUser>;
@@ -26,7 +22,7 @@ export async function loadQueue(search: QueueSearch, fixedProjectId?: string): P
 }> {
   const filter = queueFilter(search.filter);
   const viewer = await getCurrentUser();
-  const projectId = fixedProjectId ?? (search.projectId && UUID.test(search.projectId) ? search.projectId : undefined);
+  const projectId = search.projectId && UUID.test(search.projectId) ? search.projectId : undefined;
   const params: QueueParams = {
     filter: filter.key,
     projectId,
