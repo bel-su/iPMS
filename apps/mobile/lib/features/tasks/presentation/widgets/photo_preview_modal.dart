@@ -123,6 +123,25 @@ class PhotoPreviewModal extends StatelessWidget {
                       'Site: [${evidence.siteCode}] ${evidence.siteName}',
                       style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
                     ),
+                    if (evidence.checklistItemTitle != null && evidence.checklistItemTitle!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.checklist_rounded, size: 15, color: Color(0xFFDDD7F7)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Checklist: ${evidence.checklistItemTitle}',
+                              style: const TextStyle(
+                                color: Color(0xFFDDD7F7),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Text(
                       'GPS: $latStr N, $longStr E (+/-${evidence.accuracy.toStringAsFixed(1)}m)',

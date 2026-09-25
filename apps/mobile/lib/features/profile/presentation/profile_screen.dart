@@ -4,6 +4,7 @@ import '../../../core/config/env.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../auth/providers/biometric_provider.dart';
 import '../../projects/providers/project_providers.dart';
 import '../../tasks/providers/task_providers.dart';
 import '../providers/profile_providers.dart';
@@ -139,6 +140,7 @@ class ProfileScreen extends ConsumerWidget {
 
     final notificationsEnabled = prefs['notifications'] ?? true;
     final darkModeEnabled = prefs['darkMode'] ?? false;
+    final biometricState = ref.watch(biometricAuthStateProvider);
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
@@ -365,6 +367,46 @@ class ProfileScreen extends ConsumerWidget {
                               .toggleDarkMode(val);
                         },
                       ),
+                      if (biometricState.isHardwareSupported) ...[
+                        const Divider(height: 1, color: AppColors.subtleDivider),
+                        SwitchListTile.adaptive(
+                          secondary: const Icon(
+                            Icons.fingerprint_rounded,
+                            color: AppColors.darkSlate,
+                          ),
+                          title: Text(
+                            'Fingerprint login',
+                            style: AppTypography.titleMedium,
+                          ),
+                          subtitle: Text(
+                            biometricState.isConfigured
+                                ? 'Active for @${biometricState.enrolledUsername ?? user?.username}'
+                                : 'Fast biometric access',
+                            style: AppTypography.caption,
+                          ),
+                          value: biometricState.isConfigured,
+                          activeThumbColor: AppColors.darkSlate,
+                          onChanged: (val) async {
+                            if (val) {
+                              final success = await ref
+                                  .read(biometricAuthStateProvider.notifier)
+                                  .enrollBiometric(user?.username ?? 'engineer');
+                              if (context.mounted && !success) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Fingerprint enrollment was cancelled or failed.'),
+                                  ),
+                                );
+                              }
+                            } else {
+                              await ref
+                                  .read(biometricAuthStateProvider.notifier)
+                                  .disableBiometric();
+                            }
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),
