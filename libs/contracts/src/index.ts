@@ -8,6 +8,6 @@ export * from './iam/user.js';
 export * from './audit/query.js';
 export * from './project/project.js';
 export * from './project/site-import.js';
-export * from './project/work-order.js';
 export * from './qc/qc.js';
 export * from './qc/template.js';
+export * from './qc/work-order.js';

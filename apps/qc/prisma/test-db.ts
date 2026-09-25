@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma-clients/qc';
 
-export async function startTestDb(): Promise<{ prisma: PrismaClient; stop(): Promise<void> }> {
+export async function startTestDb(): Promise<{ prisma: PrismaClient; connectionString: string; stop(): Promise<void> }> {
   const container = await new PostgreSqlContainer('postgres:17-alpine').start();
   const connectionString = container.getConnectionUri();
   execSync('pnpm prisma migrate deploy', {
@@ -15,6 +15,7 @@ export async function startTestDb(): Promise<{ prisma: PrismaClient; stop(): Pro
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
   return {
     prisma,
+    connectionString,
     async stop() { await prisma.$disconnect(); await container.stop(); },
   };
 }

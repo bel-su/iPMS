@@ -5,7 +5,8 @@ import { uuidv7, type CreateSubmissionDto, type ReviewSubmissionDto } from '@ipm
 import { SUBJECTS, type QcSubmissionReviewed, type QcSubmissionSubmitted } from '@ipms/events';
 import { getCorrelationId } from '@ipms/observability';
 import { buildOutboxRecord } from '@ipms/persistence';
-import { requireTask, type TaskLookupClient } from '../tasks/task-lookup.client.js';
+import { recordAudit } from '../templates/audit.js';
+import { event } from '../work-orders/work-order.service.js';
 import { resolveGeofence, type SiteGeofenceClient } from './site-geofence.client.js';
 import { acceptVersion } from './version-acceptance.js';
 
@@ -21,7 +22,6 @@ export class SubmissionService {
     private readonly prisma: PrismaClient,
     private readonly geofence: SiteGeofenceClient,
     private readonly graceDays: number,
-    private readonly tasks: TaskLookupClient,
   ) {}
 
   async getSubmission(id: string) {
@@ -37,12 +37,13 @@ export class SubmissionService {
   async createSubmission(dto: CreateSubmissionDto, actorId: string, bearer: string) {
     const duplicate = await this.prisma.submission.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
     if (duplicate) return this.getSubmission(duplicate.id);
-    // The task is what a submission moves, so it decides who may submit: the
-    // person it is assigned to, against the checklist it carries, while open.
-    const task = requireTask(await this.tasks.fetch(dto.taskId, bearer));
-    if (task.assigneeId !== actorId) throw new ForbiddenException('This task is not assigned to you');
+    // The work order is what a submission moves, so it decides who may submit:
+    // the person it is assigned to, against the checklist it carries, while open.
+    const task = await this.prisma.workOrder.findUnique({ where: { id: dto.taskId } });
+    if (!task) throw new NotFoundException('Work order not found');
+    if (task.assigneeId !== actorId) throw new ForbiddenException('This work order is not assigned to you');
     if (task.status === 'CANCELLED') throw new ConflictException('This work order has been cancelled');
-    if (task.projectId !== dto.projectId || task.siteId !== dto.siteId) throw new BadRequestException('The submission does not match its task’s project and site');
+    if (task.projectId !== dto.projectId || task.siteId !== dto.siteId) throw new BadRequestException('The submission does not match its work order’s project and site');
     const version = await this.prisma.templateVersion.findUnique({
       where: { id: dto.templateVersionId },
       include: { template: true, sections: { include: { items: true } } },
@@ -80,8 +81,17 @@ export class SubmissionService {
         submissionId: submission.id, taskId: submission.taskId, projectId: submission.projectId,
         attemptNo: submission.attemptNo, submittedBy: actorId, submittedAt: submission.submittedAt!.toISOString(),
       };
-      // In the same transaction, so project hears of every submission that exists and of none that does not.
       await tx.outboxEvent.create({ data: buildOutboxRecord(SUBJECTS.QC_SUBMISSION_SUBMITTED, { ...fact }, getCorrelationId() ?? 'unknown', actorId) });
+      // The work order moves with the submission, in the same transaction, so the two never disagree.
+      await tx.workOrder.update({
+        where: { id: task.id },
+        data: { status: 'REVIEWING', currentSubmissionId: submission.id, currentAttemptNo: submission.attemptNo },
+      });
+      await recordAudit(tx, {
+        actorId, action: 'work_order.status_changed', objectType: 'WorkOrder', objectId: task.id,
+        previousState: { status: task.status }, newState: { status: 'REVIEWING', submissionId: submission.id, attemptNo: submission.attemptNo },
+      });
+      await event(tx, task.id, 'SUBMITTED', submission.submittedAt!, actorId, { submissionId: submission.id, attemptNo: submission.attemptNo });
       return submission;
     });
   }
@@ -104,6 +114,24 @@ export class SubmissionService {
         decision: dto.decision, reviewedBy: actorId, reviewedAt: reviewed.reviewedAt!.toISOString(), comment: dto.comment ?? null,
       };
       await tx.outboxEvent.create({ data: buildOutboxRecord(SUBJECTS.QC_SUBMISSION_REVIEWED, { ...fact }, getCorrelationId() ?? 'unknown', actorId) });
+      // A cancelled work order stays cancelled; the review is still on its timeline.
+      const status = approved ? 'COMPLETED' : 'RECTIFYING';
+      const moved = await tx.workOrder.updateMany({
+        where: { id: reviewed.taskId, status: { not: 'CANCELLED' } },
+        data: { status, currentSubmissionId: reviewed.id, currentAttemptNo: reviewed.attemptNo, actualCompletionAt: approved ? reviewed.reviewedAt : null },
+      });
+      if (moved.count > 0) {
+        await recordAudit(tx, {
+          actorId, action: 'work_order.status_changed', objectType: 'WorkOrder', objectId: reviewed.taskId,
+          previousState: {}, newState: { status, submissionId: reviewed.id, attemptNo: reviewed.attemptNo },
+        });
+      }
+      const order = await tx.workOrder.findUnique({ where: { id: reviewed.taskId }, select: { id: true } });
+      if (order) {
+        await event(tx, order.id, approved ? 'APPROVED' : 'REJECTED', reviewed.reviewedAt!, actorId, {
+          submissionId: reviewed.id, attemptNo: reviewed.attemptNo, comment: dto.comment ?? null,
+        });
+      }
       return reviewed;
     });
   }

@@ -52,17 +52,25 @@ describe('Sidebar', () => {
     expect(hrefs(await Sidebar({ active: 'projects' }))).not.toContain('/users');
   });
 
-  it('offers Quality & EHS to a viewer who may see templates, and hides it otherwise', async () => {
-    getCurrentUser.mockResolvedValue(user(['qc_template.view']));
-    expect(hrefs(await Sidebar({ active: 'projects' }))).toContain('/quality/templates');
-    getCurrentUser.mockResolvedValue(user(['project.view']));
-    expect(hrefs(await Sidebar({ active: 'projects' }))).not.toContain('/quality/templates');
+  it('groups the checklist library and work orders under Quality & EHS', async () => {
+    getCurrentUser.mockResolvedValue(user(['qc_template.view', 'task.view']));
+    const links = hrefs(await Sidebar({ active: 'work-orders' }));
+    expect(links).toEqual(expect.arrayContaining(['/quality/templates', '/quality/work-orders']));
+    expect(links).not.toContain('/work-orders');
   });
 
-  it('offers Work orders to anyone who may see tasks', async () => {
+  it('offers the checklist library only to a viewer who may see templates', async () => {
     getCurrentUser.mockResolvedValue(user(['task.view']));
-    expect(hrefs(await Sidebar({ active: 'projects' }))).toContain('/work-orders');
+    expect(hrefs(await Sidebar({ active: 'projects' }))).not.toContain('/quality/templates');
     getCurrentUser.mockResolvedValue(user(['qc_template.view']));
-    expect(hrefs(await Sidebar({ active: 'projects' }))).not.toContain('/work-orders');
+    const links = hrefs(await Sidebar({ active: 'projects' }));
+    expect(links).toContain('/quality/templates');
+    expect(links).not.toContain('/quality/work-orders');
+  });
+
+  it('hides the whole group from a viewer who may see neither', async () => {
+    getCurrentUser.mockResolvedValue(user(['project.view']));
+    const links = hrefs(await Sidebar({ active: 'projects' }));
+    expect(links.some((href) => href.startsWith('/quality'))).toBe(false);
   });
 });

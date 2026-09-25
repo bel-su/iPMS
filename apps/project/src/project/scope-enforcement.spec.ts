@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma-clients/project';
 import type { AuthzScope } from '@ipms/authz';
+import type { WorkOrderUsageClient } from './work-order-usage.client.js';
 import { ProjectService } from './project.service.js';
 
 /** Every mutation is now attributed; these tests assert behaviour, not attribution. */
@@ -57,7 +58,7 @@ function makePrisma() {
 }
 
 type Prisma = ReturnType<typeof makePrisma>;
-const svc = (p: Prisma) => new ProjectService(p as unknown as PrismaClient);
+const svc = (p: Prisma) => new ProjectService(p as unknown as PrismaClient, { count: async () => 0 } as unknown as WorkOrderUsageClient);
 
 let prisma: Prisma;
 beforeEach(() => { prisma = makePrisma(); });
@@ -128,7 +129,7 @@ describe('writes scope-check their parent before touching anything', () => {
     ['createMilestone', (s: AuthzScope) => svc(prisma).createMilestone(s, 'p-other', { code: 'X', name: 'X', kind: 'PROJECT', sequence: 1, taskTypeIds: [] } as never, ACTOR)],
     ['updateProject', (s: AuthzScope) => svc(prisma).updateProject(s, 'p-other', { name: 'X' } as never, ACTOR)],
     ['archiveProject', (s: AuthzScope) => svc(prisma).archiveProject(s, 'p-other', ACTOR)],
-    ['deleteProject', (s: AuthzScope) => svc(prisma).deleteProject(s, 'p-other', ACTOR)],
+    ['deleteProject', (s: AuthzScope) => svc(prisma).deleteProject(s, 'p-other', ACTOR, 'Bearer t')],
     ['listTasks', (s: AuthzScope) => svc(prisma).listTasks(s, 'p-other', {} as never)],
   ])('%s refuses a project outside scope', async (_label, call) => {
     prisma.project.findFirst.mockResolvedValue(null);
@@ -141,7 +142,7 @@ describe('writes scope-check their parent before touching anything', () => {
 
   it.each([
     ['updateSite', (s: AuthzScope) => svc(prisma).updateSite(s, 's-other', { name: 'X' } as never, ACTOR)],
-    ['deleteSite', (s: AuthzScope) => svc(prisma).deleteSite(s, 's-other', ACTOR)],
+    ['deleteSite', (s: AuthzScope) => svc(prisma).deleteSite(s, 's-other', ACTOR, 'Bearer t')],
   ])('%s refuses a site outside scope', async (_label, call) => {
     prisma.site.findFirst.mockResolvedValue(null);
     await expect(call(ONLY_A)).rejects.toBeInstanceOf(NotFoundException);
@@ -185,24 +186,26 @@ describe('aggregate reads do not leak the platform\'s shape', () => {
   });
 });
 
-describe('service-to-service reads stay unscoped, deliberately', () => {
-  it.each(['siteGeofence', 'internalTask'] as const)('%s addresses its row by primary key', async (method) => {
-    // qc calls these with the submitting user's token but needs the row
+describe('service-to-service reads', () => {
+  it('siteGeofence addresses its row by primary key', async () => {
+    // qc calls this with the submitting user's token but needs the row
     // regardless of that user's project scope, and the gateway refuses every
-    // /internal/ path so they are unreachable from outside the cluster.
-    if (method === 'siteGeofence') {
-      prisma.site.findUnique.mockResolvedValue({
-        id: 's-1', latitude: null, longitude: null, geofenceMode: 'OFF',
-        geofenceRadiusM: null, project: { defaultGeofenceRadiusM: 500 },
-      });
-      await svc(prisma).siteGeofence('s-1');
-      expect(prisma.site.findUnique).toHaveBeenCalled();
-    } else {
-      prisma.task.findUnique.mockResolvedValue({
-        id: 't-1', projectId: 'p-1', siteId: 's-1', assigneeId: null, templateId: null, status: 'ONGOING',
-      });
-      await svc(prisma).internalTask('t-1');
-      expect(prisma.task.findUnique).toHaveBeenCalled();
-    }
+    // /internal/ path so it is unreachable from outside the cluster.
+    prisma.site.findUnique.mockResolvedValue({
+      id: 's-1', latitude: null, longitude: null, geofenceMode: 'OFF',
+      geofenceRadiusM: null, project: { defaultGeofenceRadiusM: 500 },
+    });
+    await svc(prisma).siteGeofence('s-1');
+    expect(prisma.site.findUnique).toHaveBeenCalled();
+  });
+
+  it('siteRefs refuses a project outside scope, so qc cannot assign work there', async () => {
+    prisma.project.findFirst.mockResolvedValue(null);
+    await expect(svc(prisma).siteRefs(ONLY_A, 'p-other', ['s-1'])).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('assignable refuses a project outside scope', async () => {
+    prisma.project.findFirst.mockResolvedValue(null);
+    await expect(svc(prisma).assignable(ONLY_A, 'p-other')).rejects.toBeInstanceOf(NotFoundException);
   });
 });

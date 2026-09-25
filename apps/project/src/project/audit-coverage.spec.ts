@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma-clients/project';
 import type { AuthzScope } from '@ipms/authz';
+import type { WorkOrderUsageClient } from './work-order-usage.client.js';
 import { ProjectService } from './project.service.js';
 
 /**
@@ -58,7 +59,7 @@ let prisma: Prisma;
 let service: ProjectService;
 beforeEach(() => {
   prisma = makePrisma();
-  service = new ProjectService(prisma as unknown as PrismaClient);
+  service = new ProjectService(prisma as unknown as PrismaClient, { count: async () => 0 } as unknown as WorkOrderUsageClient);
 });
 
 /** The audit actions written during one call. */
@@ -72,10 +73,10 @@ const MUTATIONS: Array<[string, () => Promise<unknown>]> = [
   ['project.created', () => service.createProject({ code: 'NP', name: 'N' } as never, ACTOR)],
   ['project.updated', () => service.updateProject(GLOBAL, 'p-1', { name: 'N2' } as never, ACTOR)],
   ['project.archived', () => service.archiveProject(GLOBAL, 'p-1', ACTOR)],
-  ['project.deleted', () => service.deleteProject(GLOBAL, 'p-1', ACTOR)],
+  ['project.deleted', () => service.deleteProject(GLOBAL, 'p-1', ACTOR, 'Bearer t')],
   ['site.created', () => service.createSite(GLOBAL, 'p-1', { siteCode: 'K1', name: 'K', geofenceMode: 'INHERIT' } as never, ACTOR)],
   ['site.updated', () => service.updateSite(GLOBAL, 's-1', { name: 'K2' } as never, ACTOR)],
-  ['site.deleted', () => service.deleteSite(GLOBAL, 's-1', ACTOR)],
+  ['site.deleted', () => service.deleteSite(GLOBAL, 's-1', ACTOR, 'Bearer t')],
   ['task_type.created', () => service.createTaskType(GLOBAL, 'p-1', { code: 'T', name: 'T', category: 'QUALITY' } as never, ACTOR)],
   ['task_type.updated', () => service.updateTaskType(GLOBAL, 'tt-1', { name: 'T2' } as never, ACTOR)],
   ['task_type.deleted', () => service.deleteTaskType(GLOBAL, 'tt-1', ACTOR)],
@@ -117,7 +118,7 @@ describe('ledger completeness', () => {
     // that is not in MUTATIONS above fails here rather than silently going
     // unaudited — which is exactly how project drifted out of the ledger.
     const READS = new Set([
-      'listProjects', 'getProject', 'listTasks', 'siteGeofence', 'internalTask', 'dashboard',
+      'listProjects', 'getProject', 'listTasks', 'siteGeofence', 'siteRefs', 'assignable', 'dashboard',
     ]);
     const mutating = Object.getOwnPropertyNames(ProjectService.prototype)
       .filter((name) => name !== 'constructor' && !name.startsWith('require') && !READS.has(name))

@@ -1,8 +1,8 @@
 import 'server-only';
-import type { ApiResult } from '../lib/api-client';
-import { getCurrentUser, hasPermission, type CurrentUser } from '../lib/iam-api';
-import { listWorkOrders, type WorkOrder, type WorkOrderFilter } from '../lib/project-api';
-import { listUserDirectory } from '../lib/user-api';
+import type { ApiResult } from '../../lib/api-client';
+import { getCurrentUser, hasPermission, type CurrentUser } from '../../lib/iam-api';
+import { listWorkOrders, type WorkOrder, type WorkOrderFilter } from '../../lib/work-order-api';
+import { listUserDirectory } from '../../lib/user-api';
 import type { WorkOrderPage } from '@ipms/contracts';
 import { isWorkOrderType, personLabel, queueFilter } from './labels';
 import { QUEUE_PAGE_SIZE, type QueueParams } from './queue';

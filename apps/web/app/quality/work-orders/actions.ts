@@ -1,13 +1,12 @@
 'use server';
 import { redirect } from 'next/navigation';
-import {
-  cancelWorkOrder, createWorkOrders, getProject, listAssignable, updateWorkOrder, type AssignableUser,
-} from '../lib/project-api';
-import { getVersion, type ChecklistSection } from '../lib/qc-api';
-import type { FormState } from '../lib/form-state';
-import { optional, settle } from '../lib/settle';
-import { projectPages } from '../projects/[id]/paths';
-import { isWorkOrderType } from './labels';
+import { getProject, listAssignable, type AssignableUser } from '../../lib/project-api';
+import { cancelWorkOrder, createWorkOrders, updateWorkOrder } from '../../lib/work-order-api';
+import { getVersion, type ChecklistSection } from '../../lib/qc-api';
+import type { FormState } from '../../lib/form-state';
+import { optional, settle } from '../../lib/settle';
+import { projectPages } from '../../projects/[id]/paths';
+import { WORK_ORDERS_PATH, isWorkOrderType, workOrderPath } from './labels';
 
 export type ChecklistPreview =
   | { state: 'ready'; sections: ChecklistSection[] }
@@ -24,7 +23,7 @@ const validDate = (value: string | undefined): value is string => value !== unde
 
 /** Every page a work order change shows on. */
 const pages = (projectId: string, workOrderId?: string) => [
-  '/work-orders', ...(workOrderId ? [`/work-orders/${workOrderId}`] : []), ...projectPages(projectId),
+  WORK_ORDERS_PATH, ...(workOrderId ? [workOrderPath(workOrderId)] : []), ...projectPages(projectId),
 ];
 
 export async function createWorkOrdersAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -42,12 +41,12 @@ export async function createWorkOrdersAction(_previous: FormState, form: FormDat
   if (!assigneeId) return { error: 'Choose the responsible person.' };
   if (!validDate(planned)) return { error: 'Choose a planned completion date.' };
 
-  const result = await createWorkOrders(projectId, {
-    workOrderType, templateId, siteIds, assigneeId, plannedCompletionAt: new Date(planned), ...(note ? { note } : {}),
+  const result = await createWorkOrders({
+    projectId, workOrderType, templateId, siteIds, assigneeId, plannedCompletionAt: new Date(planned), ...(note ? { note } : {}),
   });
   const state = await settle(result, pages(projectId));
   if (state.error || result.state !== 'ready') return state;
-  redirect(`/work-orders?projectId=${projectId}&created=${result.data.created.length}`);
+  redirect(`${WORK_ORDERS_PATH}?projectId=${projectId}&created=${result.data.created.length}`);
 }
 
 export async function updateWorkOrderAction(_previous: FormState, form: FormData): Promise<FormState> {

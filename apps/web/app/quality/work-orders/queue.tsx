@@ -1,7 +1,7 @@
 import type { WorkOrderPage, WorkOrderStatusCounts } from '@ipms/contracts';
-import type { WorkOrder } from '../lib/project-api';
+import type { WorkOrder } from '../../lib/work-order-api';
 import {
-  DUE_BUCKETS, QUEUE_FILTERS, STATUS_TEXT, dueBucket, dueText, filterCount, initials, pageWindow, typeInfo,
+  DUE_BUCKETS, QUEUE_FILTERS, STATUS_TEXT, dueBucket, dueText, filterCount, initials, pageWindow, typeInfo, workOrderPath,
   type QueueFilterKey, type WorkOrderType,
 } from './labels';
 
@@ -126,7 +126,7 @@ function QueueRow({ order, names, now }: { order: WorkOrder; names: ReadonlyMap<
         {info?.category === 'EHS' ? 'EHS' : 'Q'}<small>{info?.selfCheck ? 'self' : 'spot'}</small>
       </span>
       <div className="queue-main">
-        <a className="queue-title" href={`/work-orders/${order.id}`}>{order.title}</a>
+        <a className="queue-title" href={workOrderPath(order.id)}>{order.title}</a>
         <div className="queue-meta">
           <span className="du" title={`Project ID (DU): ${order.project.name}`}>{order.project.code}</span>
           <span className="site"><b>{order.site.siteCode}</b>{order.site.name !== order.site.siteCode ? ` ${order.site.name}` : ''}</span>

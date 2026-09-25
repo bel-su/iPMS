@@ -13,15 +13,18 @@ import { SiteGeofenceClient } from './submissions/site-geofence.client.js';
 import { SubmissionController } from './submissions/submission.controller.js';
 import { SubmissionService } from './submissions/submission.service.js';
 import { TaskChecklistController } from './tasks/task-checklist.controller.js';
-import { TaskLookupClient } from './tasks/task-lookup.client.js';
 import { TemplateController } from './templates/template.controller.js';
 import { TemplateImportController } from './templates/template-import.controller.js';
-import { TemplateReferenceController } from './templates/template-reference.controller.js';
 import { TemplateImportService } from './templates/template-import.service.js';
 import { TemplateQueries } from './templates/template.queries.js';
 import { TemplateService } from './templates/template.service.js';
+import { ProjectDirectoryClient } from './work-orders/project-directory.client.js';
+import { WorkOrderController } from './work-orders/work-order.controller.js';
+import { WorkOrderService } from './work-orders/work-order.service.js';
+import { WorkOrderUsageController } from './work-orders/work-order-usage.controller.js';
 
 // Least-permissive scope: no qc route passes a resource to check(), so scope is never consulted.
+// Work order reads resolve the caller's real scope from project, per request — see WorkOrderController.
 const scopeProvider: ScopeProvider = { async for(): Promise<AuthzScope> { return { global: false, projectIds: [], siteIds: [] }; } };
 
 const projectInternalUrl = (): string => process.env['PROJECT_INTERNAL_URL'] ?? 'http://project:3004';
@@ -40,7 +43,7 @@ function requireEnv(name: string): string {
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [TemplateImportController, TemplateController, TemplateReferenceController, SubmissionController, TaskChecklistController, HealthController, MetricsController],
+  controllers: [TemplateImportController, TemplateController, SubmissionController, TaskChecklistController, WorkOrderController, WorkOrderUsageController, HealthController, MetricsController],
   providers: [
     // Order matters: JwtUserGuard must populate request.user before AuthzGuard reads it.
     { provide: APP_GUARD, useClass: JwtUserGuard },
@@ -56,11 +59,16 @@ function requireEnv(name: string): string {
       },
     },
     { provide: SiteGeofenceClient, useFactory: () => new SiteGeofenceClient(projectInternalUrl()) },
-    { provide: TaskLookupClient, useFactory: () => new TaskLookupClient(projectInternalUrl()) },
+    { provide: ProjectDirectoryClient, useFactory: () => new ProjectDirectoryClient(projectInternalUrl()) },
     {
       provide: SubmissionService,
-      useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient, tasks: TaskLookupClient) => new SubmissionService(prisma.db, geofence, graceDays(), tasks),
-      inject: [PrismaService, SiteGeofenceClient, TaskLookupClient],
+      useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient) => new SubmissionService(prisma.db, geofence, graceDays()),
+      inject: [PrismaService, SiteGeofenceClient],
+    },
+    {
+      provide: WorkOrderService,
+      useFactory: (prisma: PrismaService, queries: TemplateQueries, projects: ProjectDirectoryClient) => new WorkOrderService(prisma.db, queries, projects),
+      inject: [PrismaService, TemplateQueries, ProjectDirectoryClient],
     },
     {
       provide: EventBus,

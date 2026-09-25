@@ -49,7 +49,9 @@ export const STREAMS: Record<'IAM' | 'AUDIT' | 'QC', StreamDefinition> = {
     name: 'QC',
     subjects: ['qc.>'],
     maxAgeMs: 7 * 24 * 60 * 60 * 1000,
-    // project moves a work order's status from these; one durable per subject, as for IAM.
-    durableConsumers: ['project-task-submitted', 'project-task-reviewed'],
+    // Facts about submissions, for whoever needs them next (notifications).
+    // Nobody consumes them yet: qc moves its own work orders in the same
+    // transaction, so project no longer needs to hear of them.
+    durableConsumers: [],
   },
 };

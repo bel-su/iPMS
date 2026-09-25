@@ -20,6 +20,7 @@ model ChecklistTemplate {
   currentVersion   TemplateVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
   versions         TemplateVersion[] @relation("TemplateVersions")
   submissions      Submission[]
+  workOrders       WorkOrder[]
 
   @@map("checklist_template")
 }
@@ -82,6 +83,8 @@ model ChecklistItem {
 
 model Submission {
   id                String            @id @db.Uuid
+  /// The work order this submission completes. Named for the task it was
+  /// before work orders moved here; ids were kept across that move.
   taskId            String            @db.Uuid
   siteId            String            @db.Uuid
   projectId         String            @db.Uuid
@@ -155,6 +158,68 @@ model ReviewDecision {
   submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
   @@map("review_decision")
+}
+
+/// A checklist template assigned to one site of a project, for one person to
+/// complete by a date.
+///
+/// The site and project live in the project service. Their codes and names are
+/// copied here when the work order is raised, so the queue can list, search and
+/// scope work orders without a call per row; `projectId` and `siteId` are what
+/// scope filters on, exactly as project's own rows do.
+///
+/// Its status moves in the same transaction as the submission or review that
+/// moves it, so there is no window where the two disagree.
+model WorkOrder {
+  id                  String           @id @db.Uuid
+  projectId           String           @db.Uuid
+  projectCode         String           @db.VarChar(50)
+  projectName         String           @db.VarChar(200)
+  siteId              String           @db.Uuid
+  siteCode            String           @db.VarChar(50)
+  siteName            String           @db.VarChar(200)
+  siteCity            String?          @db.VarChar(100)
+  siteArea            String?          @db.VarChar(100)
+  templateId          String           @db.Uuid
+  /// The template's name when the work order was raised.
+  templateName        String           @db.VarChar(250)
+  /// QUALITY_SELF_CHECK | QUALITY_SPOT_CHECK | EHS_SELF_CHECK | EHS_SPOT_CHECK
+  workOrderType       String           @db.VarChar(30)
+  title               String           @db.VarChar(250)
+  /// NOT_STARTED | ONGOING | REVIEWING | RECTIFYING | COMPLETED | CANCELLED
+  status              String           @default("NOT_STARTED") @db.VarChar(30)
+  assigneeId          String           @db.Uuid
+  plannedCompletionAt DateTime         @db.Timestamptz(6)
+  actualCompletionAt  DateTime?        @db.Timestamptz(6)
+  currentSubmissionId String?          @db.Uuid
+  currentAttemptNo    Int?
+  cancelReason        String?          @db.VarChar(500)
+  createdBy           String           @db.Uuid
+  createdAt           DateTime         @default(now()) @db.Timestamptz(6)
+  template            ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  events              WorkOrderEvent[]
+
+  @@index([projectId, status])
+  @@index([siteId])
+  @@index([assigneeId])
+  @@index([plannedCompletionAt])
+  @@map("work_order")
+}
+
+/// What happened to a work order, for its timeline. Written in the same
+/// transaction as the change it records.
+model WorkOrderEvent {
+  id          String    @id @db.Uuid
+  workOrderId String    @db.Uuid
+  /// CREATED | REASSIGNED | RESCHEDULED | CANCELLED | SUBMITTED | APPROVED | REJECTED
+  kind        String    @db.VarChar(20)
+  at          DateTime  @db.Timestamptz(6)
+  actorId     String?   @db.Uuid
+  detail      Json      @default("{}")
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId, at])
+  @@map("work_order_event")
 }
 
 model OutboxEvent {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CurrentUser } from '../../lib/iam-api';
-import type { ProjectDetail, Task } from '../../lib/project-api';
-import { landingFor, myTasks, summarizeProject } from './summary';
+import type { ProjectDetail } from '../../lib/project-api';
+import { landingFor, myTasks, summarizeProject, workOf, type Work } from './summary';
 
 const NOW = new Date('2026-09-23T06:00:00Z');
 
@@ -33,12 +33,11 @@ function project(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
 }
 
 let seq = 0;
-function task(siteId: string, taskTypeId: string, status: Task['status'], extra: Partial<Task> = {}): Task {
+function task(siteId: string, taskTypeId: string, status: Work['status'], extra: Partial<Work> = {}): Work {
   seq += 1;
   return {
-    id: `t-${seq}`, projectId: 'p-1', siteId, taskTypeId, templateId: null, workOrderType: null, templateName: null, title: `${taskTypeId} at ${siteId}`,
-    status, assigneeId: null, plannedCompletionAt: null, actualCompletionAt: null, currentSubmissionId: null,
-    currentAttemptNo: null, cancelReason: null, origin: 'PLANNED', createdBy: 'u-0', createdAt: '2026-09-01T00:00:00Z', ...extra,
+    id: `t-${seq}`, siteId, taskTypeId, workOrderType: null, title: `${taskTypeId} at ${siteId}`,
+    status, assigneeId: null, plannedCompletionAt: null, ...extra,
   };
 }
 
@@ -144,5 +143,18 @@ describe('myTasks', () => {
       task('s1', 'e', 'RECTIFYING', { assigneeId: 'someone-else' }),
     ];
     expect(myTasks(tasks, 'u-1').map((t) => t.taskTypeId)).toEqual(['d', 'c', 'b', 'a']);
+  });
+});
+
+describe('workOf', () => {
+  it('puts planned tasks and QC work orders in one list, work orders crediting no task type', () => {
+    const work = workOf(
+      [{ id: 't-1', projectId: 'p-1', siteId: 's1', taskTypeId: 'survey', templateId: null, title: 'Survey', status: 'COMPLETED', assigneeId: null, plannedCompletionAt: null, actualCompletionAt: null, origin: 'PLANNED', createdBy: 'u-0', createdAt: '' }],
+      [{ id: 'w-1', siteId: 's2', siteCode: 'S2', title: '[EHS Self-check]s2', workOrderType: 'EHS_SELF_CHECK', status: 'REVIEWING', assigneeId: 'u-1', plannedCompletionAt: '2026-09-30T00:00:00Z' }],
+    );
+    expect(work).toEqual([
+      expect.objectContaining({ id: 't-1', taskTypeId: 'survey', workOrderType: null }),
+      expect.objectContaining({ id: 'w-1', taskTypeId: null, workOrderType: 'EHS_SELF_CHECK', status: 'REVIEWING' }),
+    ]);
   });
 });

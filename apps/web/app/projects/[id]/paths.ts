@@ -12,7 +12,7 @@ export const PROJECT_TABS: readonly { tab: ProjectTab; label: string; path: stri
  * rather than under a project tab; this is that dashboard filtered to one
  * project.
  */
-export const projectWorkOrders = (projectId: string) => `/work-orders?projectId=${projectId}`;
+export const projectWorkOrders = (projectId: string) => `/quality/work-orders?projectId=${projectId}`;
 
 /**
  * Every page a project's sites, tasks, task types or milestones are rendered

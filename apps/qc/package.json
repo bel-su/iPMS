@@ -33,6 +33,7 @@
     "@types/pg": "8.23.1",
     "prisma": "7.10.0",
     "reflect-metadata": "0.2.2",
+    "tsx": "4.20.6",
     "zod": "4.6.5"
   }
 }
