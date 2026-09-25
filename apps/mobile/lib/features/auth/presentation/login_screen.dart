@@ -50,26 +50,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Brand Header with Lavender Accent
+                  // Brand Header with Enhanced App Icon
                   Center(
                     child: Container(
-                      width: 72,
-                      height: 72,
+                      width: 80,
+                      height: 80,
                       decoration: BoxDecoration(
-                        color: AppColors.primaryLavender,
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(22),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primaryLavenderDark.withValues(alpha: 0.3),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.engineering_outlined,
-                        size: 36,
-                        color: AppColors.darkSlate,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: Image.asset(
+                          'assets/icons/app_icon.png',
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: AppColors.primaryLavender,
+                            child: const Icon(
+                              Icons.engineering_outlined,
+                              size: 40,
+                              color: AppColors.darkSlate,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -101,19 +112,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 color: AppColors.statusBlockedBg,
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Row(
+                              child: const Row(
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.error_outline,
                                     size: 18,
                                     color: AppColors.statusBlockedText,
                                   ),
-                                  const SizedBox(width: 10),
+                                  SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                      authState.error.toString().replaceAll('ApiException: ', ''),
-                                      style: AppTypography.bodySmall.copyWith(
+                                      'Invalid username or password. Please verify your credentials.',
+                                      style: TextStyle(
                                         color: AppColors.statusBlockedText,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
@@ -133,7 +145,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           TextFormField(
                             controller: _usernameController,
                             decoration: const InputDecoration(
-                              hintText: 'e.g. engineer, manager, admin',
+                              hintText: 'Enter your username',
                               prefixIcon: Icon(Icons.person_outline, size: 20),
                             ),
                             validator: (val) {
@@ -174,7 +186,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 24),
 
                           // Submit Button
                           SizedBox(
@@ -195,14 +207,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ],
                       ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-                  Center(
-                    child: Text(
-                      'Stateless Client • Connected via API Gateway',
-                      style: AppTypography.caption,
                     ),
                   ),
                 ],

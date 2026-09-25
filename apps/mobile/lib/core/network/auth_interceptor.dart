@@ -55,7 +55,7 @@ class AuthInterceptor extends QueuedInterceptor {
           try {
             // Attempt token refresh
             final response = await _refreshDio.post<Map<String, dynamic>>(
-              '/api/iam/auth/refresh',
+              '/api/v1/auth/refresh',
               data: {'refreshToken': refreshToken},
             );
 

@@ -31,52 +31,31 @@ class FloatingNavBar extends StatelessWidget {
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildNavItem(
             index: 0,
-            icon: Icons.space_dashboard_rounded,
-            tooltip: 'Tasks',
+            icon: Icons.assignment_outlined,
+            selectedIcon: Icons.assignment_rounded,
+            label: 'Tasks',
           ),
           _buildNavItem(
             index: 1,
-            icon: Icons.map_rounded,
-            tooltip: 'Site Map',
+            icon: Icons.business_outlined,
+            selectedIcon: Icons.business_rounded,
+            label: 'Projects',
           ),
           _buildNavItem(
             index: 2,
-            icon: Icons.search_rounded,
-            tooltip: 'Search',
+            icon: Icons.map_outlined,
+            selectedIcon: Icons.map_rounded,
+            label: 'Map',
           ),
           _buildNavItem(
             index: 3,
-            icon: Icons.person_rounded,
-            tooltip: 'Profile',
-          ),
-          // Quick Action Action Button
-          Container(
-            height: 44,
-            width: 44,
-            decoration: BoxDecoration(
-              color: AppColors.primaryLavender,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryLavenderDark.withValues(alpha: 0.4),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: IconButton(
-              icon: const Icon(
-                Icons.add_rounded,
-                color: AppColors.darkSlate,
-                size: 22,
-              ),
-              onPressed: onQuickAction ?? () => onTap(0),
-              tooltip: 'Quick Action',
-            ),
+            icon: Icons.person_outline_rounded,
+            selectedIcon: Icons.person_rounded,
+            label: 'Profile',
           ),
         ],
       ),
@@ -86,28 +65,45 @@ class FloatingNavBar extends StatelessWidget {
   Widget _buildNavItem({
     required int index,
     required IconData icon,
-    required String tooltip,
+    required IconData selectedIcon,
+    required String label,
   }) {
     final isSelected = currentIndex == index;
 
     return Tooltip(
-      message: tooltip,
+      message: label,
       child: InkWell(
         onTap: () => onTap(index),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: isSelected
                 ? AppColors.darkSlateSecondary
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
           ),
-          child: Icon(
-            icon,
-            size: 22,
-            color: isSelected ? Colors.white : AppColors.textTertiary,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isSelected ? selectedIcon : icon,
+                size: 20,
+                color: isSelected ? Colors.white : AppColors.textTertiary,
+              ),
+              if (isSelected) ...[
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
