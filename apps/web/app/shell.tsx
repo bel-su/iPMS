@@ -45,7 +45,7 @@ export async function Sidebar({ active }: { active: Section }) {
         <NavItem section="overview" active={active} href="/" icon="▦">Overview</NavItem>
         <NavItem section="projects" active={active} href="/projects" icon="◫">Projects</NavItem>
         {mayViewTemplates ? <NavItem section="quality" active={active} href="/quality/templates" icon="✓">Quality &amp; EHS</NavItem> : null}
-        {mayViewTasks ? <NavItem section="work-orders" active={active} href="/quality/work-orders" icon="☰">Work orders</NavItem> : null}
+        {mayViewTasks ? <NavItem section="work-orders" active={active} href="/work-orders" icon="☰">Work orders</NavItem> : null}
         {mayViewUsers ? <NavItem section="users" active={active} href="/users" icon="◉">Users</NavItem> : null}
       </nav>
       <div className="sidebar-bottom"><a className="nav-item" href="/#settings"><Icon>⚙</Icon>Settings</a></div>

@@ -59,8 +59,8 @@ function requireEnv(name: string): string {
     { provide: TaskLookupClient, useFactory: () => new TaskLookupClient(projectInternalUrl()) },
     {
       provide: SubmissionService,
-      useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient) => new SubmissionService(prisma.db, geofence, graceDays()),
-      inject: [PrismaService, SiteGeofenceClient],
+      useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient, tasks: TaskLookupClient) => new SubmissionService(prisma.db, geofence, graceDays(), tasks),
+      inject: [PrismaService, SiteGeofenceClient, TaskLookupClient],
     },
     {
       provide: EventBus,

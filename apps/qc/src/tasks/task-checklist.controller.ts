@@ -1,19 +1,10 @@
 import {
-  ConflictException, Controller, ForbiddenException, Get, NotFoundException, Param, Req, ServiceUnavailableException,
+  ConflictException, Controller, ForbiddenException, Get, NotFoundException, Param, Req,
 } from '@nestjs/common';
 import type { AuthzUser } from '@ipms/authz';
 import { UuidSchema } from '@ipms/contracts';
 import { TemplateQueries } from '../templates/template.queries.js';
-import { TaskLookupClient, type TaskLookup, type TaskRef } from './task-lookup.client.js';
-
-function requireTask(lookup: TaskLookup): TaskRef {
-  switch (lookup.state) {
-    case 'found': return lookup.task;
-    case 'not_found': throw new NotFoundException('Task not found');
-    case 'forbidden': throw new ForbiddenException('You cannot view this task');
-    case 'unavailable': throw new ServiceUnavailableException('The project service could not be reached. Try again shortly.');
-  }
-}
+import { TaskLookupClient, requireTask } from './task-lookup.client.js';
 
 /** Carries no @RequirePermission: access follows task assignment, which only project knows. */
 @Controller('qc/tasks')

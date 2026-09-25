@@ -38,7 +38,7 @@ function task(siteId: string, taskTypeId: string, status: Task['status'], extra:
   return {
     id: `t-${seq}`, projectId: 'p-1', siteId, taskTypeId, templateId: null, workOrderType: null, templateName: null, title: `${taskTypeId} at ${siteId}`,
     status, assigneeId: null, plannedCompletionAt: null, actualCompletionAt: null, currentSubmissionId: null,
-    origin: 'PLANNED', createdBy: 'u-0', ...extra,
+    currentAttemptNo: null, cancelReason: null, origin: 'PLANNED', createdBy: 'u-0', createdAt: '2026-09-01T00:00:00Z', ...extra,
   };
 }
 

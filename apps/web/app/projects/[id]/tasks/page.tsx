@@ -4,7 +4,7 @@ import { deleteTaskAction } from '../../actions';
 import { CreateTaskForm, RowAction } from '../../forms';
 import { ProjectFrame, projectProblem } from '../frame';
 import { STATUS_LABEL, formatDay } from '../summary';
-import { personLabel, taskKind } from '../work-orders/labels';
+import { personLabel, taskKind } from '../../../work-orders/labels';
 import { listUserDirectory } from '../../../lib/user-api';
 
 export default async function ProjectTasksPage({ params }: { params: Promise<{ id: string }> }) {

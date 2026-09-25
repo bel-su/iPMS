@@ -4,7 +4,7 @@ import type { ApiResult } from '../../lib/api-client';
 import { StatePage } from '../../shell';
 import { ProjectFrame, projectProblem } from './frame';
 import { STATUS_LABEL, formatDay, landingFor, myTasks, summarizeProject } from './summary';
-import { taskKind } from './work-orders/labels';
+import { taskKind } from '../../work-orders/labels';
 
 function Metric({ icon, label, value, detail, tone }: { icon: string; label: string; value: number; detail: string; tone: string }) {
   return <article className="metric-card"><div className="metric-heading"><span className={`metric-icon ${tone}`}>{icon}</span><span>{label}</span></div><strong>{value}</strong><p>{detail}</p></article>;

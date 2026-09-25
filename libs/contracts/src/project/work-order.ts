@@ -19,28 +19,82 @@ export const WORK_ORDER_TEMPLATE_CATEGORY: Record<WorkOrderType, TemplateCategor
   EHS_SPOT_CHECK: 'EHS',
 };
 
+/** The label in a generated work order name: `[Quality Self-check]SAKUWA GACHHI`. */
+export const WORK_ORDER_TYPE_LABEL: Record<WorkOrderType, string> = {
+  QUALITY_SELF_CHECK: 'Quality Self-check',
+  QUALITY_SPOT_CHECK: 'Quality Spot Check',
+  EHS_SELF_CHECK: 'EHS Self-check',
+  EHS_SPOT_CHECK: 'EHS Spot Check',
+};
+
+export const WORK_ORDER_BATCH_LIMIT = 200;
+export const WORK_ORDER_NOTE_MAX = 120;
+
 /**
- * Every field is required: a work order nobody is responsible for, or with no
- * date to be done by, is a task that will never be picked up.
+ * The name a work order gets: the type label, the site's name, and the
+ * creator's note if there is one. Generated rather than typed so every work
+ * order on a site reads the same way, and so a batch of sites needs no
+ * per-site naming. Shared by the service and the composer's preview.
  */
-export const CreateWorkOrderSchema = z.object({
+export function workOrderTitle(type: WorkOrderType, siteName: string, note?: string | null): string {
+  const extra = note?.trim();
+  return `[${WORK_ORDER_TYPE_LABEL[type]}]${siteName}${extra ? ` ${extra}` : ''}`.slice(0, 250);
+}
+
+/**
+ * One template, one person, one due date, and every site that should be
+ * checked with them — one work order per site. Every field but the note is
+ * required: a work order nobody is responsible for, or with no date to be done
+ * by, is a task that will never be picked up.
+ */
+export const CreateWorkOrdersSchema = z.object({
   workOrderType: WorkOrderTypeSchema,
   templateId: UuidSchema,
-  siteId: UuidSchema,
+  siteIds: z.array(UuidSchema).min(1).max(WORK_ORDER_BATCH_LIMIT)
+    .refine((ids) => new Set(ids).size === ids.length, { message: 'Each site may be chosen once' }),
   assigneeId: UuidSchema,
   plannedCompletionAt: z.coerce.date(),
-  title: z.string().trim().min(1).max(250),
+  note: z.string().trim().max(WORK_ORDER_NOTE_MAX).optional(),
 }).strip();
-export type CreateWorkOrderDto = z.infer<typeof CreateWorkOrderSchema>;
+export type CreateWorkOrdersDto = z.infer<typeof CreateWorkOrdersSchema>;
+
+/** Reassign, reschedule, or both. At least one is required. */
+export const UpdateWorkOrderSchema = z.object({
+  assigneeId: UuidSchema.optional(),
+  plannedCompletionAt: z.coerce.date().optional(),
+}).strip().refine((value) => value.assigneeId !== undefined || value.plannedCompletionAt !== undefined, {
+  message: 'Change the responsible person or the planned completion date',
+});
+export type UpdateWorkOrderDto = z.infer<typeof UpdateWorkOrderSchema>;
+
+export const CancelWorkOrderSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+}).strip();
+export type CancelWorkOrderDto = z.infer<typeof CancelWorkOrderSchema>;
+
+/** `overdue` is open work whose planned completion has passed; it is a view, not a stored status. */
+export const WorkOrderViewSchema = z.enum(['open', 'overdue', 'closed']);
 
 export const ListWorkOrdersQuerySchema = PaginationSchema.extend({
+  projectId: UuidSchema.optional(),
   status: TaskStatusSchema.optional(),
+  view: WorkOrderViewSchema.optional(),
   workOrderType: WorkOrderTypeSchema.optional(),
+  assigneeId: UuidSchema.optional(),
   q: z.string().trim().max(100).optional(),
 }).strip();
 export type ListWorkOrdersQueryDto = z.infer<typeof ListWorkOrdersQuerySchema>;
 
-/** How many work orders carry each status, before the status filter is applied — the numbers on the tabs. */
-export type WorkOrderStatusCounts = Record<z.infer<typeof TaskStatusSchema> | 'ALL', number>;
+/**
+ * How many work orders carry each status, plus the overdue view, before the
+ * status and view filters are applied — the numbers on the filter pills.
+ */
+export type WorkOrderStatusCounts = Record<z.infer<typeof TaskStatusSchema> | 'ALL' | 'OVERDUE', number>;
 
 export type WorkOrderPage<T> = Paginated<T> & { counts: WorkOrderStatusCounts };
+
+/** What happened to a work order, in order — the detail page's timeline. */
+export const WORK_ORDER_EVENT_KINDS = [
+  'CREATED', 'REASSIGNED', 'RESCHEDULED', 'CANCELLED', 'SUBMITTED', 'APPROVED', 'REJECTED',
+] as const;
+export type WorkOrderEventKind = (typeof WORK_ORDER_EVENT_KINDS)[number];

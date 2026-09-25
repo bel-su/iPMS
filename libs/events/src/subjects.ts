@@ -5,6 +5,8 @@ export const SUBJECTS = {
   IAM_ROLE_REMOVED: 'iam.role.removed',
   IAM_USER_DEACTIVATED: 'iam.user.deactivated',
   AUDIT_EVENT: 'audit.event.recorded',
+  QC_SUBMISSION_SUBMITTED: 'qc.submission.submitted',
+  QC_SUBMISSION_REVIEWED: 'qc.submission.reviewed',
 } as const;
 
 export type Subject = (typeof SUBJECTS)[keyof typeof SUBJECTS];
@@ -16,7 +18,7 @@ export interface StreamDefinition {
   durableConsumers: string[];
 }
 
-export const STREAMS: Record<'IAM' | 'AUDIT', StreamDefinition> = {
+export const STREAMS: Record<'IAM' | 'AUDIT' | 'QC', StreamDefinition> = {
   IAM: {
     name: 'IAM',
     subjects: ['iam.>'],
@@ -42,5 +44,12 @@ export const STREAMS: Record<'IAM' | 'AUDIT', StreamDefinition> = {
     maxAgeMs: 30 * 24 * 60 * 60 * 1000,
     // Exactly one consumer. The hash chain requires a single serialized writer.
     durableConsumers: ['audit-ledger-writer'],
+  },
+  QC: {
+    name: 'QC',
+    subjects: ['qc.>'],
+    maxAgeMs: 7 * 24 * 60 * 60 * 1000,
+    // project moves a work order's status from these; one durable per subject, as for IAM.
+    durableConsumers: ['project-task-submitted', 'project-task-reviewed'],
   },
 };

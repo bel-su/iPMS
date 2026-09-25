@@ -46,3 +46,10 @@ describe('durable naming', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 });
+
+describe('QC stream', () => {
+  it('carries the submission subjects to one durable each for project', () => {
+    expect(STREAMS.QC.subjects).toEqual(['qc.>']);
+    expect(STREAMS.QC.durableConsumers).toEqual(['project-task-submitted', 'project-task-reviewed']);
+  });
+});

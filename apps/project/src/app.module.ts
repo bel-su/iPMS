@@ -14,6 +14,7 @@ import { SiteImportService } from './project/import/site-import.service.js';
 import { TemplateLookupClient } from './work-orders/template-lookup.client.js';
 import { WorkOrderController } from './work-orders/work-order.controller.js';
 import { WorkOrderService } from './work-orders/work-order.service.js';
+import { TASK_STATUS_DEDUPE_PREFIX, TaskStatusConsumer } from './work-orders/task-status.consumer.js';
 import { UserScopeRepository } from './scope/user-scope.repository.js';
 import { projectScopeProvider } from './scope/scope.provider.js';
 import { SCOPE_DEDUPE_PREFIX, ScopeConsumer } from './scope/scope.consumer.js';
@@ -71,6 +72,21 @@ class ScopeBootstrap implements OnModuleInit {
     const dedupe = new RedisDedupeStore(redis as never, SCOPE_DEDUPE_PREFIX);
     await this.consumer.register(new DurableConsumer(this.bus, dedupe));
     log.info({ replayed }, 'scope projection consumer started');
+  }
+}
+
+/**
+ * Starts the consumer that moves task status from qc's submission events.
+ * Its own dedupe namespace, for the reason ScopeBootstrap gives.
+ */
+class TaskStatusBootstrap implements OnModuleInit {
+  constructor(private readonly bus: EventBus, private readonly consumer: TaskStatusConsumer) {}
+
+  async onModuleInit(): Promise<void> {
+    const redis = new Redis(requireEnv('REDIS_URL'));
+    const dedupe = new RedisDedupeStore(redis as never, TASK_STATUS_DEDUPE_PREFIX);
+    await this.consumer.register(new DurableConsumer(this.bus, dedupe));
+    log.info('task status consumer started');
   }
 }
 
@@ -135,8 +151,8 @@ class ScopeBootstrap implements OnModuleInit {
     { provide: TemplateLookupClient, useFactory: () => new TemplateLookupClient(process.env['QC_INTERNAL_URL'] ?? 'http://qc:3005') },
     {
       provide: WorkOrderService,
-      useFactory: (prisma: PrismaService, templates: TemplateLookupClient) => new WorkOrderService(prisma.db, templates),
-      inject: [PrismaService, TemplateLookupClient],
+      useFactory: (prisma: PrismaService, templates: TemplateLookupClient, scopes: UserScopeRepository) => new WorkOrderService(prisma.db, templates, scopes),
+      inject: [PrismaService, TemplateLookupClient, UserScopeRepository],
     },
     {
       provide: SiteImportService,
@@ -148,6 +164,12 @@ class ScopeBootstrap implements OnModuleInit {
       useFactory: (bus: EventBus, prisma: PrismaService, repo: UserScopeRepository, consumer: ScopeConsumer) =>
         new ScopeBootstrap(bus, prisma, repo, consumer),
       inject: [EventBus, PrismaService, UserScopeRepository, ScopeConsumer],
+    },
+    { provide: TaskStatusConsumer, useFactory: (prisma: PrismaService) => new TaskStatusConsumer(prisma.db), inject: [PrismaService] },
+    {
+      provide: TaskStatusBootstrap,
+      useFactory: (bus: EventBus, consumer: TaskStatusConsumer) => new TaskStatusBootstrap(bus, consumer),
+      inject: [EventBus, TaskStatusConsumer],
     },
   ],
 })

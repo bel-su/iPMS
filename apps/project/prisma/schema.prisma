@@ -108,15 +108,37 @@ model Task {
   plannedCompletionAt DateTime? @db.Timestamptz(6)
   actualCompletionAt DateTime? @db.Timestamptz(6)
   currentSubmissionId String? @db.Uuid
+  /// The attempt number of `currentSubmissionId`. Orders qc's submission events, which arrive on separate durables.
+  currentAttemptNo Int?
+  cancelReason String? @db.VarChar(500)
   origin String @db.VarChar(20)
   createdBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
   project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
   site Site @relation(fields:[siteId],references:[id],onDelete:Cascade)
   taskType TaskType? @relation(fields:[taskTypeId],references:[id],onDelete:Restrict)
+  events WorkOrderEvent[]
   @@index([projectId,status])
   @@index([projectId,workOrderType])
+  @@index([plannedCompletionAt])
   @@index([siteId])
   @@map("task")
+}
+
+/// What happened to a work order, for its timeline. Written in the same
+/// transaction as the change it records.
+model WorkOrderEvent {
+  id String @id @db.Uuid
+  taskId String @db.Uuid
+  /// CREATED | REASSIGNED | RESCHEDULED | CANCELLED | SUBMITTED | APPROVED | REJECTED
+  kind String @db.VarChar(20)
+  at DateTime @db.Timestamptz(6)
+  /// Null for nothing today; kept nullable for system-driven events.
+  actorId String? @db.Uuid
+  detail Json @default("{}")
+  task Task @relation(fields:[taskId],references:[id],onDelete:Cascade)
+  @@index([taskId,at])
+  @@map("work_order_event")
 }
 
 /// Local projection of iam's authoritative scope grants, replicated over
