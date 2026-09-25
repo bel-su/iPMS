@@ -19,7 +19,7 @@ class AuthRepository {
   }) async {
     try {
       final response = await apiClient.dio.post<Map<String, dynamic>>(
-        '/api/iam/auth/login',
+        '/api/v1/auth/login',
         data: {
           'username': username.trim(),
           'password': password,
@@ -42,7 +42,7 @@ class AuthRepository {
       );
 
       // Fetch user profile
-      return await getCurrentUser();
+      return await getCurrentUser(username: username.trim());
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
         throw const ApiException(message: 'Incorrect username or password.');
@@ -55,10 +55,10 @@ class AuthRepository {
     }
   }
 
-  Future<AuthUser> getCurrentUser() async {
+  Future<AuthUser> getCurrentUser({String? username}) async {
     try {
       final response = await apiClient.dio.get<Map<String, dynamic>>(
-        '/api/iam/users/me',
+        '/api/v1/auth/me',
       );
 
       final data = response.data;
@@ -66,7 +66,17 @@ class AuthRepository {
         throw const ApiException(message: 'User profile not found.');
       }
 
-      return AuthUser.fromJson(data);
+      final user = AuthUser.fromJson(data);
+      if (user.username.isEmpty && username != null) {
+        return AuthUser(
+          id: user.id,
+          username: username,
+          email: user.email,
+          displayName: user.displayName?.isNotEmpty == true ? user.displayName : username,
+          role: user.role,
+        );
+      }
+      return user;
     } on DioException catch (e) {
       throw ApiException(
         message: e.response?.data?['message']?.toString() ?? 'Failed to load user profile.',
@@ -83,7 +93,7 @@ class AuthRepository {
 
   Future<void> logout() async {
     try {
-      await apiClient.dio.post<void>('/api/iam/auth/logout');
+      await apiClient.dio.post<void>('/api/v1/auth/logout');
     } catch (_) {
       // Best-effort server notification
     } finally {

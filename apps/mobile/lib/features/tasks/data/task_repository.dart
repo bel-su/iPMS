@@ -22,7 +22,7 @@ class TaskRepository {
       }
 
       final response = await apiClient.dio.get<dynamic>(
-        '/api/project/tasks',
+        '/api/v1/tasks',
         queryParameters: queryParams,
       );
 
@@ -50,7 +50,7 @@ class TaskRepository {
   Future<TaskItem> getTaskById(String taskId) async {
     try {
       final response = await apiClient.dio.get<Map<String, dynamic>>(
-        '/api/project/tasks/$taskId',
+        '/api/v1/tasks/$taskId',
       );
       final data = response.data;
       if (data != null) {
