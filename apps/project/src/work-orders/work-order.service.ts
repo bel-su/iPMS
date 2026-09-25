@@ -8,6 +8,7 @@ import {
   type CancelWorkOrderDto, type CreateWorkOrdersDto, type ListWorkOrdersQueryDto, type UpdateWorkOrderDto,
   type WorkOrderEventKind, type WorkOrderStatusCounts,
 } from '@ipms/contracts';
+import { asJson, recordAudit } from '../outbox/audit.js';
 import type { UserScopeRepository } from '../scope/user-scope.repository.js';
 import { siteScope, visibleProject } from '../scope/project-scope.js';
 import type { TemplateLookup, TemplateLookupClient, TemplateRef } from './template-lookup.client.js';
@@ -90,6 +91,13 @@ export class WorkOrderService {
     }));
     const created = await this.prisma.$transaction(async (tx) => {
       await tx.task.createMany({ data: rows });
+      // One ledger entry per work order: each is its own accountable assignment.
+      for (const row of rows) {
+        await recordAudit(tx, {
+          actorId, action: 'work_order.created', objectType: 'Task', objectId: row.id, previousState: {},
+          newState: asJson({ projectId, siteId: row.siteId, templateId: template.id, workOrderType: dto.workOrderType, assigneeId: dto.assigneeId, plannedCompletionAt: dto.plannedCompletionAt, title: row.title }),
+        });
+      }
       await tx.workOrderEvent.createMany({
         data: rows.map((row) => ({
           id: uuidv7(), taskId: row.id, kind: 'CREATED', at: now, actorId,
@@ -180,6 +188,11 @@ export class WorkOrderService {
         where: { id },
         data: { ...(reassign ? { assigneeId: dto.assigneeId! } : {}), ...(reschedule ? { plannedCompletionAt: dto.plannedCompletionAt! } : {}) },
       });
+      await recordAudit(tx, {
+        actorId, action: 'work_order.updated', objectType: 'Task', objectId: id,
+        previousState: asJson({ ...(reassign ? { assigneeId: current.assigneeId } : {}), ...(reschedule ? { plannedCompletionAt: current.plannedCompletionAt } : {}) }),
+        newState: asJson({ ...(reassign ? { assigneeId: dto.assigneeId } : {}), ...(reschedule ? { plannedCompletionAt: dto.plannedCompletionAt } : {}) }),
+      });
       if (reassign) await event(tx, id, 'REASSIGNED', now, actorId, { from: current.assigneeId, to: dto.assigneeId! });
       if (reschedule) {
         await event(tx, id, 'RESCHEDULED', now, actorId, { from: current.plannedCompletionAt?.toISOString() ?? null, to: dto.plannedCompletionAt!.toISOString() });
@@ -189,12 +202,16 @@ export class WorkOrderService {
   }
 
   async cancel(scope: AuthzScope, id: string, dto: CancelWorkOrderDto, actorId: string) {
-    await this.requireOpen(scope, id);
+    const current = await this.requireOpen(scope, id);
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
       // Conditional, so a review landing between the check and the write is not overwritten.
       const changed = await tx.task.updateMany({ where: { id, status: { in: OPEN } }, data: { status: 'CANCELLED', cancelReason: dto.reason } });
       if (changed.count === 0) throw new ConflictException('This work order has just been closed');
+      await recordAudit(tx, {
+        actorId, action: 'work_order.cancelled', objectType: 'Task', objectId: id,
+        previousState: { status: current.status }, newState: { status: 'CANCELLED', reason: dto.reason },
+      });
       await event(tx, id, 'CANCELLED', now, actorId, { reason: dto.reason });
     });
     return this.get(scope, id);

@@ -3,6 +3,7 @@ import { getProject, listTasks, type ProjectDetail, type Task } from '../../lib/
 import type { ApiResult } from '../../lib/api-client';
 import { StatePage } from '../../shell';
 import { ProjectFrame, projectProblem } from './frame';
+import { projectWorkOrders } from './paths';
 import { STATUS_LABEL, formatDay, landingFor, myTasks, summarizeProject } from './summary';
 import { taskKind } from '../../work-orders/labels';
 
@@ -80,7 +81,7 @@ function ProjectOverview({ project, tasks, user }: { project: ProjectDetail; tas
         </article>
 
         <article className="panel attention-panel">
-          <div className="panel-header"><div><h2>Needs your attention</h2><p>{summary.attentionTotal === 0 ? 'Nothing needs follow-up' : `${summary.attentionTotal} item${summary.attentionTotal === 1 ? '' : 's'} require follow-up`}</p></div><a href={`${base}/tasks`}>See all <span>→</span></a></div>
+          <div className="panel-header"><div><h2>Needs your attention</h2><p>{summary.attentionTotal === 0 ? 'Nothing needs follow-up' : `${summary.attentionTotal} item${summary.attentionTotal === 1 ? '' : 's'} require follow-up`}</p></div><a href={projectWorkOrders(project.id)}>See all <span>→</span></a></div>
           {summary.attention.length === 0
             ? <div className="empty-list"><strong>All clear</strong><p>No tasks are in review, returned for rework, or close to their due date.</p></div>
             : <div className="attention-list">
@@ -97,7 +98,7 @@ function ProjectOverview({ project, tasks, user }: { project: ProjectDetail; tas
 
       <section className="bottom-grid">
         <article className="panel activity-panel">
-          <div className="panel-header"><div><h2>Upcoming deadlines</h2><p>Open tasks by planned completion</p></div><a href={`${base}/tasks`}>All tasks <span>→</span></a></div>
+          <div className="panel-header"><div><h2>Upcoming deadlines</h2><p>Open tasks by planned completion</p></div><a href={projectWorkOrders(project.id)}>All work orders <span>→</span></a></div>
           {summary.deadlines.length === 0
             ? <div className="empty-list"><strong>No upcoming deadlines</strong><p>Open tasks with a planned completion date appear here.</p></div>
             : <div className="activity-list">
@@ -151,7 +152,7 @@ function EngineerTasks({ project, tasks, user }: { project: ProjectDetail; tasks
               <tbody>
                 {mine.map((task) => (
                   <tr key={task.id}>
-                    <td>{task.title}</td>
+                    <td>{task.workOrderType ? <a className="link" href={`/work-orders/${task.id}`}>{task.title}</a> : task.title}</td>
                     <td><code>{siteCode.get(task.siteId) ?? '—'}</code></td>
                     <td>{taskKind(task, taskType)}</td>
                     <td><span className={`badge ${STATUS_LABEL[task.status].tone}`}>{STATUS_LABEL[task.status].label}</span></td>

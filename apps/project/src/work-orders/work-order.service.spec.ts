@@ -27,6 +27,7 @@ function makePrisma() {
       count: vi.fn().mockResolvedValue(0), groupBy: vi.fn().mockResolvedValue([]),
     },
     workOrderEvent: { create: vi.fn(), createMany: vi.fn() },
+    outboxEvent: { create: vi.fn() },
     userScope: { findMany: vi.fn().mockResolvedValue([]) },
     $transaction: vi.fn(),
   };
@@ -64,6 +65,14 @@ describe('WorkOrderService.create', () => {
       projectId: 'p-1', siteId: 's-2', taskTypeId: null, templateId: 'tpl-1', templateName: 'Antenna + RRU',
       workOrderType: 'QUALITY_SELF_CHECK', status: 'NOT_STARTED', origin: 'AD_HOC', assigneeId: 'u-2', createdBy: 'u-1',
     });
+  });
+
+  it('writes one audit entry per work order, in the same transaction', async () => {
+    const { service: s } = service(prisma);
+    await s.create(GLOBAL, 'p-1', DTO, 'u-1', 'Bearer t');
+    const entries = prisma.outboxEvent.create.mock.calls.map((call) => call[0].data.payload);
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({ action: 'work_order.created', objectType: 'Task', actorId: 'u-1', newState: { siteId: 's-2', assigneeId: 'u-2' } });
   });
 
   it('records a CREATED timeline entry for each', async () => {
@@ -206,12 +215,16 @@ describe('WorkOrderService.update and cancel', () => {
     await s.update(GLOBAL, 'w-1', { assigneeId: 'u-3', plannedCompletionAt: new Date('2026-10-05T00:00:00Z') }, 'u-1');
     expect(prisma.task.update).toHaveBeenCalledWith({ where: { id: 'w-1' }, data: { assigneeId: 'u-3', plannedCompletionAt: new Date('2026-10-05T00:00:00Z') } });
     expect(prisma.workOrderEvent.create.mock.calls.map((call) => call[0].data.kind)).toEqual(['REASSIGNED', 'RESCHEDULED']);
+    expect(prisma.outboxEvent.create.mock.calls[0]?.[0].data.payload).toMatchObject({
+      action: 'work_order.updated', previousState: { assigneeId: 'u-2' }, newState: { assigneeId: 'u-3', plannedCompletionAt: '2026-10-05T00:00:00.000Z' },
+    });
   });
 
   it('writes nothing when nothing changes', async () => {
     const { service: s } = service(prisma);
     await s.update(GLOBAL, 'w-1', { assigneeId: 'u-2' }, 'u-1');
     expect(prisma.task.update).not.toHaveBeenCalled();
+    expect(prisma.outboxEvent.create).not.toHaveBeenCalled();
   });
 
   it('refuses to reassign to someone who cannot see the site', async () => {
@@ -234,6 +247,7 @@ describe('WorkOrderService.update and cancel', () => {
       data: { status: 'CANCELLED', cancelReason: 'Site handed back' },
     });
     expect(prisma.workOrderEvent.create.mock.calls[0]?.[0].data).toMatchObject({ kind: 'CANCELLED', detail: { reason: 'Site handed back' } });
+    expect(prisma.outboxEvent.create.mock.calls[0]?.[0].data.payload).toMatchObject({ action: 'work_order.cancelled', newState: { status: 'CANCELLED' } });
   });
 
   it('refuses a cancel that loses a race with a review', async () => {

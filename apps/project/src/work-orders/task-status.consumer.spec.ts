@@ -6,6 +6,7 @@ function makePrisma() {
   const prisma = {
     task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }), findUnique: vi.fn().mockResolvedValue({ id: 't-1' }) },
     workOrderEvent: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
+    outboxEvent: { create: vi.fn() },
     $transaction: vi.fn(),
   };
   prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => unknown) => fn(prisma));
@@ -56,6 +57,19 @@ describe('TaskStatusConsumer', () => {
     prisma.workOrderEvent.findFirst.mockResolvedValue({ id: 'e-1' });
     await consumer.applySubmitted(SUBMITTED);
     expect(prisma.workOrderEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('audits a status that moved, as the person behind the fact', async () => {
+    await consumer.applyReviewed(REVIEWED);
+    expect(prisma.outboxEvent.create.mock.calls[0]?.[0].data.payload).toMatchObject({
+      action: 'work_order.status_changed', actorId: 'u-q', objectId: 't-1', newState: { status: 'COMPLETED', attemptNo: 2 },
+    });
+  });
+
+  it('does not audit a fact that moved nothing', async () => {
+    prisma.task.updateMany.mockResolvedValue({ count: 0 });
+    await consumer.applySubmitted(SUBMITTED);
+    expect(prisma.outboxEvent.create).not.toHaveBeenCalled();
   });
 
   it('ignores a task this service does not hold', async () => {

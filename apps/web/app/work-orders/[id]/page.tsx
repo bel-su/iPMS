@@ -5,6 +5,7 @@ import { listUserDirectory } from '../../lib/user-api';
 import { Sidebar, StatePage, TopActions } from '../../shell';
 import { ChecklistOutline } from '../checklist-outline';
 import { STATUS_TEXT, dueText, eligiblePeople, formatDateTime, formatDay, isOpen, isoDay, personLabel, typeInfo } from '../labels';
+import { projectWorkOrders } from '../../projects/[id]/paths';
 import { ManageWorkOrder } from './manage';
 
 /** The checklist as it stands now: projects always use the latest published version. */
@@ -50,7 +51,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
       <Sidebar active="work-orders" />
       <section className="content">
         <header className="topbar">
-          <div className="crumbs"><a href="/work-orders">Work orders</a><b>/</b><a href={`/projects/${wo.project.id}/work-orders`}>{wo.project.code}</a><b>/</b><strong>{wo.site.siteCode}</strong></div>
+          <div className="crumbs"><a href="/work-orders">Work orders</a><b>/</b><a href={projectWorkOrders(wo.project.id)}>{wo.project.code}</a><b>/</b><strong>{wo.site.siteCode}</strong></div>
           <TopActions />
         </header>
         <div className="dashboard">
@@ -72,7 +73,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
               <section className="panel">
                 <h2 className="panel-title">Details</h2>
                 <dl className="facts">
-                  <div><dt>Project ID (DU)</dt><dd><a href={`/projects/${wo.project.id}/work-orders`}><code>{wo.project.code}</code></a> {wo.project.name}</dd></div>
+                  <div><dt>Project ID (DU)</dt><dd><a href={projectWorkOrders(wo.project.id)}><code>{wo.project.code}</code></a> {wo.project.name}</dd></div>
                   <div><dt>Site</dt><dd><b>{wo.site.siteCode}</b> {wo.site.name !== wo.site.siteCode ? wo.site.name : ''}<small>{[wo.site.city, wo.site.area].filter(Boolean).join(' · ')}</small></dd></div>
                   <div><dt>Checklist</dt><dd>{wo.templateId && may('qc_template.view') ? <a className="link" href={`/quality/templates/${wo.templateId}`}>{wo.templateName}</a> : wo.templateName ?? '—'}</dd></div>
                   <div><dt>Responsible</dt><dd>{name(wo.assigneeId)}</dd></div>
@@ -86,7 +87,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
               <section className="panel">
                 <h2 className="panel-title">Timeline</h2>
                 <ol className="timeline">
-                  {[...wo.events].reverse().map((event) => (
+                  {timeline(wo).reverse().map((event) => (
                     <li key={event.id} className={`tl ${event.kind.toLowerCase()}`}>
                       <span className="tl-dot" aria-hidden="true" />
                       <div>
@@ -122,6 +123,20 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
       </section>
     </main>
   );
+}
+
+/**
+ * The recorded events, opened by a CREATED entry built from the work order
+ * itself when none was recorded — work orders raised before the timeline
+ * existed would otherwise show an empty history.
+ */
+function timeline(wo: { id: string; createdAt: string; createdBy: string; assigneeId: string | null; plannedCompletionAt: string | null; events: WorkOrderEvent[] }): WorkOrderEvent[] {
+  if (wo.events.some((event) => event.kind === 'CREATED')) return [...wo.events];
+  const raised: WorkOrderEvent = {
+    id: `${wo.id}-raised`, taskId: wo.id, kind: 'CREATED', at: wo.createdAt, actorId: wo.createdBy,
+    detail: { assigneeId: wo.assigneeId, plannedCompletionAt: wo.plannedCompletionAt },
+  };
+  return [raised, ...wo.events];
 }
 
 function describe(event: WorkOrderEvent, name: (id: string | null | undefined) => string): React.ReactNode {

@@ -4,6 +4,7 @@ import {
 } from '@ipms/events';
 import { uuidv7 } from '@ipms/contracts';
 import { createLogger } from '@ipms/observability';
+import { recordAudit } from '../outbox/audit.js';
 
 const log = createLogger('project');
 
@@ -57,6 +58,13 @@ export class TaskStatusConsumer {
         },
         data: { status: 'REVIEWING', currentSubmissionId: fact.submissionId, currentAttemptNo: fact.attemptNo },
       });
+      // Ledger entries only for status that actually moved; the actor is the person behind the fact.
+      if (changed.count > 0) {
+        await recordAudit(tx, {
+          actorId: fact.submittedBy, action: 'work_order.status_changed', objectType: 'Task', objectId: fact.taskId,
+          previousState: {}, newState: { status: 'REVIEWING', submissionId: fact.submissionId, attemptNo: fact.attemptNo },
+        });
+      }
       const recorded = await this.record(tx, fact.taskId, 'SUBMITTED', fact.submissionId, new Date(fact.submittedAt), fact.submittedBy, { attemptNo: fact.attemptNo });
       log.debug({ taskId: fact.taskId, attemptNo: fact.attemptNo, applied: changed.count > 0, recorded }, 'submission applied');
     });
@@ -84,6 +92,12 @@ export class TaskStatusConsumer {
           actualCompletionAt: approved ? at : null,
         },
       });
+      if (changed.count > 0) {
+        await recordAudit(tx, {
+          actorId: fact.reviewedBy, action: 'work_order.status_changed', objectType: 'Task', objectId: fact.taskId,
+          previousState: {}, newState: { status: approved ? 'COMPLETED' : 'RECTIFYING', submissionId: fact.submissionId, attemptNo: fact.attemptNo },
+        });
+      }
       const recorded = await this.record(tx, fact.taskId, approved ? 'APPROVED' : 'REJECTED', fact.submissionId, at, fact.reviewedBy, {
         attemptNo: fact.attemptNo, comment: fact.comment,
       });

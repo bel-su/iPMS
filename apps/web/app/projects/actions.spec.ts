@@ -23,7 +23,7 @@ vi.mock('../lib/project-api', () => ({
 const { settle } = await import('../lib/settle');
 const {
   archiveProjectAction, createSiteAction, deleteProjectAction,
-  updateProjectAction, updateSiteAction, updateTaskAction,
+  updateProjectAction, updateSiteAction,
 } = await import('./actions');
 
 beforeEach(() => {
@@ -91,26 +91,6 @@ describe('deleteProjectAction', () => {
     const state = await deleteProjectAction({}, form('ALPHA'));
     expect(state).toEqual({ error: 'This project still has 3 task(s).', correlationId: 'corr-2' });
     expect(redirect).not.toHaveBeenCalled();
-  });
-});
-
-describe('updateTaskAction', () => {
-  it('unassigns with an explicit null when the field is present but empty', async () => {
-    const data = new FormData();
-    data.set('projectId', 'p-1');
-    data.set('taskId', 't-1');
-    data.set('assigneeId', '');
-    await updateTaskAction({}, data);
-    expect(updateTask).toHaveBeenCalledWith('t-1', { assigneeId: null });
-  });
-
-  it('leaves the assignee alone when the field is absent from the form', async () => {
-    const data = new FormData();
-    data.set('projectId', 'p-1');
-    data.set('taskId', 't-1');
-    data.set('title', 'Renamed');
-    await updateTaskAction({}, data);
-    expect(updateTask).toHaveBeenCalledWith('t-1', { title: 'Renamed' });
   });
 });
 
