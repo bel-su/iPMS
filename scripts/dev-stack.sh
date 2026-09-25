@@ -44,7 +44,7 @@ AUDIT_PORT=3003
 # other context; these exist so `up` needs no arguments.
 export JWT_SECRET="${JWT_SECRET:-dev-only-jwt-secret-not-for-any-deployment}"
 export COOKIE_SECRET="${COOKIE_SECRET:-dev-only-cookie-secret}"
-export IAM_DEMO_PASSWORD="${IAM_DEMO_PASSWORD:-demo12345}"
+export IAM_DEMO_PASSWORD="${IAM_DEMO_PASSWORD:-P@ssw0rd1234}"
 export NODE_ENV=development
 
 export IAM_DATABASE_URL="postgresql://ipms_iam:devpass@127.0.0.1:$PG_PORT/ipms_iam"

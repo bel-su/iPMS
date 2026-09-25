@@ -106,13 +106,21 @@ describe('audit ledger', () => {
     });
     expect(created.status).toBe(201);
 
-    // The outbox drainer polls every 500ms; allow for the round trip.
-    await new Promise((r) => setTimeout(r, 3000));
+    // The suite runs against the dev stack's database, so a role left active
+    // here shows up in every user's role picker. Deactivate it however the
+    // assertions below turn out.
+    try {
+      // The outbox drainer polls every 500ms; allow for the round trip.
+      await new Promise((r) => setTimeout(r, 3000));
 
-    const events = await api<{ items: Array<{ action: string; objectId: string }> }>(
-      `/api/v1/audit/events?objectType=Role&objectId=${created.body.id}`, { token: adminToken },
-    );
-    expect(events.body.items.some((e) => e.action === 'role.created')).toBe(true);
+      const events = await api<{ items: Array<{ action: string; objectId: string }> }>(
+        `/api/v1/audit/events?objectType=Role&objectId=${created.body.id}`, { token: adminToken },
+      );
+      expect(events.body.items.some((e) => e.action === 'role.created')).toBe(true);
+    } finally {
+      const removed = await api(`/api/v1/roles/${created.body.id}`, { method: 'DELETE', token: adminToken });
+      expect(removed.status).toBe(200);
+    }
   }, 30_000);
 
   it('reports the chain as intact', async () => {

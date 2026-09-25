@@ -6,7 +6,7 @@ set -uo pipefail
 
 CD="docker compose -f docker/docker-compose.yml"
 GW=http://localhost:3000
-PW=password123
+PW='P@ssw0rd1234'
 pass=0; fail=0
 
 ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; pass=$((pass+1)); }

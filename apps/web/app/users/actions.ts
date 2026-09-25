@@ -53,6 +53,12 @@ function readNewPassword(form: FormData): { password: string } | { error: string
 /** A user's name is rendered on their own page and in the list, and both must refresh. */
 const pages = (userId: string) => [`/users/${userId}`, '/users'];
 
+/** The one role the form's radio group chose. A user holds exactly one. */
+function readRole(form: FormData): { roleCodes: string[] } | { error: string } {
+  const roleCodes = form.getAll('roleCodes').map(String);
+  return roleCodes.length === 1 ? { roleCodes } : { error: 'Choose a role for this user.' };
+}
+
 export async function createUserAction(_previous: FormState, form: FormData): Promise<FormState> {
   const email = optional(form, 'email');
   const fullName = optional(form, 'fullName');
@@ -62,13 +68,12 @@ export async function createUserAction(_previous: FormState, form: FormData): Pr
 
   const password = readNewPassword(form);
   if ('error' in password) return { error: password.error };
+  const role = readRole(form);
+  if ('error' in role) return { error: role.error };
 
   const employeeCode = optional(form, 'employeeCode');
   const result = await createUser({
-    email, fullName, password: password.password,
-    // An unchecked box sends nothing, so this is the empty set when no role
-    // was picked — which the API accepts and the service treats as "no roles".
-    roleCodes: form.getAll('roleCodes').map(String),
+    email, fullName, password: password.password, roleCodes: role.roleCodes,
     ...(employeeCode === undefined ? {} : { employeeCode }),
   });
 
@@ -100,9 +105,9 @@ export async function updateUserAction(_previous: FormState, form: FormData): Pr
 
 export async function setUserRolesAction(_previous: FormState, form: FormData): Promise<FormState> {
   const userId = String(form.get('userId'));
-  return settle(await setUserRoles(userId, {
-    roleCodes: form.getAll('roleCodes').map(String),
-  }), pages(userId));
+  const role = readRole(form);
+  if ('error' in role) return { error: role.error };
+  return settle(await setUserRoles(userId, role), pages(userId));
 }
 
 export async function deactivateUserAction(_previous: FormState, form: FormData): Promise<FormState> {

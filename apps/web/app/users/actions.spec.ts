@@ -42,17 +42,25 @@ function form(fields: Record<string, string | string[]>): FormData {
 
 const NEW_USER = {
   email: 'new.one@ipms.local', fullName: 'New One',
-  password: 'Long-enough-1', confirmPassword: 'Long-enough-1',
+  password: 'Long-enough-1', confirmPassword: 'Long-enough-1', roleCodes: 'FIELD_ENGINEER',
 };
 
 describe('createUserAction', () => {
-  it('sends the whole form, with the checked roles as an array', async () => {
-    await expect(createUserAction({}, form({ ...NEW_USER, roleCodes: ['FIELD_ENGINEER', 'QC_MANAGER'] })))
+  it('sends the whole form, with the chosen role as a one-element array', async () => {
+    await expect(createUserAction({}, form(NEW_USER)))
       .rejects.toThrow('NEXT_REDIRECT');
     expect(createUser).toHaveBeenCalledWith({
       email: 'new.one@ipms.local', fullName: 'New One',
-      password: 'Long-enough-1', roleCodes: ['FIELD_ENGINEER', 'QC_MANAGER'],
+      password: 'Long-enough-1', roleCodes: ['FIELD_ENGINEER'],
     });
+  });
+
+  it('requires exactly one role', async () => {
+    const { roleCodes: _none, ...withoutRole } = NEW_USER;
+    expect(await createUserAction({}, form(withoutRole))).toEqual({ error: 'Choose a role for this user.' });
+    expect(await createUserAction({}, form({ ...NEW_USER, roleCodes: ['FIELD_ENGINEER', 'QC_MANAGER'] })))
+      .toEqual({ error: 'Choose a role for this user.' });
+    expect(createUser).not.toHaveBeenCalled();
   });
 
   it('omits employeeCode when it was left blank rather than sending an empty string', async () => {
@@ -119,14 +127,15 @@ describe('updateUserAction', () => {
 });
 
 describe('setUserRolesAction', () => {
-  // An unchecked box sends nothing, which is how the form says "no roles".
-  it('sends the empty set when every box is unchecked', async () => {
-    expect(await setUserRolesAction({}, form({ userId: 'u-1' }))).toEqual({});
-    expect(setUserRoles).toHaveBeenCalledWith('u-1', { roleCodes: [] });
+  it('requires exactly one role', async () => {
+    expect(await setUserRolesAction({}, form({ userId: 'u-1' }))).toEqual({ error: 'Choose a role for this user.' });
+    expect(await setUserRolesAction({}, form({ userId: 'u-1', roleCodes: ['QC_MANAGER', 'VIEWER'] })))
+      .toEqual({ error: 'Choose a role for this user.' });
+    expect(setUserRoles).not.toHaveBeenCalled();
   });
 
-  it('sends every checked role', async () => {
-    await setUserRolesAction({}, form({ userId: 'u-1', roleCodes: ['QC_MANAGER'] }));
+  it('sends the chosen role as the whole set', async () => {
+    await setUserRolesAction({}, form({ userId: 'u-1', roleCodes: 'QC_MANAGER' }));
     expect(setUserRoles).toHaveBeenCalledWith('u-1', { roleCodes: ['QC_MANAGER'] });
   });
 });

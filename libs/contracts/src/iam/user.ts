@@ -34,12 +34,18 @@ export const NewPasswordSchema = z
   .regex(/[0-9]/, 'Password must contain a digit')
   .regex(/[^A-Za-z0-9]/, 'Password must contain a symbol');
 
+/**
+ * A user holds one role. Still an array on the wire, so the complete-set
+ * semantics below and every existing client keep working; empty means "no role".
+ */
+const SingleRoleSchema = z.array(RoleCodeSchema).max(1, 'A user holds a single role');
+
 export const CreateUserSchema = z.object({
   email: EmailSchema,
   fullName: z.string().trim().min(1).max(200),
   employeeCode: z.string().trim().min(1).max(50).optional(),
   password: NewPasswordSchema,
-  roleCodes: z.array(RoleCodeSchema).default([]),
+  roleCodes: SingleRoleSchema.default([]),
 }).strip();
 export type CreateUserDto = z.infer<typeof CreateUserSchema>;
 
@@ -69,7 +75,7 @@ export type UpdateUserDto = z.infer<typeof UpdateUserSchema>;
  * before-and-after.
  */
 export const AssignRolesSchema = z.object({
-  roleCodes: z.array(RoleCodeSchema),
+  roleCodes: SingleRoleSchema,
 }).strip();
 export type AssignRolesDto = z.infer<typeof AssignRolesSchema>;
 

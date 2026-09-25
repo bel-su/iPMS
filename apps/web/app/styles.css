@@ -346,3 +346,16 @@ a.link { color: var(--blue); }
 .password-toggle { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
 .password-toggle:hover { color: var(--ink); background: var(--pale); }
 .password-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* Live summary under the role checkboxes of what the ticked roles allow. */
+.role-access { margin: 14px 0 4px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--pale); }
+.role-access-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.role-access-heading strong { font-size: 13px; }
+.role-access-heading .subtle { margin: 0; }
+.role-access > p.subtle { margin: 8px 0 0; }
+.role-access-list { display: grid; gap: 10px; margin: 12px 0 0; }
+.role-access-list > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px 14px; align-items: start; }
+.role-access-list dt { padding-top: 5px; color: var(--muted); font-size: 12px; font-weight: 650; }
+.role-access-list dd { margin: 0; }
+.role-access-list .chip { padding: 3px 9px; font-size: 11.5px; }
+@media (max-width: 700px) { .role-access-list > div { grid-template-columns: 1fr; gap: 6px; } .role-access-list dt { padding-top: 0; } }

@@ -25,6 +25,10 @@ describe('CreateUserSchema', () => {
     expect(CreateUserSchema.parse(valid).email).toBe('new@ipms.local');
   });
 
+  it('refuses more than one role', () => {
+    expect(CreateUserSchema.safeParse({ ...valid, roleCodes: ['FIELD_ENGINEER', 'QC_MANAGER'] }).success).toBe(false);
+  });
+
   it('defaults roleCodes to none', () => {
     const { roleCodes: _omitted, ...withoutRoles } = valid;
     expect(CreateUserSchema.parse(withoutRoles).roleCodes).toEqual([]);
@@ -81,6 +85,10 @@ describe('AssignRolesSchema', () => {
   it('takes the whole desired set, including the empty one', () => {
     expect(AssignRolesSchema.parse({ roleCodes: [] }).roleCodes).toEqual([]);
     expect(AssignRolesSchema.parse({ roleCodes: ['QC_MANAGER'] }).roleCodes).toEqual(['QC_MANAGER']);
+  });
+
+  it('refuses more than one role: a user holds a single role', () => {
+    expect(AssignRolesSchema.safeParse({ roleCodes: ['QC_MANAGER', 'VIEWER'] }).success).toBe(false);
   });
 
   it('refuses a role code that is not UPPER_SNAKE_CASE', () => {

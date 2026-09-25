@@ -1,11 +1,13 @@
 import { getCurrentUser, hasPermission } from '../../lib/iam-api';
-import { getUser, listRoles } from '../../lib/user-api';
+import { getUser, listPermissions, listRoles } from '../../lib/user-api';
 import { Sidebar, StatePage, TopActions } from '../../shell';
 import { AccountStatusForm, EditUserForm, ResetPasswordForm, RoleAssignmentForm } from '../forms';
 
 export default async function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [user, roles, viewer] = await Promise.all([getUser(id), listRoles(), getCurrentUser()]);
+  const [user, roles, viewer, permissions] = await Promise.all([
+    getUser(id), listRoles(), getCurrentUser(), listPermissions(),
+  ]);
 
   if (user.state === 'unauthenticated') {
     return <StatePage title="Sign in to see this user"><a className="primary-button" href="/login">Sign in</a></StatePage>;
@@ -113,8 +115,12 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
 
           {may('role.assign') ? (
             <section className="panel">
-              <h2>Roles</h2>
-              <RoleAssignmentForm user={subject} grantable={grantable} />
+              <h2>Role</h2>
+              <RoleAssignmentForm
+                user={subject} grantable={grantable}
+                roles={roles.state === 'ready' ? roles.data : []}
+                catalog={permissions.state === 'ready' ? permissions.data : []}
+              />
             </section>
           ) : null}
 

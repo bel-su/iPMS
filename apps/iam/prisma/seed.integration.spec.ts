@@ -149,7 +149,7 @@ describe('seedIam', () => {
  */
 describe('seedDemoUsers global scope replication', () => {
   beforeAll(async () => {
-    process.env['IAM_DEMO_PASSWORD'] = 'test-only-password';
+    process.env['IAM_DEMO_PASSWORD'] = 'Test-only-1';
     await seedDemoUsers(prisma);
   }, 120_000);
 
@@ -177,5 +177,14 @@ describe('seedDemoUsers global scope replication', () => {
     await seedDemoUsers(prisma);
     expect(await prisma.userGlobalScope.count()).toBe(1);
     expect(await prisma.outboxEvent.count({ where: { subject: 'iam.scope.granted' } })).toBe(1);
+  });
+
+  it('refuses a demo password the password policy would reject', async () => {
+    process.env['IAM_DEMO_PASSWORD'] = 'password123';
+    try {
+      await expect(seedDemoUsers(prisma)).rejects.toThrow(/does not meet the password policy/);
+    } finally {
+      process.env['IAM_DEMO_PASSWORD'] = 'Test-only-1';
+    }
   });
 });

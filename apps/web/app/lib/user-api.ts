@@ -43,7 +43,13 @@ export interface UserPage { items: User[]; total: number; page: number; limit: n
  * cannot import — and a second copy of the rule in this app could drift from
  * the one that actually decides.
  */
-export interface Role { id: string; code: string; name: string; isActive: boolean; assignable: boolean }
+export interface Role {
+  id: string; code: string; name: string; isActive: boolean; assignable: boolean;
+  permissionCodes: string[];
+}
+
+/** One entry of iam's permission catalog, as the role picker describes it. */
+export interface Permission { code: string; module: string; description: string }
 
 export interface UserFilters {
   search?: string | undefined;
@@ -108,6 +114,14 @@ export async function listUserDirectory(): Promise<ApiResult<DirectoryUser[]>> {
 /** Feeds the role checkboxes. Needs `role.view`, which every user-managing role holds. */
 export async function listRoles(): Promise<ApiResult<Role[]>> {
   return authFetch<Role[]>('/api/v1/roles');
+}
+
+/**
+ * Needs `permission.view`, which `role.assign` does not imply. Callers treat
+ * anything but `ready` as "no descriptions" and fall back to the raw codes.
+ */
+export async function listPermissions(): Promise<ApiResult<Permission[]>> {
+  return authFetch<Permission[]>('/api/v1/permissions');
 }
 
 export async function changePassword(input: ChangePasswordDto): Promise<ApiResult<{ status: string }>> {

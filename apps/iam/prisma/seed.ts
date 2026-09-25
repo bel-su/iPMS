@@ -5,7 +5,7 @@ import { PERMISSIONS, expandDependencies } from '@ipms/authz';
 import { SUBJECTS } from '@ipms/events';
 import { buildOutboxRecord } from '@ipms/persistence';
 import { hashPassword } from '../src/auth/password.js';
-import { uuidv7 } from '@ipms/contracts';
+import { NewPasswordSchema, uuidv7 } from '@ipms/contracts';
 
 const ALL = PERMISSIONS.map((p) => p.code);
 
@@ -125,6 +125,13 @@ export async function seedDemoUsers(prisma: PrismaClient): Promise<void> {
   const password = process.env['IAM_DEMO_PASSWORD'];
   if (!password) {
     throw new Error('IAM_DEMO_PASSWORD is not set; refusing to seed demo accounts with a default password');
+  }
+  // Held to the same policy as a password set through the API. Otherwise the
+  // demo accounts carry a password nobody could choose, and whoever changes
+  // one of them can never set it back.
+  const policy = NewPasswordSchema.safeParse(password);
+  if (!policy.success) {
+    throw new Error(`IAM_DEMO_PASSWORD does not meet the password policy: ${policy.error.issues.map((i) => i.message).join('; ')}`);
   }
 
   const passwordHash = await hashPassword(password);
