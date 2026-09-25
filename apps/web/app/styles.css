@@ -314,3 +314,35 @@ a.link { color: var(--blue); }
 .nav-item.nested { min-height: 36px; margin-left: 20px; padding-left: 12px; font-size: 13px; position: relative; }
 .nav-item.nested::before { content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px; border-left: 1px solid var(--line); }
 .nav-item.nested .icon { font-size: 14px; }
+/* Documentation */
+.manual { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; }
+.manual-toc { position: sticky; top: 20px; }
+.manual-toc ol { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 8px; font-size: 13px; }
+.manual-toc a { color: var(--blue); }
+.manual-body { display: grid; gap: 20px; min-width: 0; }
+.manual-body .panel + .panel { margin-top: 0; }
+.manual-chapter { scroll-margin-top: 20px; }
+.manual-chapter h2 { margin: 4px 0 6px; font-size: 18px; }
+.manual-steps { margin: 14px 0 0; padding-left: 20px; display: grid; gap: 8px; line-height: 1.5; }
+.manual-tip { margin: 16px 0 0; padding: 10px 14px; border-radius: 8px; background: var(--pale); font-size: 13px; }
+.manual-tip strong { margin-right: 6px; color: var(--blue); }
+@media (max-width:700px) { .manual { grid-template-columns: 1fr; } .manual-toc { position: static; } }
+/* Account menu in the topbar */
+.profile-menu { position: relative; }
+.profile-menu > summary { list-style: none; cursor: pointer; }
+.profile-menu > summary::-webkit-details-marker { display: none; }
+.profile-dropdown { position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; min-width: 180px; padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 30px #233a6b1f; display: grid; }
+.profile-dropdown a, .profile-dropdown button { display: block; width: 100%; text-align: left; padding: 9px 10px; border: 0; border-radius: 6px; background: none; color: var(--ink); font-size: 13px; }
+.profile-dropdown a:hover, .profile-dropdown button:hover { background: var(--pale); }
+.profile-dropdown form { margin: 0; }
+.profile-name { margin: 0; padding: 8px 10px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; font-size: 12px; font-weight: 650; color: var(--muted); }
+/* Profile page */
+.profile-grid { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px 24px; }
+.profile-grid dt { font-size: 11px; font-weight: 650; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; }
+.profile-grid dd { margin: 4px 0 0; font-size: 14px; }
+/* Password field with a show/hide toggle */
+.password-field { position: relative; display: block; }
+.password-field > input { width: 100%; padding-right: 42px; }
+.password-toggle { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.password-toggle:hover { color: var(--ink); background: var(--pale); }
+.password-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }

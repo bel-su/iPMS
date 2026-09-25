@@ -64,6 +64,11 @@ export async function listUsers(filters: UserFilters = {}): Promise<ApiResult<Us
   });
 }
 
+/** The signed-in user's own record. Needs no permission, unlike `getUser`. */
+export async function getMyProfile(): Promise<ApiResult<User>> {
+  return authFetch<User>('/api/v1/users/me');
+}
+
 export async function getUser(id: string): Promise<ApiResult<User>> {
   return authFetch<User>(`/api/v1/users/${id}`);
 }

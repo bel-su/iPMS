@@ -79,3 +79,12 @@ describe('UsersController parsing', () => {
     expect(users.create.mock.calls[0]![0]).not.toHaveProperty('isActive');
   });
 });
+
+describe('UsersController.me', () => {
+  it('reads the caller from the token, with no permission required', async () => {
+    const { controller, users } = build();
+    await controller.me(req);
+    expect(users.get).toHaveBeenCalledWith(ACTOR);
+    expect(permissionOf('me')).toBeUndefined();
+  });
+});

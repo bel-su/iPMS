@@ -32,3 +32,17 @@ export async function getCurrentUser(): Promise<ApiResult<CurrentUser>> {
 export function hasPermission(user: CurrentUser, permission: string): boolean {
   return user.isActive && user.permissions.includes(permission);
 }
+
+/**
+ * Roles that may read the staff documentation at `/docs`: managers and above.
+ *
+ * A role list rather than a permission because the catalog deliberately has no
+ * `docs.*` codes yet (see libs/authz/src/permissions.ts). A custom role is
+ * therefore not a manager here until it is added — the fail-closed direction.
+ */
+export const DOCS_READER_ROLES: readonly string[] = ['SUPER_ADMIN', 'PROJECT_MANAGER', 'QC_MANAGER'];
+
+/** True when the signed-in user may read the documentation. */
+export function mayReadDocs(user: CurrentUser): boolean {
+  return user.isActive && user.roles.some((role) => DOCS_READER_ROLES.includes(role));
+}

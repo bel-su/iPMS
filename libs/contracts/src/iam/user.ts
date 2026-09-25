@@ -25,14 +25,20 @@ export const UsernameSchema = z
   );
 
 /**
- * Twelve characters for anything set through the API. `LoginSchema` stays at
- * eight on purpose: raising it would lock out every account created under the
- * old policy, which is a migration, not this change.
+ * Anything set through the API: at least eight characters, with an uppercase
+ * letter, a lowercase letter, a digit and a symbol (any character that is not
+ * a letter or a digit). `LoginSchema` checks length only, on purpose: adding
+ * the character rules there would lock out every account whose password
+ * predates them.
  */
 export const NewPasswordSchema = z
   .string()
-  .min(12, 'Password must be at least 12 characters')
-  .max(200);
+  .min(8, 'Password must be at least 8 characters')
+  .max(200)
+  .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+  .regex(/[a-z]/, 'Password must contain a lowercase letter')
+  .regex(/[0-9]/, 'Password must contain a digit')
+  .regex(/[^A-Za-z0-9]/, 'Password must contain a symbol');
 
 export const CreateUserSchema = z.object({
   username: UsernameSchema,

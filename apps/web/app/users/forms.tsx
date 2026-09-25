@@ -5,6 +5,7 @@ import {
   createUserAction, deactivateUserAction, reactivateUserAction,
   resetUserPasswordAction, setUserRolesAction, updateUserAction,
 } from './actions';
+import { PasswordInput } from '../components/forms';
 import { EMPTY, type FormState } from '../lib/form-state';
 import type { Role, User, UserRoleSummary } from '../lib/user-api';
 
@@ -102,12 +103,12 @@ export function CreateUserForm({ grantable }: { grantable: Role[] }) {
         <label className="field">Employee code<input name="employeeCode" maxLength={50} /></label>
         <label className="field">
           Temporary password
-          <input name="password" type="password" required minLength={12} maxLength={200} autoComplete="new-password" />
-          <span className="hint">At least 12 characters.</span>
+          <PasswordInput name="password" required minLength={8} maxLength={200} autoComplete="new-password" />
+          <span className="hint">At least 8 characters, with an uppercase letter, a lowercase letter, a digit and a symbol.</span>
         </label>
         <label className="field">
           Confirm password
-          <input name="confirmPassword" type="password" required minLength={12} maxLength={200} autoComplete="new-password" />
+          <PasswordInput name="confirmPassword" required minLength={8} maxLength={200} autoComplete="new-password" />
         </label>
       </div>
       <RoleCheckboxes grantable={grantable} held={new Set()} locked={[]} />
@@ -196,12 +197,12 @@ export function ResetPasswordForm({ user }: { user: User }) {
       <div className="form-grid">
         <label className="field">
           New password
-          <input name="password" type="password" required minLength={12} maxLength={200} autoComplete="new-password" />
-          <span className="hint">At least 12 characters.</span>
+          <PasswordInput name="password" required minLength={8} maxLength={200} autoComplete="new-password" />
+          <span className="hint">At least 8 characters, with an uppercase letter, a lowercase letter, a digit and a symbol.</span>
         </label>
         <label className="field">
           Confirm password
-          <input name="confirmPassword" type="password" required minLength={12} maxLength={200} autoComplete="new-password" />
+          <PasswordInput name="confirmPassword" required minLength={8} maxLength={200} autoComplete="new-password" />
         </label>
       </div>
       <FormError state={state} />

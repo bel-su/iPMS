@@ -25,7 +25,7 @@ describe('UsernameSchema', () => {
 describe('CreateUserSchema', () => {
   const valid = {
     username: 'new.engineer', email: 'new@ipms.local', fullName: 'New Engineer',
-    password: 'correct-horse-battery', roleCodes: ['FIELD_ENGINEER'],
+    password: 'Correct-horse-1', roleCodes: ['FIELD_ENGINEER'],
   };
 
   it('accepts a complete body', () => {
@@ -37,9 +37,18 @@ describe('CreateUserSchema', () => {
     expect(CreateUserSchema.parse(withoutRoles).roleCodes).toEqual([]);
   });
 
-  it('refuses a password under twelve characters', () => {
-    expect(CreateUserSchema.safeParse({ ...valid, password: 'short11chars' }).success).toBe(true);
-    expect(CreateUserSchema.safeParse({ ...valid, password: 'tooshort' }).success).toBe(false);
+  it('accepts eight characters with every character class', () => {
+    expect(CreateUserSchema.safeParse({ ...valid, password: 'Abcdef1!' }).success).toBe(true);
+  });
+
+  it.each([
+    ['under eight characters', 'Abcde1!'],
+    ['no uppercase letter', 'abcdef1!'],
+    ['no lowercase letter', 'ABCDEF1!'],
+    ['no digit', 'Abcdefg!'],
+    ['no symbol', 'Abcdefg1'],
+  ])('refuses a password with %s', (_why, password) => {
+    expect(CreateUserSchema.safeParse({ ...valid, password }).success).toBe(false);
   });
 
   it('refuses a malformed email', () => {
@@ -88,7 +97,7 @@ describe('AssignRolesSchema', () => {
 
 describe('ChangePasswordSchema', () => {
   it('requires both halves, and holds only the new one to the policy', () => {
-    const parsed = ChangePasswordSchema.parse({ currentPassword: 'old8char', newPassword: 'a-long-enough-one' });
+    const parsed = ChangePasswordSchema.parse({ currentPassword: 'old8char', newPassword: 'Long-enough-1' });
     expect(parsed.currentPassword).toBe('old8char');
     expect(ChangePasswordSchema.safeParse({ currentPassword: 'old8char', newPassword: 'tooshort' }).success).toBe(false);
   });

@@ -14,6 +14,8 @@ import { TokenService } from './token.service.js';
  */
 export const GENERIC_FAILURE = 'Invalid username or password';
 
+export const CURRENT_PASSWORD_WRONG = 'Your current password is incorrect';
+
 /**
  * Publishes each user's current token version to the shared cache the gateway
  * reads when deciding whether a token has been revoked.
@@ -216,8 +218,12 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.isActive) throw new UnauthorizedException(GENERIC_FAILURE);
 
+    // 400, not 401. The caller is already authenticated, so there is no
+    // username to protect, and every client reads a 401 as "session expired":
+    // the web app answered one by sending the user to sign in, which looked
+    // exactly like a successful change.
     if (!(await this.passwords.verify(user.passwordHash, dto.currentPassword))) {
-      throw new UnauthorizedException(GENERIC_FAILURE);
+      throw new BadRequestException(CURRENT_PASSWORD_WRONG);
     }
     if (dto.currentPassword === dto.newPassword) {
       throw new BadRequestException('The new password must differ from the current one');

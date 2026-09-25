@@ -53,14 +53,14 @@ describe('authorization', () => {
 
   it('rejects a role whose permission set breaks a dependency', async () => {
     // qc_review.approve depends on qc_review.view and qc_submission.view.
-    const res = await api<{ message: string }>('/api/v1/roles', {
+    const res = await api<{ error: { message: string } }>('/api/v1/roles', {
       method: 'POST', token: adminToken,
       body: { name: 'Broken', code: 'BROKEN_ROLE', description: '', permissionCodes: ['qc_review.approve'] },
     });
     expect(res.status).toBe(400);
     // An unknown code is also a 400, so the status alone cannot tell this
     // rejection apart from a stale code in the request.
-    expect(res.body.message).toMatch(/Permission set is incomplete/);
+    expect(res.body.error.message).toMatch(/Permission set is incomplete/);
   });
 
   it('refuses to delete a system role', async () => {

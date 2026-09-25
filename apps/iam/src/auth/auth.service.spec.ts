@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { UnauthorizedException } from '@nestjs/common';
-import { AuthService } from './auth.service.js';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { AuthService, CURRENT_PASSWORD_WRONG } from './auth.service.js';
 import { PasswordService } from './password.service.js';
 import { TokenService } from './token.service.js';
 import { uuidv7 } from '@ipms/contracts';
@@ -277,11 +277,12 @@ describe('AuthService and mustChangePassword', () => {
 });
 
 describe('AuthService.changePassword', () => {
+  // A 400 the form can show, not a 401 every client reads as an expired session.
   it('refuses a wrong current password without touching the row', async () => {
     const { service, prisma, user } = await build();
     await expect(service.changePassword(user.id as string, {
-      currentPassword: 'not-the-password', newPassword: 'a-long-enough-one',
-    })).rejects.toBeInstanceOf(UnauthorizedException);
+      currentPassword: 'not-the-password', newPassword: 'Long-enough-1',
+    })).rejects.toThrow(new BadRequestException(CURRENT_PASSWORD_WRONG));
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
@@ -296,11 +297,11 @@ describe('AuthService.changePassword', () => {
   it('stores a new hash and clears the flag', async () => {
     const { service, prisma, user } = await build({ mustChangePassword: true });
     await service.changePassword(user.id as string, {
-      currentPassword: 'demo12345', newPassword: 'a-long-enough-one',
+      currentPassword: 'demo12345', newPassword: 'Long-enough-1',
     });
     const data = prisma.user.update.mock.calls[0]![0].data;
     expect(data.mustChangePassword).toBe(false);
-    expect(await passwords.verify(data.passwordHash as string, 'a-long-enough-one')).toBe(true);
+    expect(await passwords.verify(data.passwordHash as string, 'Long-enough-1')).toBe(true);
   });
 
   // The bump kills the caller's own token, which is the point: the next sign-in
@@ -308,7 +309,7 @@ describe('AuthService.changePassword', () => {
   it('revokes every outstanding session', async () => {
     const { service, versions, user } = await build();
     await service.changePassword(user.id as string, {
-      currentPassword: 'demo12345', newPassword: 'a-long-enough-one',
+      currentPassword: 'demo12345', newPassword: 'Long-enough-1',
     });
     expect(versions.publish).toHaveBeenCalled();
   });
@@ -316,7 +317,7 @@ describe('AuthService.changePassword', () => {
   it('refuses a deactivated user', async () => {
     const { service, user } = await build({ isActive: false });
     await expect(service.changePassword(user.id as string, {
-      currentPassword: 'demo12345', newPassword: 'a-long-enough-one',
+      currentPassword: 'demo12345', newPassword: 'Long-enough-1',
     })).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

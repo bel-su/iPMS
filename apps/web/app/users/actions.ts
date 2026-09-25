@@ -17,14 +17,35 @@ import { clearable, optional, settle } from '../lib/settle';
  */
 
 /** Matches `NewPasswordSchema` in @ipms/contracts. Keep the two in step. */
-const MIN_PASSWORD = 12;
+const MIN_PASSWORD = 8;
+const PASSWORD_RULES: ReadonlyArray<[RegExp, string]> = [
+  [/[A-Z]/, 'an uppercase letter'],
+  [/[a-z]/, 'a lowercase letter'],
+  [/[0-9]/, 'a digit'],
+  [/[^A-Za-z0-9]/, 'a symbol'],
+];
+
+/**
+ * A password exactly as typed. Not `optional`, which trims: sign-in sends the
+ * value untrimmed, so a password stored trimmed and typed with its trailing
+ * space would never match again.
+ */
+function secret(form: FormData, field: string): string | undefined {
+  const value = form.get(field);
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
 
 /** Both password forms take the value twice; neither should reach the API disagreeing. */
 function readNewPassword(form: FormData): { password: string } | { error: string } {
-  const password = optional(form, 'password') ?? optional(form, 'newPassword');
-  const confirmation = optional(form, 'confirmPassword');
+  const password = secret(form, 'password') ?? secret(form, 'newPassword');
+  const confirmation = secret(form, 'confirmPassword');
   if (!password) return { error: 'A password is required.' };
   if (password.length < MIN_PASSWORD) return { error: `The password must be at least ${MIN_PASSWORD} characters.` };
+  const missing = PASSWORD_RULES.filter(([rule]) => !rule.test(password)).map(([, name]) => name);
+  if (missing.length > 0) {
+    const list = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}`;
+    return { error: `The password must contain ${list}.` };
+  }
   if (password !== confirmation) return { error: 'The two passwords do not match.' };
   return { password };
 }
@@ -106,12 +127,13 @@ export async function resetUserPasswordAction(_previous: FormState, form: FormDa
  * Self-service, and the last thing this session does.
  *
  * The change bumps `tokenVersion`, so the cookie in this browser is dead by the
- * time the call returns — there is no authenticated page left to land on, and
- * signing in again is what hands the user a token carrying their real
- * permissions for the first time.
+ * time the call returns. Rather than redirecting straight to sign-in, which
+ * reads as being thrown out, it reports `done` and the form confirms the change
+ * before offering to sign in again (through the logout route, which clears the
+ * dead cookies).
  */
 export async function changePasswordAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const currentPassword = optional(form, 'currentPassword');
+  const currentPassword = secret(form, 'currentPassword');
   if (!currentPassword) return { error: 'Enter your current password.' };
 
   const password = readNewPassword(form);
@@ -125,5 +147,5 @@ export async function changePasswordAction(_previous: FormState, form: FormData)
     '/users',
   );
   if (state.error) return state;
-  redirect('/login?changed=1');
+  return { done: true };
 }
