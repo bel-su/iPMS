@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { PrismaClient } from '@prisma-clients/qc';
 import type { AuthzScope } from '@ipms/authz';
 import { uuidv7, type AssignableUser, type SiteRefs } from '@ipms/contracts';
@@ -23,7 +25,7 @@ const POWER = uuidv7();
 const ANTENNA_SITE = uuidv7();
 const POWER_SITE = uuidv7();
 const PROJECTS: Record<string, SiteRefs> = {
-  [ANTENNA]: { project: { id: ANTENNA, code: 'TI-L2100', name: 'Antenna upgrade', status: 'ACTIVE' }, sites: [{ id: ANTENNA_SITE, siteCode: 'KOS102X', name: 'KOS102X', city: 'Biratnagar', area: null }] },
+  [ANTENNA]: { project: { id: ANTENNA, code: 'TI-L2100', name: 'Antenna upgrade', status: 'ACTIVE' }, sites: [{ id: ANTENNA_SITE, siteCode: 'KOS102X', name: 'SAKUWA GACHHI', city: 'Biratnagar', area: null }] },
   [POWER]: { project: { id: POWER, code: 'PWR-2026', name: 'Power upgrade', status: 'ACTIVE' }, sites: [{ id: POWER_SITE, siteCode: 'KOS102X', name: 'KOS102X', city: 'Biratnagar', area: null }] },
 };
 /** project's answer to "who can be given work here": the engineer holds the antenna project only, unless a test grants more. */
@@ -69,7 +71,11 @@ const submit = (order: { id: string; projectId: string; siteId: string }) => sub
 describe('work orders against a real database', () => {
   it('tells the same site code apart by project', async () => {
     const { created } = await create(ANTENNA, ANTENNA_SITE);
-    expect(created[0]).toMatchObject({ project: { code: 'TI-L2100' }, site: { siteCode: 'KOS102X', city: 'Biratnagar' }, templateName: 'Antenna + RRU' });
+    expect(created[0]).toMatchObject({
+      // Named by the site ID, not the site's name.
+      title: '[Quality Self-check]KOS102X',
+      project: { code: 'TI-L2100' }, site: { siteCode: 'KOS102X', name: 'SAKUWA GACHHI', city: 'Biratnagar' }, templateName: 'Antenna + RRU',
+    });
     const page = await service.list(GLOBAL, { page: 1, limit: 20, q: 'PWR' });
     expect(page.total).toBe(0);
   });
@@ -122,6 +128,14 @@ describe('work orders against a real database', () => {
     await expect(submit(order)).rejects.toThrow('cancelled');
     expect(await prisma.workOrder.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ status: 'CANCELLED', cancelReason: 'Site handed back' });
     await expect(service.update(GLOBAL, order.id, { assigneeId: ENGINEER }, ACTOR, 'Bearer t')).rejects.toThrow('cancelled');
+  });
+
+  it('renames work orders raised under the site-name rule, keeping the note', async () => {
+    const { created } = await create(ANTENNA, ANTENNA_SITE);
+    await prisma.workOrder.update({ where: { id: created[0]!.id }, data: { title: '[Quality Self-check]SAKUWA GACHHI sector B' } });
+    const sql = readFileSync(fileURLToPath(new URL('./migrations/20260926000200_work_order_title_site_code/migration.sql', import.meta.url)), 'utf8');
+    await prisma.$executeRawUnsafe(sql.split('\n').filter((line) => !line.startsWith('--')).join('\n'));
+    expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: created[0]!.id } })).title).toBe('[Quality Self-check]KOS102X sector B');
   });
 
   it('counts what a project or site still has, for project’s delete guard', async () => {

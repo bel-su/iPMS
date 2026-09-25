@@ -231,7 +231,7 @@ export function pageWindow(page: number, pages: number, radius = 2): (number | n
  * must not import the contracts barrel (it pulls in zod and node:crypto).
  * `labels.spec.ts` holds the two to the same output.
  */
-export function previewTitle(type: WorkOrderType, siteName: string, note?: string): string {
+export function previewTitle(type: WorkOrderType, siteCode: string, note?: string): string {
   const extra = note?.trim();
-  return `[${WORK_ORDER_TYPE_LABEL[type]}]${siteName}${extra ? ` ${extra}` : ''}`.slice(0, 250);
+  return `[${WORK_ORDER_TYPE_LABEL[type]}]${siteCode}${extra ? ` ${extra}` : ''}`.slice(0, 250);
 }

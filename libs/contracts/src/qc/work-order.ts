@@ -20,7 +20,7 @@ export const WORK_ORDER_TEMPLATE_CATEGORY: Record<WorkOrderType, TemplateCategor
   EHS_SPOT_CHECK: 'EHS',
 };
 
-/** The label in a generated work order name: `[Quality Self-check]SAKUWA GACHHI`. */
+/** The label in a generated work order name: `[Quality Self-check]KOS001`. */
 export const WORK_ORDER_TYPE_LABEL: Record<WorkOrderType, string> = {
   QUALITY_SELF_CHECK: 'Quality Self-check',
   QUALITY_SPOT_CHECK: 'Quality Spot Check',
@@ -32,14 +32,16 @@ export const WORK_ORDER_BATCH_LIMIT = 200;
 export const WORK_ORDER_NOTE_MAX = 120;
 
 /**
- * The name a work order gets: the type label, the site's name, and the
- * creator's note if there is one. Generated rather than typed so every work
+ * The name a work order gets: the type label, the site ID, and the creator's
+ * note if there is one. The site ID rather than its name: it is what the field
+ * and the client call the site, and it is unique within a project where names
+ * are not. Generated rather than typed so every work
  * order on a site reads the same way, and so a batch of sites needs no
  * per-site naming. Shared by the service and the composer's preview.
  */
-export function workOrderTitle(type: WorkOrderType, siteName: string, note?: string | null): string {
+export function workOrderTitle(type: WorkOrderType, siteCode: string, note?: string | null): string {
   const extra = note?.trim();
-  return `[${WORK_ORDER_TYPE_LABEL[type]}]${siteName}${extra ? ` ${extra}` : ''}`.slice(0, 250);
+  return `[${WORK_ORDER_TYPE_LABEL[type]}]${siteCode}${extra ? ` ${extra}` : ''}`.slice(0, 250);
 }
 
 /**
