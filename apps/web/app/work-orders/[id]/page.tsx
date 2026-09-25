@@ -86,7 +86,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
               <section className="panel">
                 <h2 className="panel-title">Timeline</h2>
                 <ol className="timeline">
-                  {[...wo.events].reverse().map((event) => (
+                  {timeline(wo).reverse().map((event) => (
                     <li key={event.id} className={`tl ${event.kind.toLowerCase()}`}>
                       <span className="tl-dot" aria-hidden="true" />
                       <div>
@@ -122,6 +122,20 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
       </section>
     </main>
   );
+}
+
+/**
+ * The recorded events, opened by a CREATED entry built from the work order
+ * itself when none was recorded — work orders raised before the timeline
+ * existed would otherwise show an empty history.
+ */
+function timeline(wo: { id: string; createdAt: string; createdBy: string; assigneeId: string | null; plannedCompletionAt: string | null; events: WorkOrderEvent[] }): WorkOrderEvent[] {
+  if (wo.events.some((event) => event.kind === 'CREATED')) return [...wo.events];
+  const raised: WorkOrderEvent = {
+    id: `${wo.id}-raised`, taskId: wo.id, kind: 'CREATED', at: wo.createdAt, actorId: wo.createdBy,
+    detail: { assigneeId: wo.assigneeId, plannedCompletionAt: wo.plannedCompletionAt },
+  };
+  return [raised, ...wo.events];
 }
 
 function describe(event: WorkOrderEvent, name: (id: string | null | undefined) => string): React.ReactNode {
