@@ -4,10 +4,12 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 const redirect = vi.fn((path: string) => { throw new Error(`NEXT_REDIRECT ${path}`); });
 vi.mock('next/navigation', () => ({ redirect }));
 
-const projectApi = { createWorkOrders: vi.fn(), updateWorkOrder: vi.fn(), cancelWorkOrder: vi.fn(), getProject: vi.fn(), listAssignable: vi.fn() };
-vi.mock('../lib/project-api', () => projectApi);
+const projectApi = { getProject: vi.fn(), listAssignable: vi.fn() };
+vi.mock('../../lib/project-api', () => projectApi);
+const workOrderApi = { createWorkOrders: vi.fn(), updateWorkOrder: vi.fn(), cancelWorkOrder: vi.fn() };
+vi.mock('../../lib/work-order-api', () => workOrderApi);
 const qcApi = { getVersion: vi.fn() };
-vi.mock('../lib/qc-api', () => qcApi);
+vi.mock('../../lib/qc-api', () => qcApi);
 
 const actions = await import('./actions');
 const ID = '0192f7a0-0000-7000-8000-000000000001';
@@ -29,17 +31,17 @@ beforeEach(() => { vi.clearAllMocks(); });
 
 describe('createWorkOrdersAction', () => {
   it('creates one per site and returns to the queue saying how many', async () => {
-    projectApi.createWorkOrders.mockResolvedValue({ state: 'ready', data: { created: [{}, {}] } });
-    await expect(actions.createWorkOrdersAction({}, form(complete))).rejects.toThrow('NEXT_REDIRECT /work-orders?projectId=p-1&created=2');
-    expect(projectApi.createWorkOrders).toHaveBeenCalledWith('p-1', {
-      workOrderType: 'QUALITY_SELF_CHECK', templateId: ID, siteIds: ['s-1', 's-2'], assigneeId: 'u-1', plannedCompletionAt: new Date(PLANNED),
+    workOrderApi.createWorkOrders.mockResolvedValue({ state: 'ready', data: { created: [{}, {}] } });
+    await expect(actions.createWorkOrdersAction({}, form(complete))).rejects.toThrow('NEXT_REDIRECT /quality/work-orders?projectId=p-1&created=2');
+    expect(workOrderApi.createWorkOrders).toHaveBeenCalledWith({
+      projectId: 'p-1', workOrderType: 'QUALITY_SELF_CHECK', templateId: ID, siteIds: ['s-1', 's-2'], assigneeId: 'u-1', plannedCompletionAt: new Date(PLANNED),
     });
   });
 
   it('passes the note when there is one', async () => {
-    projectApi.createWorkOrders.mockResolvedValue({ state: 'ready', data: { created: [{}] } });
+    workOrderApi.createWorkOrders.mockResolvedValue({ state: 'ready', data: { created: [{}] } });
     await expect(actions.createWorkOrdersAction({}, form({ ...complete, note: 'sector A' }))).rejects.toThrow('NEXT_REDIRECT');
-    expect(projectApi.createWorkOrders.mock.calls[0]?.[1]).toMatchObject({ note: 'sector A' });
+    expect(workOrderApi.createWorkOrders.mock.calls[0]?.[0]).toMatchObject({ note: 'sector A' });
   });
 
   it.each([
@@ -48,38 +50,38 @@ describe('createWorkOrdersAction', () => {
   ])('asks for %s before calling the API', async (field, message) => {
     const state = await actions.createWorkOrdersAction({}, form({ ...complete, [field]: field === 'siteIds' ? [] : '' }));
     expect(state.error).toContain(message);
-    expect(projectApi.createWorkOrders).not.toHaveBeenCalled();
+    expect(workOrderApi.createWorkOrders).not.toHaveBeenCalled();
   });
 
   it('shows the service’s own refusal', async () => {
-    projectApi.createWorkOrders.mockResolvedValue({ state: 'unavailable', status: 400, message: 'The responsible person has no access to site KOS102X.' });
+    workOrderApi.createWorkOrders.mockResolvedValue({ state: 'unavailable', status: 400, message: 'The responsible person has no access to site KOS102X.' });
     expect((await actions.createWorkOrdersAction({}, form(complete))).error).toContain('no access to site KOS102X');
   });
 });
 
 describe('updateWorkOrderAction and cancelWorkOrderAction', () => {
   it('reassigns', async () => {
-    projectApi.updateWorkOrder.mockResolvedValue({ state: 'ready', data: {} });
+    workOrderApi.updateWorkOrder.mockResolvedValue({ state: 'ready', data: {} });
     expect(await actions.updateWorkOrderAction({}, form({ id: 'w-1', projectId: 'p-1', assigneeId: 'u-2' }))).toEqual({});
-    expect(projectApi.updateWorkOrder).toHaveBeenCalledWith('w-1', { assigneeId: 'u-2' });
+    expect(workOrderApi.updateWorkOrder).toHaveBeenCalledWith('w-1', { assigneeId: 'u-2' });
   });
 
   it('reschedules', async () => {
-    projectApi.updateWorkOrder.mockResolvedValue({ state: 'ready', data: {} });
+    workOrderApi.updateWorkOrder.mockResolvedValue({ state: 'ready', data: {} });
     await actions.updateWorkOrderAction({}, form({ id: 'w-1', projectId: 'p-1', plannedCompletionAt: PLANNED }));
-    expect(projectApi.updateWorkOrder).toHaveBeenCalledWith('w-1', { plannedCompletionAt: new Date(PLANNED) });
+    expect(workOrderApi.updateWorkOrder).toHaveBeenCalledWith('w-1', { plannedCompletionAt: new Date(PLANNED) });
   });
 
   it('needs something to change', async () => {
     expect((await actions.updateWorkOrderAction({}, form({ id: 'w-1', projectId: 'p-1' }))).error).toBeTruthy();
-    expect(projectApi.updateWorkOrder).not.toHaveBeenCalled();
+    expect(workOrderApi.updateWorkOrder).not.toHaveBeenCalled();
   });
 
   it('cancels only with a reason', async () => {
     expect((await actions.cancelWorkOrderAction({}, form({ id: 'w-1', projectId: 'p-1', reason: ' ' }))).error).toContain('why');
-    projectApi.cancelWorkOrder.mockResolvedValue({ state: 'ready', data: {} });
+    workOrderApi.cancelWorkOrder.mockResolvedValue({ state: 'ready', data: {} });
     await actions.cancelWorkOrderAction({}, form({ id: 'w-1', projectId: 'p-1', reason: 'Handed back' }));
-    expect(projectApi.cancelWorkOrder).toHaveBeenCalledWith('w-1', { reason: 'Handed back' });
+    expect(workOrderApi.cancelWorkOrder).toHaveBeenCalledWith('w-1', { reason: 'Handed back' });
   });
 });
 

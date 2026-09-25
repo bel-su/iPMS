@@ -173,3 +173,19 @@ export const ListTasksQuerySchema = z.object({
   status: TaskStatusSchema.optional(),
 }).strip();
 export type ListTasksQueryDto = z.infer<typeof ListTasksQuerySchema>;
+
+/**
+ * Service-to-service: qc asks project which of these sites the caller can see,
+ * and what they are called, before assigning work to them. Bounded by the
+ * largest work order batch.
+ */
+export const SiteRefsRequestSchema = z.object({
+  siteIds: z.array(UuidSchema).min(1).max(200),
+}).strip();
+export type SiteRefsRequestDto = z.infer<typeof SiteRefsRequestSchema>;
+
+export interface SiteRef { id: string; siteCode: string; name: string; city: string | null; area: string | null }
+export interface SiteRefs { project: { id: string; code: string; name: string; status: string }; sites: SiteRef[] }
+
+/** Who could be made responsible for work in a project: the whole project, or only the sites listed. */
+export interface AssignableUser { userId: string; wholeProject: boolean; siteIds: string[] }

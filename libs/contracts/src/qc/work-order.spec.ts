@@ -7,7 +7,7 @@ import {
 const ID = '0190a9b8-1c2d-7e3f-8a4b-5c6d7e8f9a0b';
 const ID2 = '0190a9b8-1c2d-7e3f-8a4b-5c6d7e8f9a0c';
 const valid = {
-  workOrderType: 'QUALITY_SELF_CHECK', templateId: ID, siteIds: [ID, ID2], assigneeId: ID,
+  projectId: ID, workOrderType: 'QUALITY_SELF_CHECK', templateId: ID, siteIds: [ID, ID2], assigneeId: ID,
   plannedCompletionAt: '2026-09-30',
 };
 

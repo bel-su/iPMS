@@ -219,6 +219,9 @@ services:
       - ./env/project.env
     depends_on:
       postgres-project: { condition: service_healthy }
+      # Project's migrations drop the work orders qc-migrate copies out of
+      # them, so they must not run until that copy has finished.
+      qc-migrate:       { condition: service_completed_successfully }
 
   project:
     <<: *service-defaults
@@ -243,8 +246,12 @@ services:
       args: { SERVICE: qc }
     env_file:
       - ./env/qc.env
+    # Copies project's work orders into qc's tables once they exist; a no-op
+    # once project no longer holds any. See prisma/import-project-work-orders.ts.
+    command: ["sh", "-c", "pnpm exec prisma migrate deploy && pnpm exec tsx prisma/import-project-work-orders.ts"]
     depends_on:
-      postgres-qc: { condition: service_healthy }
+      postgres-qc:      { condition: service_healthy }
+      postgres-project: { condition: service_healthy }
 
   qc:
     <<: *service-defaults

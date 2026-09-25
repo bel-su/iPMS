@@ -1,5 +1,7 @@
 # iPMS — Work Order Management Design
 
+> **Superseded in part** by [2026-09-25-work-orders-in-qc-design.md](2026-09-25-work-orders-in-qc-design.md): work orders now live in `qc`, not as `project` tasks. Decisions W1, W2 and W6 and the status-sync section below describe the earlier design.
+
 **Status:** Implemented
 **Date:** 2026-09-24 (revised 2026-09-25)
 **Parent spec:** `2026-09-22-qc-template-management-design.md` §1 (sub-project 2)

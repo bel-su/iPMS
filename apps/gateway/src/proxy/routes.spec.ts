@@ -20,7 +20,6 @@ describe('resolveUpstream — allowlist', () => {
     for (const path of [
       '/api/v1/dashboard', '/api/v1/projects', '/api/v1/projects/x/sites', '/api/v1/projects/x/tasks',
       '/api/v1/tasks/x/assign', '/api/v1/sites/x', '/api/v1/task-types/x', '/api/v1/milestones/x',
-      '/api/v1/work-orders', '/api/v1/work-orders/x/cancel',
     ]) {
       const upstream = resolveUpstream(path);
       expect(upstream?.service).toBe('project');
@@ -32,10 +31,12 @@ describe('resolveUpstream — allowlist', () => {
     expect(resolveUpstream('/api/v1/sites/internal/secrets')).toBeUndefined();
   });
 
-  it('routes the qc prefix to the qc service', () => {
-    const upstream = resolveUpstream('/api/v1/qc/submissions');
-    expect(upstream?.service).toBe('qc');
-    expect(upstream?.port).toBe(3005);
+  it('routes the qc prefixes to the qc service', () => {
+    for (const path of ['/api/v1/qc/submissions', '/api/v1/work-orders', '/api/v1/work-orders/x/cancel']) {
+      const upstream = resolveUpstream(path);
+      expect(upstream?.service).toBe('qc');
+      expect(upstream?.port).toBe(3005);
+    }
   });
 
   it('routes the media prefix to the media service', () => {

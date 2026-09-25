@@ -50,8 +50,9 @@ export const ROUTES: Upstream[] = [
   { prefix: '/api/v1/task-types', service: 'project', ...PROJECT },
   { prefix: '/api/v1/milestones', service: 'project', ...PROJECT },
   { prefix: '/api/v1/tasks', service: 'project', ...PROJECT },
-  { prefix: '/api/v1/work-orders', service: 'project', ...PROJECT },
   { prefix: '/api/v1/qc', service: 'qc', ...QC },
+  // Work orders are qc's: checklists assigned to project sites.
+  { prefix: '/api/v1/work-orders', service: 'qc', ...QC },
   { prefix: '/api/v1/media', service: 'media', ...MEDIA },
   { prefix: '/api/v1/notifications', service: 'notification', ...NOTIFICATION },
   { prefix: '/api/v1/docs', service: 'docs', ...DOCS },

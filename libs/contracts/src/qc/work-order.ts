@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { UuidSchema } from '../common/ids.js';
 import { PaginationSchema, type Paginated } from '../common/pagination.js';
-import type { TemplateCategory } from '../qc/template.js';
-import { TaskStatusSchema } from './project.js';
+import type { TemplateCategory } from './template.js';
+import { TaskStatusSchema } from '../project/project.js';
 
 /**
- * A work order is a task that carries a QC checklist template. Its type says
+ * A work order is a QC checklist template assigned to one site of a project,
+ * owned by the qc service. Its statuses are the task statuses. Its type says
  * which kind of check it is and, through `WORK_ORDER_TEMPLATE_CATEGORY`, which
  * templates it may use: a Quality check cannot be raised on an EHS checklist.
  */
@@ -48,6 +49,7 @@ export function workOrderTitle(type: WorkOrderType, siteName: string, note?: str
  * by, is a task that will never be picked up.
  */
 export const CreateWorkOrdersSchema = z.object({
+  projectId: UuidSchema,
   workOrderType: WorkOrderTypeSchema,
   templateId: UuidSchema,
   siteIds: z.array(UuidSchema).min(1).max(WORK_ORDER_BATCH_LIMIT)
@@ -92,6 +94,17 @@ export type ListWorkOrdersQueryDto = z.infer<typeof ListWorkOrdersQuerySchema>;
 export type WorkOrderStatusCounts = Record<z.infer<typeof TaskStatusSchema> | 'ALL' | 'OVERDUE', number>;
 
 export type WorkOrderPage<T> = Paginated<T> & { counts: WorkOrderStatusCounts };
+
+/**
+ * A project's work orders in brief, for the project dashboard: enough to
+ * count by status, place on a site and a date, and link to. Not paginated:
+ * the dashboard summarises all of them.
+ */
+export interface WorkOrderBrief {
+  id: string; siteId: string; siteCode: string; title: string;
+  workOrderType: WorkOrderType; status: z.infer<typeof TaskStatusSchema>;
+  assigneeId: string | null; plannedCompletionAt: Date | string | null;
+}
 
 /** What happened to a work order, in order — the detail page's timeline. */
 export const WORK_ORDER_EVENT_KINDS = [

@@ -17,10 +17,10 @@ export default async function VersionPage({ params }: { params: Promise<{ id: st
   const { template, version: detail } = result.data;
   return (
     <main className="app-shell">
-      <Sidebar active="quality" />
+      <Sidebar active="checklists" />
       <section className="content">
         <header className="topbar">
-          <div className="crumbs"><a href="/quality/templates">Templates</a><b>/</b><a href={`/quality/templates/${id}`}>{template.code}</a><b>/</b><strong>v{detail.version}</strong></div>
+          <div className="crumbs"><a href="/quality">Quality &amp; EHS</a><b>/</b><a href="/quality/templates">Checklist library</a><b>/</b><a href={`/quality/templates/${id}`}>{template.code}</a><b>/</b><strong>v{detail.version}</strong></div>
           <TopActions />
         </header>
         <div className="dashboard">

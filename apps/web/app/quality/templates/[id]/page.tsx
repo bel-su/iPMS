@@ -27,10 +27,10 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
 
   return (
     <main className="app-shell">
-      <Sidebar active="quality" />
+      <Sidebar active="checklists" />
       <section className="content">
         <header className="topbar">
-          <div className="crumbs"><a href="/quality/templates">Templates</a><b>/</b><strong>{template.code}</strong></div>
+          <div className="crumbs"><a href="/quality">Quality &amp; EHS</a><b>/</b><a href="/quality/templates">Checklist library</a><b>/</b><strong>{template.code}</strong></div>
           <TopActions />
         </header>
         <div className="dashboard">

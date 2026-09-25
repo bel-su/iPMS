@@ -6,8 +6,6 @@ import type {
   CreateSiteInput,
   CreateTaskDto,
   CreateTaskTypeDto,
-  CancelWorkOrderDto,
-  CreateWorkOrdersDto,
   SiteImportCommitDto,
   SiteImportPreviewDto,
   UpdateMilestoneDto,
@@ -15,10 +13,6 @@ import type {
   UpdateSiteDto,
   UpdateTaskDto,
   UpdateTaskTypeDto,
-  UpdateWorkOrderDto,
-  WorkOrderEventKind,
-  WorkOrderPage,
-  WorkOrderType,
 } from '@ipms/contracts';
 import { authFetch, type ApiResult } from './api-client';
 
@@ -88,49 +82,16 @@ export interface Milestone {
   kind: 'PROJECT' | 'CONTRACT'; sequence: number; targetDate: string | null;
 }
 
+/** Planned work of one of the project's task types. Work orders — checklists assigned to sites — are qc's; see work-order-api. */
 export interface Task {
-  /** Null for a work order, which is raised against a checklist template instead of a task type. */
-  id: string; projectId: string; siteId: string; taskTypeId: string | null; templateId: string | null;
-  /** Set only on a work order; `templateName` is the template's name when it was raised. */
-  workOrderType: WorkOrderType | null; templateName: string | null;
+  id: string; projectId: string; siteId: string; taskTypeId: string; templateId: string | null;
   title: string; status: TaskStatus; assigneeId: string | null;
   plannedCompletionAt: string | null; actualCompletionAt: string | null;
-  currentSubmissionId: string | null; currentAttemptNo: number | null; cancelReason: string | null;
   origin: 'PLANNED' | 'AD_HOC'; createdBy: string; createdAt: string;
 }
 
-/**
- * A work order as the list returns it: the task with its site and its project.
- * The project code is the work order's Project ID (the DU) — the same site
- * code exists in several projects, and only the project tells them apart.
- */
-export type WorkOrder = Task & {
-  site: { id: string; siteCode: string; name: string; city: string | null; area: string | null };
-  project: { id: string; code: string; name: string };
-};
-
-export interface WorkOrderEvent {
-  id: string; taskId: string; kind: WorkOrderEventKind; at: string; actorId: string | null;
-  detail: Record<string, string | number | null>;
-}
-
-export type WorkOrderDetail = WorkOrder & { events: WorkOrderEvent[] };
-
 /** Who may be made responsible for work in a project: the whole project, or only the sites listed. */
 export interface AssignableUser { userId: string; wholeProject: boolean; siteIds: string[] }
-
-export type WorkOrderView = 'open' | 'overdue' | 'closed';
-
-export interface WorkOrderFilter {
-  projectId?: string | undefined;
-  status?: TaskStatus | undefined;
-  view?: WorkOrderView | undefined;
-  workOrderType?: WorkOrderType | undefined;
-  assigneeId?: string | undefined;
-  q?: string | undefined;
-  page?: number | undefined;
-  limit?: number | undefined;
-}
 
 /** `listProjects` counts sites and tasks rather than returning them. */
 export type ProjectListEntry = Project & { _count: { sites: number; tasks: number } };
@@ -155,8 +116,6 @@ export interface DashboardProject {
 export interface ProjectDashboard {
   activeProjectCount: number;
   sitesInDelivery: number;
-  pendingReviews: number;
-  rectifyingTasks: number;
   projects: DashboardProject[];
 }
 
@@ -208,41 +167,9 @@ export async function listTasks(projectId: string, filter: { siteId?: string; st
   return authFetch<Task[]>(`/api/v1/projects/${projectId}/tasks`, { query: filter });
 }
 
-/** The workspace queue: every project the caller can see, narrowed by the filter. */
-export async function listWorkOrders(filter: WorkOrderFilter = {}): Promise<ApiResult<WorkOrderPage<WorkOrder>>> {
-  return authFetch<WorkOrderPage<WorkOrder>>('/api/v1/work-orders', {
-    query: {
-      projectId: filter.projectId,
-      status: filter.status,
-      view: filter.view,
-      workOrderType: filter.workOrderType,
-      assigneeId: filter.assigneeId,
-      q: filter.q,
-      page: filter.page === undefined ? undefined : String(filter.page),
-      limit: filter.limit === undefined ? undefined : String(filter.limit),
-    },
-  });
-}
-
-export async function getWorkOrder(id: string): Promise<ApiResult<WorkOrderDetail>> {
-  return authFetch<WorkOrderDetail>(`/api/v1/work-orders/${id}`);
-}
-
-/** One work order per site; the service checks the template and that the person can reach every site. */
-export async function createWorkOrders(projectId: string, batch: CreateWorkOrdersDto): Promise<ApiResult<{ created: WorkOrder[] }>> {
-  return authFetch<{ created: WorkOrder[] }>(`/api/v1/projects/${projectId}/work-orders`, { method: 'POST', json: batch });
-}
-
-export async function updateWorkOrder(id: string, changes: UpdateWorkOrderDto): Promise<ApiResult<WorkOrderDetail>> {
-  return authFetch<WorkOrderDetail>(`/api/v1/work-orders/${id}`, { method: 'PATCH', json: changes });
-}
-
-export async function cancelWorkOrder(id: string, body: CancelWorkOrderDto): Promise<ApiResult<WorkOrderDetail>> {
-  return authFetch<WorkOrderDetail>(`/api/v1/work-orders/${id}/cancel`, { method: 'POST', json: body });
-}
-
+/** Who can be given work in this project — project's to answer, since it holds the replicated scope. */
 export async function listAssignable(projectId: string): Promise<ApiResult<AssignableUser[]>> {
-  return authFetch<AssignableUser[]>(`/api/v1/projects/${projectId}/work-orders/assignable`);
+  return authFetch<AssignableUser[]>(`/api/v1/projects/${projectId}/assignable`);
 }
 
 export async function updateSite(id: string, changes: UpdateSiteDto): Promise<ApiResult<Site>> {

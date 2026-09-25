@@ -1,14 +1,40 @@
 import type { CurrentUser } from '../../lib/iam-api';
 import type { ProjectDetail, Task, TaskStatus } from '../../lib/project-api';
+import type { WorkOrderBrief } from '../../lib/work-order-api';
+import type { WorkOrderType } from '../../quality/work-orders/labels';
 
 /**
  * Everything the project landing pages show, derived from the project detail
- * and its task list. Pure, and given `now` rather than reading the clock, so
- * the rules are testable without rendering a page.
+ * and its work: the project's own planned tasks, and the work orders QC holds
+ * for its sites. Pure, and given `now` rather than reading the clock, so the
+ * rules are testable without rendering a page.
  *
- * The Project service has no summary endpoint of its own, so this is computed
- * here from the two calls the page already makes.
+ * Neither service has a summary endpoint of its own, so this is computed here
+ * from the calls the page already makes.
  */
+
+/**
+ * One piece of work on a site, whichever service holds it. A planned task
+ * carries a task type, which is what milestones count; a work order carries
+ * its type of check instead.
+ */
+export interface Work {
+  id: string; siteId: string; title: string; status: TaskStatus; assigneeId: string | null;
+  plannedCompletionAt: string | null; taskTypeId: string | null; workOrderType: WorkOrderType | null;
+}
+
+export function workOf(tasks: readonly Task[], workOrders: readonly WorkOrderBrief[]): Work[] {
+  return [
+    ...tasks.map((task) => ({
+      id: task.id, siteId: task.siteId, title: task.title, status: task.status, assigneeId: task.assigneeId,
+      plannedCompletionAt: task.plannedCompletionAt, taskTypeId: task.taskTypeId, workOrderType: null,
+    })),
+    ...workOrders.map((order) => ({
+      id: order.id, siteId: order.siteId, title: order.title, status: order.status, assigneeId: order.assigneeId,
+      plannedCompletionAt: order.plannedCompletionAt, taskTypeId: null, workOrderType: order.workOrderType,
+    })),
+  ];
+}
 
 export type Tone = 'green' | 'amber' | 'slate' | 'red' | 'blue';
 
@@ -94,7 +120,7 @@ function milestoneBadge(met: number, total: number, targetDate: string | null, n
 }
 
 /** Why a task needs someone's attention, most urgent first; null when it does not. */
-function attentionFor(task: Task, now: Date): { rank: number; status: string; detail: string; tone: Tone } | null {
+function attentionFor(task: Work, now: Date): { rank: number; status: string; detail: string; tone: Tone } | null {
   if (task.status === 'RECTIFYING') return { rank: 0, status: 'Action needed', detail: 'Returned from QC for rework', tone: 'red' };
   if (task.status === 'REVIEWING') return { rank: 1, status: 'Review', detail: 'Awaiting QC review', tone: 'blue' };
   if (CLOSED.has(task.status) || !task.plannedCompletionAt) return null;
@@ -104,7 +130,7 @@ function attentionFor(task: Task, now: Date): { rank: number; status: string; de
   return null;
 }
 
-export function summarizeProject(project: ProjectDetail, tasks: Task[], now: Date, limit = 5): ProjectSummary {
+export function summarizeProject(project: ProjectDetail, tasks: Work[], now: Date, limit = 5): ProjectSummary {
   const siteCode = new Map(project.sites.map((site) => [site.id, site.siteCode]));
   const live = tasks.filter((task) => task.status !== 'CANCELLED');
   const completed = live.filter((task) => task.status === 'COMPLETED');
@@ -140,7 +166,7 @@ export function summarizeProject(project: ProjectDetail, tasks: Task[], now: Dat
 
   const flagged = live
     .map((task) => ({ task, why: attentionFor(task, now) }))
-    .filter((entry): entry is { task: Task; why: NonNullable<ReturnType<typeof attentionFor>> } => entry.why !== null)
+    .filter((entry): entry is { task: Work; why: NonNullable<ReturnType<typeof attentionFor>> } => entry.why !== null)
     .sort((a, b) => a.why.rank - b.why.rank || (a.task.plannedCompletionAt ?? '').localeCompare(b.task.plannedCompletionAt ?? ''));
 
   const deadlines = live
@@ -197,7 +223,7 @@ const WORK_ORDER: Record<TaskStatus, number> = {
   RECTIFYING: 0, ONGOING: 1, NOT_STARTED: 2, REVIEWING: 3, COMPLETED: 4, CANCELLED: 5,
 };
 
-export function myTasks(tasks: Task[], userId: string): Task[] {
+export function myTasks<T extends Pick<Work, 'assigneeId' | 'status' | 'plannedCompletionAt'>>(tasks: T[], userId: string): T[] {
   return tasks
     .filter((task) => task.assigneeId === userId)
     .sort((a, b) => WORK_ORDER[a.status] - WORK_ORDER[b.status]

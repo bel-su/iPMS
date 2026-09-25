@@ -1,5 +1,5 @@
-import type { ChecklistSection } from '../lib/qc-api';
-import { RESPONSE_TYPE_LABELS, photoLabel } from '../quality/templates/labels';
+import type { ChecklistSection } from '../../lib/qc-api';
+import { RESPONSE_TYPE_LABELS, photoLabel } from '../templates/labels';
 
 /**
  * The shape of a checklist at a glance: how big it is, what is critical, what

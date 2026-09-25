@@ -1,5 +1,6 @@
-import type { AssignableUser, TaskStatus } from '../lib/project-api';
-import type { DirectoryUser } from '../lib/user-api';
+import type { AssignableUser, TaskStatus } from '../../lib/project-api';
+
+import type { DirectoryUser } from '../../lib/user-api';
 
 /**
  * Work order vocabulary and the pure rules the screens share. Free of
@@ -200,11 +201,15 @@ export function eligiblePeople(assignable: readonly AssignableUser[], directory:
   return { people: people.sort((a, b) => a.label.localeCompare(b.label)), hidden };
 }
 
-/** What a task table's Type column says: the task type's name, or the work order type for a work order. */
+/** What a work table's Type column says: the task type's name, or the work order type for a work order. */
 export function taskKind(task: { taskTypeId: string | null; workOrderType: WorkOrderType | null }, taskTypeNames: ReadonlyMap<string, string>): string {
   if (task.taskTypeId) return taskTypeNames.get(task.taskTypeId) ?? '—';
   return task.workOrderType ? WORK_ORDER_TYPE_LABEL[task.workOrderType] : '—';
 }
+
+/** Where the work order pages live: under Quality & EHS, beside the checklist library. */
+export const WORK_ORDERS_PATH = '/quality/work-orders';
+export const workOrderPath = (id: string) => `${WORK_ORDERS_PATH}/${id}`;
 
 /** Page numbers around the current page, with `null` for a gap: 1 … 4 5 [6] 7 8 … 103. */
 export function pageWindow(page: number, pages: number, radius = 2): (number | null)[] {

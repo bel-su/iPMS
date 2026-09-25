@@ -45,29 +45,7 @@ const CALLS: { name: string; call: () => Promise<unknown>; path: string; method?
     path: '/api/v1/tasks/task-1/assign', method: 'POST', json: { assigneeId: 'u-1' },
   },
   { name: 'listTasks', call: () => api.listTasks('p-1'), path: '/api/v1/projects/p-1/tasks' },
-  { name: 'listWorkOrders', call: () => api.listWorkOrders(), path: '/api/v1/work-orders' },
-  { name: 'getWorkOrder', call: () => api.getWorkOrder('w-1'), path: '/api/v1/work-orders/w-1' },
-  {
-    name: 'createWorkOrders',
-    call: () => api.createWorkOrders('p-1', {
-      workOrderType: 'QUALITY_SELF_CHECK', templateId: 'tpl-1', siteIds: ['s-1', 's-2'], assigneeId: 'u-1',
-      plannedCompletionAt: new Date('2026-09-30T23:59:59Z'),
-    }),
-    path: '/api/v1/projects/p-1/work-orders', method: 'POST',
-    json: {
-      workOrderType: 'QUALITY_SELF_CHECK', templateId: 'tpl-1', siteIds: ['s-1', 's-2'], assigneeId: 'u-1',
-      plannedCompletionAt: new Date('2026-09-30T23:59:59Z'),
-    },
-  },
-  {
-    name: 'updateWorkOrder', call: () => api.updateWorkOrder('w-1', { assigneeId: 'u-2' }),
-    path: '/api/v1/work-orders/w-1', method: 'PATCH', json: { assigneeId: 'u-2' },
-  },
-  {
-    name: 'cancelWorkOrder', call: () => api.cancelWorkOrder('w-1', { reason: 'Handed back' }),
-    path: '/api/v1/work-orders/w-1/cancel', method: 'POST', json: { reason: 'Handed back' },
-  },
-  { name: 'listAssignable', call: () => api.listAssignable('p-1'), path: '/api/v1/projects/p-1/work-orders/assignable' },
+  { name: 'listAssignable', call: () => api.listAssignable('p-1'), path: '/api/v1/projects/p-1/assignable' },
   {
     name: 'updateSite', call: () => api.updateSite('s-1', { name: 'Renamed' }),
     path: '/api/v1/sites/s-1', method: 'PATCH', json: { name: 'Renamed' },
@@ -106,7 +84,7 @@ describe('project-api — every call maps to a gateway route', () => {
   // These are the prefixes ROUTES in apps/gateway/src/proxy/routes.ts sends to
   // the project service, and nothing else reaches it. A path outside them 404s
   // at the edge rather than failing somewhere visible.
-  const ROUTED = ['/api/v1/dashboard', '/api/v1/projects', '/api/v1/sites', '/api/v1/task-types', '/api/v1/milestones', '/api/v1/tasks', '/api/v1/work-orders'];
+  const ROUTED = ['/api/v1/dashboard', '/api/v1/projects', '/api/v1/sites', '/api/v1/task-types', '/api/v1/milestones', '/api/v1/tasks'];
 
   it('uses only paths the gateway allowlist routes to the project service', async () => {
     for (const { call } of CALLS) {
@@ -128,15 +106,6 @@ describe('project-api — results pass through untouched', () => {
     authFetch.mockResolvedValueOnce({ state: 'forbidden', message: 'Permission project.create is required' });
     expect(await api.createProject({ code: 'ALPHA', name: 'Alpha' }))
       .toEqual({ state: 'forbidden', message: 'Permission project.create is required' });
-  });
-});
-
-describe('listWorkOrders filtering', () => {
-  it('sends paging as strings and drops what was not given', async () => {
-    await api.listWorkOrders({ projectId: 'p-1', view: 'overdue', page: 2, q: 'KOS' });
-    expect(authFetch).toHaveBeenCalledWith('/api/v1/work-orders', {
-      query: { projectId: 'p-1', status: undefined, view: 'overdue', workOrderType: undefined, assigneeId: undefined, q: 'KOS', page: '2', limit: undefined },
-    });
   });
 });
 

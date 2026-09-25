@@ -5,6 +5,7 @@ export const ACTOR = '0192f7a0-0000-7000-8000-00000000a001';
 
 export async function resetDb(prisma: PrismaClient): Promise<void> {
   await prisma.submission.deleteMany({});
+  await prisma.workOrder.deleteMany({});
   await prisma.outboxEvent.deleteMany({});
   await prisma.checklistTemplate.updateMany({ data: { currentVersionId: null } });
   await prisma.checklistTemplate.deleteMany({});
@@ -40,4 +41,23 @@ export async function seedPublishedTemplate(
     await prisma.checklistTemplate.update({ where: { id: templateId }, data: { currentVersionId: versionId } });
   }
   return { templateId, versionId, itemId };
+}
+
+export interface SeededWorkOrder { id: string; projectId: string; siteId: string; assigneeId: string; templateId: string; status: string }
+
+/** A work order on a fresh project and site, written without the service. */
+export async function seedWorkOrder(
+  prisma: PrismaClient, templateId: string, overrides: Partial<Pick<SeededWorkOrder, 'assigneeId' | 'status'>> = {},
+): Promise<SeededWorkOrder> {
+  const row = {
+    id: uuidv7(), projectId: uuidv7(), siteId: uuidv7(), assigneeId: ACTOR, templateId, status: 'NOT_STARTED', ...overrides,
+  };
+  await prisma.workOrder.create({
+    data: {
+      ...row, projectCode: 'TI-L2100', projectName: 'Antenna upgrade', siteCode: 'KOS102X', siteName: 'KOS102X',
+      templateName: 'Antenna + RRU', workOrderType: 'QUALITY_SELF_CHECK', title: '[Quality Self-check]KOS102X',
+      plannedCompletionAt: new Date('2026-09-30T18:14:59Z'), createdBy: ACTOR,
+    },
+  });
+  return row;
 }

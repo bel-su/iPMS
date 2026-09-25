@@ -29,10 +29,10 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
   return (
     <main className="app-shell">
-      <Sidebar active="quality" />
+      <Sidebar active="checklists" />
       <section className="content">
         <header className="topbar">
-          <div className="crumbs"><a href="/quality/templates">Templates</a><b>/</b><a href={`/quality/templates/${id}`}>{template.code}</a><b>/</b><strong>Draft v{draft.version}</strong></div>
+          <div className="crumbs"><a href="/quality">Quality &amp; EHS</a><b>/</b><a href="/quality/templates">Checklist library</a><b>/</b><a href={`/quality/templates/${id}`}>{template.code}</a><b>/</b><strong>Draft v{draft.version}</strong></div>
           <TopActions />
         </header>
         <div className="dashboard">

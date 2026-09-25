@@ -1,11 +1,12 @@
 import { getCurrentUser, hasPermission, type CurrentUser } from '../../lib/iam-api';
-import { getProject, listTasks, type ProjectDetail, type Task } from '../../lib/project-api';
+import { getProject, listTasks, type ProjectDetail } from '../../lib/project-api';
+import { listProjectWorkOrders } from '../../lib/work-order-api';
 import type { ApiResult } from '../../lib/api-client';
 import { StatePage } from '../../shell';
 import { ProjectFrame, projectProblem } from './frame';
 import { projectWorkOrders } from './paths';
-import { STATUS_LABEL, formatDay, landingFor, myTasks, summarizeProject } from './summary';
-import { taskKind } from '../../work-orders/labels';
+import { STATUS_LABEL, formatDay, landingFor, myTasks, summarizeProject, workOf, type Work } from './summary';
+import { taskKind, workOrderPath } from '../../quality/work-orders/labels';
 
 function Metric({ icon, label, value, detail, tone }: { icon: string; label: string; value: number; detail: string; tone: string }) {
   return <article className="metric-card"><div className="metric-heading"><span className={`metric-icon ${tone}`}>{icon}</span><span>{label}</span></div><strong>{value}</strong><p>{detail}</p></article>;
@@ -18,8 +19,9 @@ function Metric({ icon, label, value, detail, tone }: { icon: string; label: str
  */
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [project, tasks, user] = await Promise.all([getProject(id), listTasks(id), getCurrentUser()]);
+  const [project, planned, workOrders, user] = await Promise.all([getProject(id), listTasks(id), listProjectWorkOrders(id), getCurrentUser()]);
   if (project.state !== 'ready') return projectProblem(project);
+  const tasks = combined(planned, workOrders);
 
   // Without an identity there is no way to tell whose tasks are whose, and the
   // overview is not something to fall back to for someone who may be in the field.
@@ -32,12 +34,29 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     : <EngineerTasks project={project.data} tasks={tasks} user={user.data} />;
 }
 
-function TasksUnavailable({ tasks }: { tasks: ApiResult<Task[]> }) {
-  if (tasks.state === 'ready') return null;
-  return <section className="panel api-note"><h2>Tasks could not be loaded</h2><p>{tasks.state === 'unauthenticated' ? 'Sign in again to continue.' : tasks.message}</p></section>;
+/**
+ * The project's planned tasks and QC's work orders for it, as one list. Either
+ * can fail on its own; the page says which, and summarises what did load.
+ */
+function combined(planned: Awaited<ReturnType<typeof listTasks>>, workOrders: Awaited<ReturnType<typeof listProjectWorkOrders>>): ApiResult<Work[]> & { partial?: string } {
+  const failed = [planned, workOrders].find((result) => result.state !== 'ready');
+  const data = workOf(planned.state === 'ready' ? planned.data : [], workOrders.state === 'ready' ? workOrders.data : []);
+  if (!failed) return { state: 'ready', data };
+  if (planned.state === 'ready' || workOrders.state === 'ready') {
+    const which = planned.state === 'ready' ? 'Work orders' : 'Planned tasks';
+    return { state: 'ready', data, partial: `${which} could not be loaded: ${'message' in failed ? failed.message : 'sign in again to continue.'}` };
+  }
+  return failed as ApiResult<Work[]>;
 }
 
-function ProjectOverview({ project, tasks, user }: { project: ProjectDetail; tasks: ApiResult<Task[]>; user: CurrentUser }) {
+function TasksUnavailable({ tasks }: { tasks: ApiResult<Work[]> & { partial?: string } }) {
+  if (tasks.state === 'ready') {
+    return tasks.partial ? <section className="panel api-note"><h2>Some work could not be loaded</h2><p>{tasks.partial}</p></section> : null;
+  }
+  return <section className="panel api-note"><h2>Work could not be loaded</h2><p>{tasks.state === 'unauthenticated' ? 'Sign in again to continue.' : tasks.message}</p></section>;
+}
+
+function ProjectOverview({ project, tasks, user }: { project: ProjectDetail; tasks: ApiResult<Work[]> & { partial?: string }; user: CurrentUser }) {
   const summary = summarizeProject(project, tasks.state === 'ready' ? tasks.data : [], new Date());
   const base = `/projects/${project.id}`;
 
@@ -126,11 +145,11 @@ function ProjectOverview({ project, tasks, user }: { project: ProjectDetail; tas
   );
 }
 
-function EngineerTasks({ project, tasks, user }: { project: ProjectDetail; tasks: ApiResult<Task[]>; user: CurrentUser }) {
+function EngineerTasks({ project, tasks, user }: { project: ProjectDetail; tasks: ApiResult<Work[]> & { partial?: string }; user: CurrentUser }) {
   const mine = myTasks(tasks.state === 'ready' ? tasks.data : [], user.id);
   const siteCode = new Map(project.sites.map((site) => [site.id, site.siteCode]));
   const taskType = new Map(project.taskTypes.map((type) => [type.id, type.name]));
-  const count = (...statuses: Task['status'][]) => mine.filter((task) => statuses.includes(task.status)).length;
+  const count = (...statuses: Work['status'][]) => mine.filter((task) => statuses.includes(task.status)).length;
 
   return (
     <ProjectFrame project={project} active="overview" tabs={false}>
@@ -152,7 +171,7 @@ function EngineerTasks({ project, tasks, user }: { project: ProjectDetail; tasks
               <tbody>
                 {mine.map((task) => (
                   <tr key={task.id}>
-                    <td>{task.workOrderType ? <a className="link" href={`/work-orders/${task.id}`}>{task.title}</a> : task.title}</td>
+                    <td>{task.workOrderType ? <a className="link" href={workOrderPath(task.id)}>{task.title}</a> : task.title}</td>
                     <td><code>{siteCode.get(task.siteId) ?? '—'}</code></td>
                     <td>{taskKind(task, taskType)}</td>
                     <td><span className={`badge ${STATUS_LABEL[task.status].tone}`}>{STATUS_LABEL[task.status].label}</span></td>

@@ -6,11 +6,12 @@ import { projectScope, siteScope, visibleProject, visibleSite, visibleTask, visi
 import { scopeWhere } from '@ipms/authz';
 import type { JsonObject } from '@ipms/persistence';
 import { asJson, recordAudit, type AuditObject, type Tx } from '../outbox/audit.js';
-import { uuidv7, type AssignTaskDto, type CreateMilestoneDto, type CreateProjectDto, type CreateSiteDto, type CreateTaskDto, type CreateTaskTypeDto, type ListTasksQueryDto, type UpdateMilestoneDto, type UpdateProjectDto, type UpdateSiteDto, type UpdateTaskDto, type UpdateTaskTypeDto } from '@ipms/contracts';
+import type { WorkOrderUsageClient } from './work-order-usage.client.js';
+import { uuidv7, type AssignableUser, type SiteRefs, type AssignTaskDto, type CreateMilestoneDto, type CreateProjectDto, type CreateSiteDto, type CreateTaskDto, type CreateTaskTypeDto, type ListTasksQueryDto, type UpdateMilestoneDto, type UpdateProjectDto, type UpdateSiteDto, type UpdateTaskDto, type UpdateTaskTypeDto } from '@ipms/contracts';
 
 @Injectable()
 export class ProjectService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaClient, private readonly workOrders: WorkOrderUsageClient) {}
 
   /**
    * Runs a mutation and its ledger entry in one transaction.
@@ -296,20 +297,28 @@ export class ProjectService {
       (tx) => tx.project.update({ where: { id }, data: { status: 'CANCELLED' } }),
     );
   }
-  /** Refuses while tasks remain: the schema cascades Project to its sites, task types, milestones and tasks, so this would take the lot. */
-  async deleteProject(scope: AuthzScope, id: string, actorId: string) {
+  /**
+   * Refuses while tasks or work orders remain: the schema cascades Project to
+   * its sites, task types, milestones and tasks, so this would take the lot,
+   * and qc's work orders would be left pointing at nothing.
+   */
+  async deleteProject(scope: AuthzScope, id: string, actorId: string, bearer: string) {
     const project = await this.requireProject(scope, id);
     const tasks = await this.prisma.task.count({ where: { projectId: id } });
     if (tasks > 0) throw new ConflictException(`This project still has ${tasks} task(s). Delete them, or archive the project instead.`);
+    const workOrders = await this.workOrders.count({ projectId: id }, bearer);
+    if (workOrders > 0) throw new ConflictException(`This project still has ${workOrders} work order(s). Archive the project instead.`);
     await this.auditedDelete(
       { actorId, action: 'project.deleted', objectType: 'Project', objectId: id, previousState: asJson(project) },
       (tx) => tx.project.delete({ where: { id } }),
     );
   }
-  async deleteSite(scope: AuthzScope, id: string, actorId: string) {
+  async deleteSite(scope: AuthzScope, id: string, actorId: string, bearer: string) {
     const site = await this.requireSite(scope, id);
     const tasks = await this.prisma.task.count({ where: { siteId: id } });
     if (tasks > 0) throw new ConflictException(`This site still has ${tasks} task(s). Delete them first.`);
+    const workOrders = await this.workOrders.count({ siteId: id }, bearer);
+    if (workOrders > 0) throw new ConflictException(`This site has ${workOrders} work order(s) in Quality & EHS, which keep its history. It cannot be deleted.`);
     await this.auditedDelete(
       { actorId, action: 'site.deleted', objectType: 'Site', objectId: id, previousState: asJson({ siteCode: site.siteCode, name: site.name, projectId: site.projectId }) },
       (tx) => tx.site.delete({ where: { id } }),
@@ -334,7 +343,6 @@ export class ProjectService {
   }
   async deleteTask(scope: AuthzScope, id: string, actorId: string) {
     const task = await this.requireTask(scope, id);
-    if (task.currentSubmissionId) throw new ConflictException('This task has a QC submission. Cancel the task instead of deleting it.');
     await this.auditedDelete(
       { actorId, action: 'task.deleted', objectType: 'Task', objectId: id, previousState: asJson({ title: task.title, status: task.status, siteId: task.siteId }) },
       (tx) => tx.task.delete({ where: { id } }),
@@ -358,24 +366,47 @@ export class ProjectService {
       ),
     };
   }
-  async internalTask(id: string): Promise<{ id: string; projectId: string; siteId: string; assigneeId: string | null; templateId: string | null; status: string }> {
-    const task = await this.prisma.task.findUnique({
-      where: { id },
-      select: { id: true, projectId: true, siteId: true, assigneeId: true, templateId: true, status: true },
+  /**
+   * For qc, before it assigns work: the project, and those of `siteIds` in it
+   * that the caller can see. A site the caller cannot see is simply absent, so
+   * qc's count check refuses it without learning whether it exists.
+   */
+  async siteRefs(scope: AuthzScope, projectId: string, siteIds: string[]): Promise<SiteRefs> {
+    const project = await this.requireProject(scope, projectId);
+    const sites = await this.prisma.site.findMany({
+      where: { AND: [{ id: { in: siteIds }, projectId }, siteScope(scope)] },
+      select: { id: true, siteCode: true, name: true, city: true, area: true },
     });
-    if (!task) throw new NotFoundException('Task not found');
-    return task;
+    return { project, sites };
   }
-  /** Every count is scoped: an unscoped tally leaks the shape of the whole platform. */
+  /**
+   * Who could be made responsible for work in this project: every user whose
+   * replicated scope reaches it, with how far. The web intersects this with the
+   * name directory, and qc checks a work order's assignee against it.
+   */
+  async assignable(scope: AuthzScope, projectId: string): Promise<AssignableUser[]> {
+    await this.requireProject(scope, projectId);
+    const siteIds = (await this.prisma.site.findMany({ where: { projectId }, select: { id: true } })).map((site) => site.id);
+    const rows = await this.prisma.userScope.findMany({
+      where: { OR: [{ level: 'GLOBAL' }, { level: 'PROJECT', projectId }, { level: 'SITE', siteId: { in: siteIds } }] },
+      select: { userId: true, level: true, siteId: true },
+    });
+    const byUser = new Map<string, AssignableUser>();
+    for (const row of rows) {
+      const entry = byUser.get(row.userId) ?? { userId: row.userId, wholeProject: false, siteIds: [] };
+      if (row.level === 'SITE' && row.siteId) entry.siteIds.push(row.siteId);
+      else entry.wholeProject = true;
+      byUser.set(row.userId, entry);
+    }
+    return [...byUser.values()];
+  }
+  /**
+   * Every count is scoped: an unscoped tally leaks the shape of the whole
+   * platform. Review and rework counts are qc's, since work orders live there.
+   */
   async dashboard(scope: AuthzScope) {
-    const visible = projectScope(scope);
-    const tasks = scopeWhere(scope);
-    const [projects, reviewCount, rectifying] = await Promise.all([
-      this.prisma.project.findMany({ where: { AND: [{ status: 'ACTIVE' }, visible] }, include: { _count: { select: { sites: { where: siteScope(scope) } } } }, take: 12, orderBy: { updatedAt: 'desc' } }),
-      this.prisma.task.count({ where: { AND: [{ status: 'REVIEWING' }, tasks] } }),
-      this.prisma.task.count({ where: { AND: [{ status: 'RECTIFYING' }, tasks] } }),
-    ]);
-    return { activeProjectCount: projects.length, sitesInDelivery: projects.reduce((total, p) => total + p._count.sites, 0), pendingReviews: reviewCount, rectifyingTasks: rectifying, projects };
+    const projects = await this.prisma.project.findMany({ where: { AND: [{ status: 'ACTIVE' }, projectScope(scope)] }, include: { _count: { select: { sites: { where: siteScope(scope) } } } }, take: 12, orderBy: { updatedAt: 'desc' } });
+    return { activeProjectCount: projects.length, sitesInDelivery: projects.reduce((total, p) => total + p._count.sites, 0), projects };
   }
   /**
    * The five guards below are where scope is enforced for almost every method

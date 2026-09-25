@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma-clients/project';
 import type { AuthzScope } from '@ipms/authz';
+import type { WorkOrderUsageClient } from './work-order-usage.client.js';
 import { ProjectService } from './project.service.js';
 
 /** Every mutation is now attributed; these tests assert behaviour, not attribution. */
@@ -32,10 +33,10 @@ function makePrisma() {
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ id: 'created-1' }), update: vi.fn().mockResolvedValue({ id: 'created-1' }), delete: vi.fn(),
     },
-    // findUnique as well as findFirst: siteGeofence and internalTask are the
-    // two service-to-service reads that are deliberately NOT scoped, so they
-    // still address a row by primary key.
-    site: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn().mockResolvedValue({ id: 'created-1' }), update: vi.fn().mockResolvedValue({ id: 'created-1' }), delete: vi.fn() },
+    // findUnique as well as findFirst: siteGeofence is the service-to-service
+    // read that is deliberately NOT scoped, so it still addresses a row by
+    // primary key.
+    site: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({ id: 'created-1' }), update: vi.fn().mockResolvedValue({ id: 'created-1' }), delete: vi.fn() },
     taskType: { findFirst: vi.fn(), count: vi.fn(), create: vi.fn().mockResolvedValue({ id: 'created-1' }), update: vi.fn().mockResolvedValue({ id: 'created-1' }), delete: vi.fn() },
     milestone: { findFirst: vi.fn(), create: vi.fn().mockResolvedValue({ id: 'created-1' }), update: vi.fn().mockResolvedValue({ id: 'created-1' }), delete: vi.fn() },
     milestoneRequirement: { deleteMany: vi.fn(), createMany: vi.fn() },
@@ -45,6 +46,7 @@ function makePrisma() {
       create: vi.fn().mockResolvedValue({ id: 'created-1' }), update: vi.fn().mockResolvedValue({ id: 'created-1' }), delete: vi.fn(),
     },
     region: { upsert: vi.fn() },
+    userScope: { findMany: vi.fn().mockResolvedValue([]) },
     outboxEvent: { create: vi.fn().mockResolvedValue({}) },
     $transaction: vi.fn(),
   };
@@ -62,8 +64,12 @@ function makePrisma() {
 
 type Prisma = ReturnType<typeof makePrisma>;
 
+/** How many work orders qc reports for whatever is being deleted. */
+let workOrderCount = 0;
+const usage = { count: vi.fn(async () => workOrderCount) };
+
 function service(prisma: Prisma): ProjectService {
-  return new ProjectService(prisma as unknown as PrismaClient);
+  return new ProjectService(prisma as unknown as PrismaClient, usage as unknown as WorkOrderUsageClient);
 }
 
 describe('listTasks', () => {
@@ -84,6 +90,14 @@ describe('listTasks', () => {
     await service(prisma).listTasks(GLOBAL, 'p-1', { siteId: 's-1', status: 'ONGOING' });
     expect(prisma.task.findMany.mock.calls[0]![0].where)
       .toEqual({ AND: [{ projectId: 'p-1' }, {}, { siteId: 's-1' }, { status: 'ONGOING' }] });
+  });
+
+  it('refuses while qc still holds work orders for it, asking with the caller’s token', async () => {
+    prisma.task.count.mockResolvedValue(0);
+    workOrderCount = 4;
+    await expect(service(prisma).deleteProject(GLOBAL, 'p-1', ACTOR, 'Bearer t')).rejects.toThrow(/4 work order/);
+    expect(usage.count).toHaveBeenCalledWith({ projectId: 'p-1' }, 'Bearer t');
+    expect(prisma.project.delete).not.toHaveBeenCalled();
   });
 
   it('refuses a project that does not exist', async () => {
@@ -201,28 +215,36 @@ describe('archiveProject', () => {
 
 describe('deleteProject', () => {
   let prisma: Prisma;
-  beforeEach(() => { prisma = makePrisma(); });
+  beforeEach(() => { prisma = makePrisma(); workOrderCount = 0; });
 
   it('deletes a project that has no tasks', async () => {
     prisma.task.count.mockResolvedValue(0);
-    await service(prisma).deleteProject(GLOBAL, 'p-1', ACTOR);
+    await service(prisma).deleteProject(GLOBAL, 'p-1', ACTOR, 'Bearer t');
     expect(prisma.project.delete).toHaveBeenCalledWith({ where: { id: 'p-1' } });
   });
 
   it('refuses while any task remains, because the cascade would take them all', async () => {
     prisma.task.count.mockResolvedValue(3);
-    await expect(service(prisma).deleteProject(GLOBAL, 'p-1', ACTOR)).rejects.toBeInstanceOf(ConflictException);
+    await expect(service(prisma).deleteProject(GLOBAL, 'p-1', ACTOR, 'Bearer t')).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.project.delete).not.toHaveBeenCalled();
   });
 
   it('says how many tasks are in the way, so the message is actionable', async () => {
     prisma.task.count.mockResolvedValue(3);
-    await expect(service(prisma).deleteProject(GLOBAL, 'p-1', ACTOR)).rejects.toThrow(/3 task/);
+    await expect(service(prisma).deleteProject(GLOBAL, 'p-1', ACTOR, 'Bearer t')).rejects.toThrow(/3 task/);
+  });
+
+  it('refuses while qc still holds work orders for it, asking with the caller’s token', async () => {
+    prisma.task.count.mockResolvedValue(0);
+    workOrderCount = 4;
+    await expect(service(prisma).deleteProject(GLOBAL, 'p-1', ACTOR, 'Bearer t')).rejects.toThrow(/4 work order/);
+    expect(usage.count).toHaveBeenCalledWith({ projectId: 'p-1' }, 'Bearer t');
+    expect(prisma.project.delete).not.toHaveBeenCalled();
   });
 
   it('refuses a project that does not exist', async () => {
     prisma.project.findFirst.mockResolvedValue(null);
-    await expect(service(prisma).deleteProject(GLOBAL, 'missing', ACTOR)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service(prisma).deleteProject(GLOBAL, 'missing', ACTOR, 'Bearer t')).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -230,17 +252,25 @@ describe('deleteSite', () => {
   let prisma: Prisma;
   beforeEach(() => {
     prisma = makePrisma();
+    workOrderCount = 0;
     prisma.site.findFirst.mockResolvedValue({ id: 's-1', projectId: 'p-1' });
+  });
+
+  it('refuses while qc still holds work orders for the site', async () => {
+    prisma.task.count.mockResolvedValue(0);
+    workOrderCount = 1;
+    await expect(service(prisma).deleteSite(GLOBAL, 's-1', ACTOR, 'Bearer t')).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.site.delete).not.toHaveBeenCalled();
   });
 
   it('refuses while a task references the site', async () => {
     prisma.task.count.mockResolvedValue(1);
-    await expect(service(prisma).deleteSite(GLOBAL, 's-1', ACTOR)).rejects.toBeInstanceOf(ConflictException);
+    await expect(service(prisma).deleteSite(GLOBAL, 's-1', ACTOR, 'Bearer t')).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('deletes a site with no tasks', async () => {
     prisma.task.count.mockResolvedValue(0);
-    await service(prisma).deleteSite(GLOBAL, 's-1', ACTOR);
+    await service(prisma).deleteSite(GLOBAL, 's-1', ACTOR, 'Bearer t');
     expect(prisma.site.delete).toHaveBeenCalledWith({ where: { id: 's-1' } });
   });
 });
@@ -268,13 +298,8 @@ describe('deleteTask', () => {
   let prisma: Prisma;
   beforeEach(() => { prisma = makePrisma(); });
 
-  it('refuses a task that carries QC evidence', async () => {
-    prisma.task.findFirst.mockResolvedValue({ id: 't-1', currentSubmissionId: 'sub-1' });
-    await expect(service(prisma).deleteTask(GLOBAL, 't-1', ACTOR)).rejects.toBeInstanceOf(ConflictException);
-  });
-
-  it('deletes a task with no submission', async () => {
-    prisma.task.findFirst.mockResolvedValue({ id: 't-1', currentSubmissionId: null });
+  it('deletes a task', async () => {
+    prisma.task.findFirst.mockResolvedValue({ id: 't-1' });
     await service(prisma).deleteTask(GLOBAL, 't-1', ACTOR);
     expect(prisma.task.delete).toHaveBeenCalledWith({ where: { id: 't-1' } });
   });
@@ -358,22 +383,29 @@ describe('siteGeofence', () => {
   });
 });
 
-describe('internalTask', () => {
-  let prisma: Prisma;
-  beforeEach(() => { prisma = makePrisma(); });
-
-  it('returns only what qc needs to authorize a checklist request', async () => {
-    const task = { id: 't-1', projectId: 'p-1', siteId: 's-1', assigneeId: 'u-1', templateId: 'tpl-1', status: 'ONGOING' };
-    prisma.task.findUnique.mockResolvedValue(task);
-    await expect(service(prisma).internalTask('t-1')).resolves.toEqual(task);
-    expect(prisma.task.findUnique).toHaveBeenCalledWith({
-      where: { id: 't-1' },
-      select: { id: true, projectId: true, siteId: true, assigneeId: true, templateId: true, status: true },
-    });
+describe('siteRefs', () => {
+  it('returns only the requested sites the caller can see, with the project', async () => {
+    const prisma = makePrisma();
+    prisma.site.findMany.mockResolvedValue([{ id: 's-1', siteCode: 'K1', name: 'K', city: null, area: null }]);
+    const scope: AuthzScope = { global: false, projectIds: [], siteIds: ['s-1'] };
+    const refs = await service(prisma).siteRefs(scope, 'p-1', ['s-1', 's-2']);
+    expect(refs).toMatchObject({ project: PROJECT, sites: [{ id: 's-1' }] });
+    const where = JSON.stringify(prisma.site.findMany.mock.calls[0]![0].where);
+    expect(where).toContain('"projectId":"p-1"');
+    // The caller's own site grant narrows the lookup, not just the ids asked for.
+    expect(where).toContain('"id":{"in":["s-1"]}');
   });
+});
 
-  it('refuses a task that does not exist', async () => {
-    prisma.task.findUnique.mockResolvedValue(null);
-    await expect(service(prisma).internalTask('t-1')).rejects.toBeInstanceOf(NotFoundException);
+describe('assignable', () => {
+  it('groups replicated grants per user, whole project or by site', async () => {
+    const prisma = makePrisma();
+    prisma.site.findMany.mockResolvedValue([{ id: 's-1' }]);
+    prisma.userScope.findMany.mockResolvedValue([
+      { userId: 'u-1', level: 'PROJECT', siteId: null }, { userId: 'u-2', level: 'SITE', siteId: 's-1' },
+    ]);
+    await expect(service(prisma).assignable(GLOBAL, 'p-1')).resolves.toEqual([
+      { userId: 'u-1', wholeProject: true, siteIds: [] }, { userId: 'u-2', wholeProject: false, siteIds: ['s-1'] },
+    ]);
   });
 });

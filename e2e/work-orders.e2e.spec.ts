@@ -23,15 +23,9 @@ beforeAll(async () => {
   engineerId = users.body.items[0]!.id;
 }, 90_000);
 
-/** Status travels qc → NATS → project, so it is polled rather than read once. */
-async function statusBecomes(id: string, status: string): Promise<string> {
-  let last = '';
-  for (let i = 0; i < 40; i += 1) {
-    last = (await api<{ status: string }>(`/api/v1/work-orders/${id}`, { token: admin })).body.status;
-    if (last === status) break;
-    await sleep(250);
-  }
-  return last;
+/** qc moves a work order in the same transaction as the submission or review, so one read is enough. */
+async function statusOf(id: string): Promise<string> {
+  return (await api<{ status: string }>(`/api/v1/work-orders/${id}`, { token: admin })).body.status;
 }
 
 describe('work orders', () => {
@@ -52,8 +46,8 @@ describe('work orders', () => {
     await sleep(1500); // scope replicates to project over NATS
 
     const batch = (projectId: string, siteId: string) => api<{ created: { id: string; title: string; project: { code: string } }[] }>(
-      `/api/v1/projects/${projectId}/work-orders`,
-      { method: 'POST', token: admin, body: { workOrderType: 'QUALITY_SELF_CHECK', templateId, siteIds: [siteId], assigneeId: engineerId, plannedCompletionAt: '2026-12-31T18:14:59Z' } },
+      '/api/v1/work-orders',
+      { method: 'POST', token: admin, body: { projectId, workOrderType: 'QUALITY_SELF_CHECK', templateId, siteIds: [siteId], assigneeId: engineerId, plannedCompletionAt: '2026-12-31T18:14:59Z' } },
     );
     // The engineer holds the antenna project only: the same site code under the power project is out of reach.
     expect((await batch(power, powerSite)).status).toBe(400);
@@ -77,14 +71,14 @@ describe('work orders', () => {
 
     const first = await submit();
     expect(first.status).toBe(201);
-    expect(await statusBecomes(id, 'REVIEWING')).toBe('REVIEWING');
+    expect(await statusOf(id)).toBe('REVIEWING');
     await review(first.body.id, 'REJECT_REWORK', 'REJECTED');
-    expect(await statusBecomes(id, 'RECTIFYING')).toBe('RECTIFYING');
+    expect(await statusOf(id)).toBe('RECTIFYING');
     const second = await submit();
     expect(second.status).toBe(201);
-    await statusBecomes(id, 'REVIEWING');
+    expect(await statusOf(id)).toBe('REVIEWING');
     await review(second.body.id, 'APPROVE', 'APPROVED');
-    expect(await statusBecomes(id, 'COMPLETED')).toBe('COMPLETED');
+    expect(await statusOf(id)).toBe('COMPLETED');
 
     const detail = await api<{ actualCompletionAt: string | null; events: { kind: string }[] }>(`/api/v1/work-orders/${id}`, { token: admin });
     expect(detail.body.actualCompletionAt).not.toBeNull();
@@ -92,9 +86,16 @@ describe('work orders', () => {
 
     const queue = await api<{ total: number; items: { id: string }[] }>(`/api/v1/work-orders?projectId=${antenna}&status=COMPLETED`, { token: admin });
     expect(queue.body.items.map((item) => item.id)).toContain(id);
+    const brief = await api<{ id: string }[]>(`/api/v1/work-orders/by-project/${antenna}`, { token: admin });
+    expect(brief.body.map((row) => row.id)).toContain(id);
+
+    // The site still has a work order in qc, so project will not delete it.
+    expect((await api(`/api/v1/sites/${antennaSite}`, { method: 'DELETE', token: admin })).status).toBe(409);
   }, 60_000);
 
   it('keeps /internal endpoints off the gateway', async () => {
-    expect((await api('/api/v1/internal/templates/0192f7a0-0000-7000-8000-000000000001', { token: admin })).status).toBe(404);
+    for (const path of ['/api/v1/internal/scope', '/api/v1/internal/work-orders/usage?siteId=0192f7a0-0000-7000-8000-000000000001']) {
+      expect((await api(path, { token: admin })).status).toBe(404);
+    }
   });
 });

@@ -307,3 +307,10 @@ a.link { color: var(--blue); }
   .step { padding: 16px; }
   .wo-hero { align-items: flex-start; }
 }
+
+/* Quality & EHS: a heading with its two pages indented beneath it. */
+.nav-group { display: grid; gap: 2px; }
+.nav-item.nav-parent.open { color: #243152; font-weight: 700; }
+.nav-item.nested { min-height: 36px; margin-left: 20px; padding-left: 12px; font-size: 13px; position: relative; }
+.nav-item.nested::before { content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px; border-left: 1px solid var(--line); }
+.nav-item.nested .icon { font-size: 14px; }

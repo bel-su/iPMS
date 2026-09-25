@@ -35,15 +35,15 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 
   return (
     <main className="app-shell">
-      <Sidebar active="quality" />
+      <Sidebar active="checklists" />
       <section className="content">
         <header className="topbar">
-          <div className="crumbs"><a href="/">Workspace</a><b>/</b><span>Quality &amp; EHS</span><b>/</b><strong>Templates</strong></div>
+          <div className="crumbs"><a href="/">Workspace</a><b>/</b><a href="/quality">Quality &amp; EHS</a><b>/</b><strong>Checklist library</strong></div>
           <TopActions />
         </header>
         <div className="dashboard">
           <div className="toolbar">
-            <div><p className="eyebrow">QUALITY &amp; EHS</p><h1>Checklist templates</h1></div>
+            <div><p className="eyebrow">QUALITY &amp; EHS</p><h1>Checklist library</h1><p className="subtle">The checklist templates work orders are raised from. Publish a version to make it assignable.</p></div>
             <div className="toolbar-actions">
               <a className="ghost-button" href="/api/qc/templates/blank">Download blank workbook</a>
               {may('qc_template.import') ? <a className="ghost-button" href="/quality/templates/import">Import from Excel</a> : null}
