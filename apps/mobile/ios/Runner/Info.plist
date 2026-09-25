@@ -66,5 +66,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Authenticate with Face ID or fingerprint to quickly and securely access your iPMS field tasks.</string>
 </dict>
 </plist>

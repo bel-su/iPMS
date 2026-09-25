@@ -20,10 +20,24 @@ final selectedStatusFilterProvider =
   SelectedStatusFilterNotifier.new,
 );
 
+class TaskSearchQueryNotifier extends Notifier<String> {
+  @override
+  String build() => '';
+
+  void setQuery(String q) => state = q;
+  void clear() => state = '';
+}
+
+final taskSearchQueryProvider =
+    NotifierProvider<TaskSearchQueryNotifier, String>(
+  TaskSearchQueryNotifier.new,
+);
+
 final assignedTasksProvider = FutureProvider<List<TaskItem>>((ref) async {
   final repository = ref.watch(taskRepositoryProvider);
   final status = ref.watch(selectedStatusFilterProvider);
-  return repository.getAssignedTasks(status: status);
+  final query = ref.watch(taskSearchQueryProvider);
+  return repository.getAssignedTasks(status: status, query: query);
 });
 
 final taskDetailProvider =
@@ -31,3 +45,11 @@ final taskDetailProvider =
   final repository = ref.watch(taskRepositoryProvider);
   return repository.getTaskById(taskId);
 });
+
+final siteTasksProvider =
+    FutureProvider.family<List<TaskItem>, String>((ref, siteCode) async {
+  final repository = ref.watch(taskRepositoryProvider);
+  return repository.getAssignedTasks(siteCode: siteCode);
+});
+
+

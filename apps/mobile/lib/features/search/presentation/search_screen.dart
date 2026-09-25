@@ -205,8 +205,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               loading: () => const Center(
                 child: CircularProgressIndicator(),
               ),
-              error: (err, _) => Center(
-                child: Text('Search error: $err'),
+              error: (_, _) => Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.search_off_outlined, size: 40, color: AppColors.textSecondary),
+                    const SizedBox(height: 12),
+                    Text('No matching tasks found', style: AppTypography.titleMedium),
+                  ],
+                ),
               ),
             ),
           ),
