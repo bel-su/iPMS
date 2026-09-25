@@ -67,6 +67,51 @@ services:
       retries: 10
     restart: unless-stopped
 
+  postgres-media:
+    image: postgres:17-alpine
+    env_file:
+      - ./env/media-db.env
+    volumes:
+      - postgres-media-data:/var/lib/postgresql/data
+    ports:
+      - "${MEDIA_DB_PORT:-5437}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ipms_media -d ipms_media"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  postgres-notification:
+    image: postgres:17-alpine
+    env_file:
+      - ./env/notification-db.env
+    volumes:
+      - postgres-notification-data:/var/lib/postgresql/data
+    ports:
+      - "${NOTIFICATION_DB_PORT:-5438}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ipms_notification -d ipms_notification"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  postgres-docs:
+    image: postgres:17-alpine
+    env_file:
+      - ./env/docs-db.env
+    volumes:
+      - postgres-docs-data:/var/lib/postgresql/data
+    ports:
+      - "${DOCS_DB_PORT:-5439}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ipms_docs -d ipms_docs"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   nats:
     image: nats:2.10-alpine
     command: ["-js", "-sd", "/data", "-m", "8222"]
@@ -174,6 +219,9 @@ services:
       - ./env/project.env
     depends_on:
       postgres-project: { condition: service_healthy }
+      # Project's migrations drop the work orders qc-migrate copies out of
+      # them, so they must not run until that copy has finished.
+      qc-migrate:       { condition: service_completed_successfully }
 
   project:
     <<: *service-defaults
@@ -198,8 +246,12 @@ services:
       args: { SERVICE: qc }
     env_file:
       - ./env/qc.env
+    # Copies project's work orders into qc's tables once they exist; a no-op
+    # once project no longer holds any. See prisma/import-project-work-orders.ts.
+    command: ["sh", "-c", "pnpm exec prisma migrate deploy && pnpm exec tsx prisma/import-project-work-orders.ts"]
     depends_on:
-      postgres-qc: { condition: service_healthy }
+      postgres-qc:      { condition: service_healthy }
+      postgres-project: { condition: service_healthy }
 
   qc:
     <<: *service-defaults
@@ -215,6 +267,102 @@ services:
       redis:       { condition: service_healthy }
       qc-migrate:  { condition: service_completed_successfully }
 
+  media-migrate:
+    <<: *migrate-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      target: migrate
+      args: { SERVICE: media }
+    env_file:
+      - ./env/media.env
+    depends_on:
+      postgres-media: { condition: service_healthy }
+
+  # Postgres only: media has no EventBus and no Redis client, so it waits on
+  # neither and its env file carries no NATS_URL or REDIS_URL.
+  media:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      args: { SERVICE: media }
+    env_file:
+      - ./env/media.env
+    depends_on:
+      postgres-media: { condition: service_healthy }
+      media-migrate:  { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3006/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  notification-migrate:
+    <<: *migrate-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      target: migrate
+      args: { SERVICE: notification }
+    env_file:
+      - ./env/notification.env
+    depends_on:
+      postgres-notification: { condition: service_healthy }
+
+  # Postgres only: notification has no EventBus and no Redis client, so it waits on
+  # neither and its env file carries no NATS_URL or REDIS_URL.
+  notification:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      args: { SERVICE: notification }
+    env_file:
+      - ./env/notification.env
+    depends_on:
+      postgres-notification: { condition: service_healthy }
+      notification-migrate:  { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3007/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  docs-migrate:
+    <<: *migrate-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      target: migrate
+      args: { SERVICE: docs }
+    env_file:
+      - ./env/docs.env
+    depends_on:
+      postgres-docs: { condition: service_healthy }
+
+  # Postgres only: docs has no EventBus and no Redis client, so it waits on
+  # neither and its env file carries no NATS_URL or REDIS_URL.
+  docs:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      args: { SERVICE: docs }
+    env_file:
+      - ./env/docs.env
+    depends_on:
+      postgres-docs: { condition: service_healthy }
+      docs-migrate:  { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3008/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   gateway:
     <<: *service-defaults
     build:
@@ -226,12 +374,15 @@ services:
     ports:
       - "${GATEWAY_PORT:-3000}:3000"
     depends_on:
-      nats:    { condition: service_healthy }
-      redis:   { condition: service_healthy }
-      iam:     { condition: service_healthy }
-      audit:   { condition: service_healthy }
-      project: { condition: service_started }
-      qc:      { condition: service_started }
+      nats:         { condition: service_healthy }
+      redis:        { condition: service_healthy }
+      iam:          { condition: service_healthy }
+      audit:        { condition: service_healthy }
+      project:      { condition: service_started }
+      qc:           { condition: service_started }
+      media:        { condition: service_healthy }
+      notification: { condition: service_healthy }
+      docs:         { condition: service_healthy }
 
   web:
     restart: unless-stopped
@@ -250,6 +401,9 @@ volumes:
   postgres-audit-data:
   postgres-project-data:
   postgres-qc-data:
+  postgres-media-data:
+  postgres-notification-data:
+  postgres-docs-data:
   nats-data:
   redis-data:
   loki-data:

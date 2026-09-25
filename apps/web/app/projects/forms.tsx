@@ -2,10 +2,10 @@
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import {
-  archiveProjectAction, createMilestoneAction, createProjectAction, createSiteAction, createTaskAction,
+  archiveProjectAction, createMilestoneAction, createProjectAction, createSiteAction,
   createTaskTypeAction, deleteProjectAction, updateProjectAction, updateSiteAction,
 } from './actions';
-import { EMPTY, type FormState } from './form-state';
+import { EMPTY, type FormState } from '../lib/form-state';
 import type { ProjectDetail } from '../lib/project-api';
 
 /** Disables itself while the action runs, so a slow API cannot be double-submitted. */
@@ -113,40 +113,6 @@ export function CreateTaskTypeForm({ projectId }: { projectId: string }) {
       <label className="field">Name<input name="name" required maxLength={200} /></label>
       <label className="field">Category<input name="category" required maxLength={100} /></label>
       <SubmitButton>Add task type</SubmitButton>
-      <FormError state={state} />
-    </form>
-  );
-}
-
-export function CreateTaskForm({
-  projectId, sites, taskTypes,
-}: {
-  projectId: string;
-  sites: { id: string; siteCode: string; name: string }[];
-  taskTypes: { id: string; code: string; name: string; isActive: boolean }[];
-}) {
-  const [state, action] = useActionState(createTaskAction, EMPTY);
-  const active = taskTypes.filter((type) => type.isActive);
-  if (sites.length === 0 || active.length === 0) {
-    return <p className="form-note">Add a site and an active task type before creating tasks.</p>;
-  }
-  return (
-    <form action={action} className="inline-form">
-      <input type="hidden" name="projectId" value={projectId} />
-      <label className="field">Site
-        <select name="siteId" required defaultValue="">
-          <option value="" disabled>Choose a site</option>
-          {sites.map((site) => <option key={site.id} value={site.id}>{site.siteCode} — {site.name}</option>)}
-        </select>
-      </label>
-      <label className="field">Task type
-        <select name="taskTypeId" required defaultValue="">
-          <option value="" disabled>Choose a task type</option>
-          {active.map((type) => <option key={type.id} value={type.id}>{type.code} — {type.name}</option>)}
-        </select>
-      </label>
-      <label className="field">Title<input name="title" required maxLength={250} /></label>
-      <SubmitButton>Add task</SubmitButton>
       <FormError state={state} />
     </form>
   );

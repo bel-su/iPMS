@@ -150,3 +150,17 @@ describe('verifyToken — expiry and payload shape', () => {
     expect(payload).not.toHaveProperty('global');
   });
 });
+
+describe('the mustChangePassword claim', () => {
+  it('round-trips when set', () => {
+    const token = signToken(claims({ mustChangePassword: true }), 'access', SECRET, 900);
+    expect(verifyToken(token, SECRET, 'access').mustChangePassword).toBe(true);
+  });
+
+  // Tokens minted before this field existed must keep verifying, so it is
+  // absent rather than false — and an ordinary token's bytes are unchanged.
+  it('is absent, not false, when it was never set', () => {
+    const token = signToken(claims(), 'access', SECRET, 900);
+    expect(verifyToken(token, SECRET, 'access').mustChangePassword).toBeUndefined();
+  });
+});

@@ -1,121 +1,236 @@
 generator client {
   provider = "prisma-client-js"
-  output = "../node_modules/@prisma-clients/qc"
+  output   = "../node_modules/@prisma-clients/qc"
 }
+
 datasource db {
   provider = "postgresql"
 }
 
 model ChecklistTemplate {
-  id String @id @db.Uuid
-  projectId String @db.Uuid
-  code String @db.VarChar(50)
-  name String @db.VarChar(250)
-  category String @db.VarChar(20)
-  version Int
-  status String @default("DRAFT") @db.VarChar(20)
-  publishedAt DateTime? @db.Timestamptz(6)
-  createdBy String @db.Uuid
-  source String @default("WEB") @db.VarChar(20)
-  sections ChecklistSection[]
-  submissions Submission[]
-  @@unique([projectId,code,version])
+  id               String            @id @db.Uuid
+  code             String            @unique @db.VarChar(50)
+  name             String            @db.VarChar(250)
+  category         String            @db.VarChar(20)
+  currentVersionId String?           @unique @db.Uuid
+  disabledAt       DateTime?         @db.Timestamptz(6)
+  createdBy        String            @db.Uuid
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(6)
+  currentVersion   TemplateVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions         TemplateVersion[] @relation("TemplateVersions")
+  submissions      Submission[]
+  workOrders       WorkOrder[]
+
   @@map("checklist_template")
 }
+
+model TemplateVersion {
+  id          String             @id @db.Uuid
+  templateId  String             @db.Uuid
+  version     Int
+  status      String             @db.VarChar(20)
+  revision    Int                @default(1)
+  source      String             @db.VarChar(20)
+  createdBy   String             @db.Uuid
+  createdAt   DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime           @updatedAt @db.Timestamptz(6)
+  publishedAt DateTime?          @db.Timestamptz(6)
+  publishedBy String?            @db.Uuid
+  retiredAt   DateTime?          @db.Timestamptz(6)
+  template    ChecklistTemplate  @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
+  currentOf   ChecklistTemplate? @relation("CurrentVersion")
+  sections    ChecklistSection[]
+  submissions Submission[]
+
+  @@unique([templateId, version])
+  @@map("template_version")
+}
+
 model ChecklistSection {
-  id String @id @db.Uuid
-  templateId String @db.Uuid
-  number String @db.VarChar(30)
-  title String @db.VarChar(300)
-  order Int
-  template ChecklistTemplate @relation(fields:[templateId],references:[id],onDelete:Cascade)
-  items ChecklistItem[]
-  @@unique([templateId,number])
+  id        String          @id @db.Uuid
+  versionId String          @db.Uuid
+  number    String          @db.VarChar(30)
+  title     String          @db.VarChar(300)
+  order     Int
+  version   TemplateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  items     ChecklistItem[]
+
+  @@unique([versionId, number])
   @@map("checklist_section")
 }
+
 model ChecklistItem {
-  id String @id @db.Uuid
-  sectionId String @db.Uuid
-  number String @db.VarChar(30)
-  requirementText String @db.Text
-  severity String @db.VarChar(20)
-  responseType String @db.VarChar(20)
-  requiresPhoto Boolean @default(false)
-  minPhotos Int @default(0)
-  maxPhotos Int @default(0)
-  allowsNa Boolean @default(false)
-  isRequired Boolean @default(true)
-  guidanceText String? @db.Text
-  order Int
-  section ChecklistSection @relation(fields:[sectionId],references:[id],onDelete:Cascade)
-  responses ItemResponse[]
-  @@unique([sectionId,number])
+  id              String           @id @db.Uuid
+  sectionId       String           @db.Uuid
+  number          String           @db.VarChar(30)
+  requirementText String           @db.Text
+  severity        String           @db.VarChar(20)
+  responseType    String           @db.VarChar(20)
+  selectOptions   String[]         @default([])
+  minPhotos       Int              @default(0)
+  maxPhotos       Int              @default(0)
+  allowsNa        Boolean          @default(false)
+  isRequired      Boolean          @default(true)
+  guidanceText    String?          @db.Text
+  order           Int
+  section         ChecklistSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  responses       ItemResponse[]
+
+  @@unique([sectionId, number])
   @@map("checklist_item")
 }
+
 model Submission {
-  id String @id @db.Uuid
-  taskId String @db.Uuid
-  siteId String @db.Uuid
-  projectId String @db.Uuid
-  templateId String @db.Uuid
-  templateVersion Int
-  attemptNo Int
-  status String @db.VarChar(30)
-  overallVerdict String? @db.VarChar(10)
-  submittedBy String @db.Uuid
-  submittedAt DateTime? @db.Timestamptz(6)
-  reviewedBy String? @db.Uuid
-  reviewedAt DateTime? @db.Timestamptz(6)
-  reviewComment String? @db.Text
-  integrityHash String @db.VarChar(64)
-  idempotencyKey String @unique @db.VarChar(255)
-  deviceId String? @db.VarChar(255)
-  latitude Decimal? @db.Decimal(10,7)
-  longitude Decimal? @db.Decimal(10,7)
+  id                String            @id @db.Uuid
+  /// The work order this submission completes. Named for the task it was
+  /// before work orders moved here; ids were kept across that move.
+  taskId            String            @db.Uuid
+  siteId            String            @db.Uuid
+  projectId         String            @db.Uuid
+  templateId        String            @db.Uuid
+  templateVersionId String            @db.Uuid
+  templateVersion   Int
+  attemptNo         Int
+  status            String            @db.VarChar(30)
+  overallVerdict    String?           @db.VarChar(10)
+  submittedBy       String            @db.Uuid
+  submittedAt       DateTime?         @db.Timestamptz(6)
+  reviewedBy        String?           @db.Uuid
+  reviewedAt        DateTime?         @db.Timestamptz(6)
+  reviewComment     String?           @db.Text
+  integrityHash     String            @db.VarChar(64)
+  idempotencyKey    String            @unique @db.VarChar(255)
+  deviceId          String?           @db.VarChar(255)
+  latitude          Decimal?          @db.Decimal(10, 7)
+  longitude         Decimal?          @db.Decimal(10, 7)
   distanceFromSiteM Int?
-  geofenceStatus String @default("NOT_APPLICABLE") @db.VarChar(20)
-  template ChecklistTemplate @relation(fields:[templateId],references:[id])
-  responses ItemResponse[]
-  decisions ReviewDecision[]
-  @@unique([taskId,attemptNo])
+  geofenceStatus    String            @default("NOT_APPLICABLE") @db.VarChar(20)
+  template          ChecklistTemplate @relation(fields: [templateId], references: [id])
+  version           TemplateVersion   @relation(fields: [templateVersionId], references: [id])
+  responses         ItemResponse[]
+  decisions         ReviewDecision[]
+
+  @@unique([taskId, attemptNo])
   @@map("submission")
 }
+
 model ItemResponse {
-  id String @id @db.Uuid
-  submissionId String @db.Uuid
-  itemId String @db.Uuid
-  selfCheckResult String @db.VarChar(10)
-  selfCheckDescription String? @db.Text
-  textValue String? @db.Text
-  numberValue Decimal? @db.Decimal(18,4)
-  booleanValue Boolean?
-  selectValue String? @db.VarChar(500)
-  reviewResult String @default("PENDING") @db.VarChar(20)
-  reviewDescription String? @db.Text
-  reviewedBy String? @db.Uuid
-  reviewedAt DateTime? @db.Timestamptz(6)
-  submission Submission @relation(fields:[submissionId],references:[id],onDelete:Cascade)
-  item ChecklistItem @relation(fields:[itemId],references:[id])
-  photos ItemPhoto[]
-  @@unique([submissionId,itemId])
+  id                   String        @id @db.Uuid
+  submissionId         String        @db.Uuid
+  itemId               String        @db.Uuid
+  selfCheckResult      String        @db.VarChar(10)
+  selfCheckDescription String?       @db.Text
+  textValue            String?       @db.Text
+  numberValue          Decimal?      @db.Decimal(18, 4)
+  booleanValue         Boolean?
+  selectValue          String?       @db.VarChar(500)
+  reviewResult         String        @default("PENDING") @db.VarChar(20)
+  reviewDescription    String?       @db.Text
+  reviewedBy           String?       @db.Uuid
+  reviewedAt           DateTime?     @db.Timestamptz(6)
+  submission           Submission    @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  item                 ChecklistItem @relation(fields: [itemId], references: [id])
+  photos               ItemPhoto[]
+
+  @@unique([submissionId, itemId])
   @@map("item_response")
 }
+
 model ItemPhoto {
-  id String @id @db.Uuid
-  itemResponseId String @db.Uuid
-  mediaId String @db.Uuid
-  sequence Int
-  itemResponse ItemResponse @relation(fields:[itemResponseId],references:[id],onDelete:Cascade)
-  @@unique([itemResponseId,sequence])
+  id             String       @id @db.Uuid
+  itemResponseId String       @db.Uuid
+  mediaId        String       @db.Uuid
+  sequence       Int
+  itemResponse   ItemResponse @relation(fields: [itemResponseId], references: [id], onDelete: Cascade)
+
+  @@unique([itemResponseId, sequence])
   @@map("item_photo")
 }
+
 model ReviewDecision {
-  id String @id @db.Uuid
-  submissionId String @db.Uuid
-  reviewerId String @db.Uuid
-  decision String @db.VarChar(30)
-  comment String? @db.Text
-  decidedAt DateTime @default(now()) @db.Timestamptz(6)
-  submission Submission @relation(fields:[submissionId],references:[id],onDelete:Cascade)
+  id           String     @id @db.Uuid
+  submissionId String     @db.Uuid
+  reviewerId   String     @db.Uuid
+  decision     String     @db.VarChar(30)
+  comment      String?    @db.Text
+  decidedAt    DateTime   @default(now()) @db.Timestamptz(6)
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
   @@map("review_decision")
+}
+
+/// A checklist template assigned to one site of a project, for one person to
+/// complete by a date.
+///
+/// The site and project live in the project service. Their codes and names are
+/// copied here when the work order is raised, so the queue can list, search and
+/// scope work orders without a call per row; `projectId` and `siteId` are what
+/// scope filters on, exactly as project's own rows do.
+///
+/// Its status moves in the same transaction as the submission or review that
+/// moves it, so there is no window where the two disagree.
+model WorkOrder {
+  id                  String           @id @db.Uuid
+  projectId           String           @db.Uuid
+  projectCode         String           @db.VarChar(50)
+  projectName         String           @db.VarChar(200)
+  siteId              String           @db.Uuid
+  siteCode            String           @db.VarChar(50)
+  siteName            String           @db.VarChar(200)
+  siteCity            String?          @db.VarChar(100)
+  siteArea            String?          @db.VarChar(100)
+  templateId          String           @db.Uuid
+  /// The template's name when the work order was raised.
+  templateName        String           @db.VarChar(250)
+  /// QUALITY_SELF_CHECK | QUALITY_SPOT_CHECK | EHS_SELF_CHECK | EHS_SPOT_CHECK
+  workOrderType       String           @db.VarChar(30)
+  title               String           @db.VarChar(250)
+  /// NOT_STARTED | ONGOING | REVIEWING | RECTIFYING | COMPLETED | CANCELLED
+  status              String           @default("NOT_STARTED") @db.VarChar(30)
+  assigneeId          String           @db.Uuid
+  plannedCompletionAt DateTime         @db.Timestamptz(6)
+  actualCompletionAt  DateTime?        @db.Timestamptz(6)
+  currentSubmissionId String?          @db.Uuid
+  currentAttemptNo    Int?
+  cancelReason        String?          @db.VarChar(500)
+  createdBy           String           @db.Uuid
+  createdAt           DateTime         @default(now()) @db.Timestamptz(6)
+  template            ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  events              WorkOrderEvent[]
+
+  @@index([projectId, status])
+  @@index([siteId])
+  @@index([assigneeId])
+  @@index([plannedCompletionAt])
+  @@map("work_order")
+}
+
+/// What happened to a work order, for its timeline. Written in the same
+/// transaction as the change it records.
+model WorkOrderEvent {
+  id          String    @id @db.Uuid
+  workOrderId String    @db.Uuid
+  /// CREATED | REASSIGNED | RESCHEDULED | CANCELLED | SUBMITTED | APPROVED | REJECTED
+  kind        String    @db.VarChar(20)
+  at          DateTime  @db.Timestamptz(6)
+  actorId     String?   @db.Uuid
+  detail      Json      @default("{}")
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId, at])
+  @@map("work_order_event")
+}
+
+model OutboxEvent {
+  id            String    @id @db.Uuid
+  subject       String    @db.VarChar(100)
+  payload       Json
+  correlationId String    @db.VarChar(64)
+  actorId       String?   @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  publishedAt   DateTime? @db.Timestamptz(6)
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_event")
 }

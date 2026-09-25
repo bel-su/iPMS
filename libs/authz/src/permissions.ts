@@ -25,6 +25,12 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   def('scope', 'view', 'View project and site access'),
   def('scope', 'grant', 'Grant project or site access', ['scope.view', 'user.view']),
   def('scope', 'revoke', 'Revoke project or site access', ['scope.view', 'user.view']),
+  // Separate from scope.grant on purpose. Global reach is qualitatively
+  // different from access to one project: it is the largest grant the system
+  // can make, and an administrator trusted to scope a PM onto a project is not
+  // thereby trusted to hand out the whole platform.
+  def('scope', 'grant_global', 'Grant global scope', ['scope.view', 'scope.grant', 'user.view']),
+  def('scope', 'revoke_global', 'Revoke global scope', ['scope.view', 'scope.revoke', 'user.view']),
   def('override', 'view', 'View permission overrides'),
   def('override', 'create', 'Create permission overrides', ['override.view', 'permission.view']),
   def('override', 'revoke', 'Revoke permission overrides', ['override.view']),
@@ -75,6 +81,21 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   // Audit — deliberately no update or delete. The ledger is append-only.
   def('audit', 'view', 'View the audit ledger'),
   def('audit', 'verify', 'Verify audit chain integrity', ['audit.view']),
+
+  // DEFERRED — no `notification.*` or `docs.*` permissions (spec 2026-09-20 §6.4).
+  //
+  // `media` needs none added: `qc_evidence.upload` and `qc_evidence.export`
+  // above are already its permissions.
+  //
+  // A permission code is not free. Each one must be seeded, considered for
+  // every system role in apps/iam/prisma/seed.ts, and carried in the JWT
+  // `permissions` claim of every user who holds it. Codes that guard nothing
+  // dilute the catalog the access simulator reports against, and invite roles
+  // to be granted authority over behaviour that has not been designed.
+  //
+  // Define one in the same change as the `@RequirePermission` that uses it and
+  // the SYSTEM_ROLES grant that confers it — never before, so that the catalog
+  // always describes real authority.
 ] as const;
 
 export const PERMISSION_CODES: ReadonlySet<string> = new Set(PERMISSIONS.map((p) => p.code));

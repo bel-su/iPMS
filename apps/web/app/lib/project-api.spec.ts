@@ -45,6 +45,7 @@ const CALLS: { name: string; call: () => Promise<unknown>; path: string; method?
     path: '/api/v1/tasks/task-1/assign', method: 'POST', json: { assigneeId: 'u-1' },
   },
   { name: 'listTasks', call: () => api.listTasks('p-1'), path: '/api/v1/projects/p-1/tasks' },
+  { name: 'listAssignable', call: () => api.listAssignable('p-1'), path: '/api/v1/projects/p-1/assignable' },
   {
     name: 'updateSite', call: () => api.updateSite('s-1', { name: 'Renamed' }),
     path: '/api/v1/sites/s-1', method: 'PATCH', json: { name: 'Renamed' },

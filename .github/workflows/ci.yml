@@ -29,6 +29,21 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Every service imports its own generated Prisma client from
+      # `@prisma-clients/<service>`, which is written into that app's
+      # node_modules and is not committed. Without this step nothing that
+      # imports one can typecheck, build or run its tests -- CI was green only
+      # when `nx affected` happened to exclude every such project, which made a
+      # passing run mean very little.
+      #
+      # DATABASE_URL is required because each prisma.config.ts reads it, but its
+      # value is irrelevant here: `generate` emits types and never connects.
+      - name: Generate Prisma clients
+        run: |
+          for service in audit docs iam media notification project qc; do
+            (cd "apps/$service" && DATABASE_URL=postgresql://codegen:codegen@127.0.0.1:5432/codegen pnpm exec prisma generate)
+          done
+
       - name: Derive affected SHAs
         uses: nrwl/nx-set-shas@v4
 

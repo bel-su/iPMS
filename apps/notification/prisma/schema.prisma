@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+  // Each service must generate into its own location — see the note in
+  // apps/iam/prisma/schema.prisma for what happens when two services share one.
+  output = "../node_modules/@prisma-clients/notification"
+}
+datasource db {
+  provider = "postgresql"
+}
+
+model Notification {
+  id String @id @db.Uuid
+  recipientId String @db.Uuid
+  type String @db.VarChar(50)
+  title String @db.VarChar(250)
+  body String
+  actionUrl String? @db.VarChar(500)
+  isRead Boolean @default(false)
+  readAt DateTime? @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  // The only query the in-app notification list will ever issue.
+  @@index([recipientId, isRead, createdAt])
+  @@map("notification")
+}
+
+model DevicePushToken {
+  id String @id @db.Uuid
+  userId String @db.Uuid
+  // Unique: the same device registering twice must update its row, not
+  // accumulate rows that each earn a duplicate push.
+  token String @unique @db.VarChar(500)
+  platform String @db.VarChar(20)
+  isActive Boolean @default(true)
+
+  @@index([userId, isActive])
+  @@map("device_push_token")
+}

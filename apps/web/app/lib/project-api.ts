@@ -82,12 +82,16 @@ export interface Milestone {
   kind: 'PROJECT' | 'CONTRACT'; sequence: number; targetDate: string | null;
 }
 
+/** Planned work of one of the project's task types. Work orders — checklists assigned to sites — are qc's; see work-order-api. */
 export interface Task {
   id: string; projectId: string; siteId: string; taskTypeId: string; templateId: string | null;
   title: string; status: TaskStatus; assigneeId: string | null;
   plannedCompletionAt: string | null; actualCompletionAt: string | null;
-  currentSubmissionId: string | null; origin: 'PLANNED' | 'AD_HOC'; createdBy: string;
+  origin: 'PLANNED' | 'AD_HOC'; createdBy: string; createdAt: string;
 }
+
+/** Who may be made responsible for work in a project: the whole project, or only the sites listed. */
+export interface AssignableUser { userId: string; wholeProject: boolean; siteIds: string[] }
 
 /** `listProjects` counts sites and tasks rather than returning them. */
 export type ProjectListEntry = Project & { _count: { sites: number; tasks: number } };
@@ -112,8 +116,6 @@ export interface DashboardProject {
 export interface ProjectDashboard {
   activeProjectCount: number;
   sitesInDelivery: number;
-  pendingReviews: number;
-  rectifyingTasks: number;
   projects: DashboardProject[];
 }
 
@@ -163,6 +165,11 @@ export async function assignTask(taskId: string, assignment: AssignTaskDto): Pro
 
 export async function listTasks(projectId: string, filter: { siteId?: string; status?: TaskStatus } = {}): Promise<ApiResult<Task[]>> {
   return authFetch<Task[]>(`/api/v1/projects/${projectId}/tasks`, { query: filter });
+}
+
+/** Who can be given work in this project — project's to answer, since it holds the replicated scope. */
+export async function listAssignable(projectId: string): Promise<ApiResult<AssignableUser[]>> {
+  return authFetch<AssignableUser[]>(`/api/v1/projects/${projectId}/assignable`);
 }
 
 export async function updateSite(id: string, changes: UpdateSiteDto): Promise<ApiResult<Site>> {

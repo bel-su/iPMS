@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+  // Each service must generate into its own location — see the note in
+  // apps/iam/prisma/schema.prisma for what happens when two services share one.
+  output = "../node_modules/@prisma-clients/docs"
+}
+datasource db {
+  provider = "postgresql"
+}
+
+model Document {
+  id String @id @db.Uuid
+  // The addressable identity of a document, not a label.
+  slug String @unique @db.VarChar(200)
+  title String @db.VarChar(250)
+  category String @db.VarChar(100)
+  summary String? @db.VarChar(500)
+  bodyMd String
+  version Int @default(1)
+  isPublished Boolean @default(false)
+  updatedBy String @db.Uuid
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  versions DocumentVersion[]
+
+  @@index([category, isPublished])
+  @@map("document")
+}
+
+model DocumentVersion {
+  id String @id @db.Uuid
+  documentId String @db.Uuid
+  version Int
+  bodyMd String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@map("document_version")
+}

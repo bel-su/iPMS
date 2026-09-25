@@ -91,6 +91,8 @@ model MilestoneRequirement {
   @@id([milestoneId,taskTypeId])
   @@map("milestone_requirement")
 }
+/// Planned work on a site, of one of the project's task types. Work orders —
+/// checklists assigned to sites — are qc's, not tasks.
 model Task {
   id String @id @db.Uuid
   projectId String @db.Uuid
@@ -102,13 +104,75 @@ model Task {
   assigneeId String? @db.Uuid
   plannedCompletionAt DateTime? @db.Timestamptz(6)
   actualCompletionAt DateTime? @db.Timestamptz(6)
-  currentSubmissionId String? @db.Uuid
   origin String @db.VarChar(20)
   createdBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
   project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
   site Site @relation(fields:[siteId],references:[id],onDelete:Cascade)
   taskType TaskType @relation(fields:[taskTypeId],references:[id],onDelete:Restrict)
   @@index([projectId,status])
+  @@index([plannedCompletionAt])
   @@index([siteId])
   @@map("task")
+}
+
+/// Local projection of iam's authoritative scope grants, replicated over
+/// JetStream on the `project-scope-cache` durable that STREAMS.IAM already
+/// declared.
+///
+/// Written ONLY by the scope consumer, never by a request handler. A handler
+/// that writes here has invented authority iam did not grant, and the two will
+/// disagree about the same user until someone notices -- which, for an
+/// authorization table, means until someone sees data they should not have.
+///
+/// Uniqueness is enforced by three partial indexes in migration.sql, not by an
+/// `@@unique` here: PostgreSQL treats NULL as never equal to NULL in a unique
+/// index, so a composite over the nullable columns would silently accept
+/// unlimited duplicate global and project-scoped rows. Declaring an `@@unique`
+/// as well would make `prisma migrate dev` try to "correct" the partial
+/// indexes away. Same hazard, same fix as iam's UserRole.
+model UserScope {
+  id        String   @id @db.Uuid
+  userId    String   @db.Uuid
+  level     String   @db.VarChar(10)
+  projectId String?  @db.Uuid
+  siteId    String?  @db.Uuid
+  grantedAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("user_scope")
+}
+
+/// Records that the scope projection has been populated at least once.
+///
+/// Distinguishes "this user genuinely has no scope" from "nothing has been
+/// replicated yet". Both look like an empty user_scope table and they demand
+/// opposite behaviour: the first denies correctly, the second must trigger a
+/// rebuild.
+model ProjectionWatermark {
+  name      String   @id @db.VarChar(50)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("projection_watermark")
+}
+
+/// Embedded verbatim from OUTBOX_MODEL_SQL in @ipms/persistence, as every
+/// service that publishes does.
+///
+/// A mutation writes its audit row in the same transaction as the change, so a
+/// crash between commit and publish cannot lose it. Publishing to NATS directly
+/// from a service method would: the process dies after the write lands and the
+/// ledger never hears about a mutation that happened, which is the one thing an
+/// append-only ledger must never do.
+model OutboxEvent {
+  id            String    @id @db.Uuid
+  subject       String    @db.VarChar(100)
+  payload       Json
+  correlationId String    @db.VarChar(64)
+  actorId       String?   @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  publishedAt   DateTime? @db.Timestamptz(6)
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_event")
 }

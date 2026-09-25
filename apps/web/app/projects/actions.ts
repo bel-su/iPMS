@@ -1,13 +1,14 @@
 'use server';
 import { redirect } from 'next/navigation';
 import {
-  createMilestone, createProject, createSite, createTask, createTaskType,
-  deleteMilestone, deleteSite, deleteTask, deleteTaskType,
-  archiveProject, deleteProject, updateMilestone, updateProject, updateSite, updateTask, updateTaskType,
-  type ProjectStatus, type SiteStatus, type TaskStatus,
+  createMilestone, createProject, createSite, createTaskType,
+  deleteMilestone, deleteSite, deleteTaskType,
+  archiveProject, deleteProject, updateMilestone, updateProject, updateSite, updateTaskType,
+  type ProjectStatus, type SiteStatus,
 } from '../lib/project-api';
-import { type FormState } from './form-state';
-import { clearable, optional, settle } from './settle';
+import { type FormState } from '../lib/form-state';
+import { clearable, optional, settle } from '../lib/settle';
+import { projectPages } from './[id]/paths';
 
 /**
  * One Server Action per mutation.
@@ -47,7 +48,7 @@ export async function createProjectAction(_previous: FormState, form: FormData):
   return state;
 }
 
-/** Every sub-resource action revalidates its project's page, which is the only page that renders it. */
+/** The project's landing page, where project-level actions return to. */
 const page = (projectId: string) => `/projects/${projectId}`;
 
 /**
@@ -100,7 +101,7 @@ export async function createSiteAction(_previous: FormState, form: FormData): Pr
     ...(regionName === undefined ? {} : { regionName }),
     ...(city === undefined ? {} : { city }),
     ...geofence.fields,
-  }), page(projectId));
+  }), projectPages(projectId));
 }
 
 /**
@@ -123,14 +124,14 @@ export async function updateSiteAction(_previous: FormState, form: FormData): Pr
     ...clearable(form, 'regionName'),
     ...clearable(form, 'city'),
     ...geofence.fields,
-  }), page(projectId));
+  }), projectPages(projectId));
   if (state.error) return state;
-  redirect(`/projects/${projectId}#sites`);
+  redirect(`/projects/${projectId}/sites`);
 }
 
 export async function deleteSiteAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
-  return settle(await deleteSite(String(form.get('siteId'))), page(projectId));
+  return settle(await deleteSite(String(form.get('siteId'))), projectPages(projectId));
 }
 
 export async function createTaskTypeAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -139,7 +140,7 @@ export async function createTaskTypeAction(_previous: FormState, form: FormData)
   const name = optional(form, 'name');
   const category = optional(form, 'category');
   if (!code || !name || !category) return { error: 'A code, a name and a category are required.' };
-  return settle(await createTaskType(projectId, { code, name, category }), page(projectId));
+  return settle(await createTaskType(projectId, { code, name, category }), projectPages(projectId));
 }
 
 export async function updateTaskTypeAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -149,12 +150,12 @@ export async function updateTaskTypeAction(_previous: FormState, form: FormData)
     ...(name === undefined ? {} : { name }),
     // An unchecked checkbox sends nothing, which is how the form says "retired".
     isActive: form.get('isActive') === 'on',
-  }), page(projectId));
+  }), projectPages(projectId));
 }
 
 export async function deleteTaskTypeAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
-  return settle(await deleteTaskType(String(form.get('taskTypeId'))), page(projectId));
+  return settle(await deleteTaskType(String(form.get('taskTypeId'))), projectPages(projectId));
 }
 
 export async function createMilestoneAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -167,7 +168,7 @@ export async function createMilestoneAction(_previous: FormState, form: FormData
     kind: (optional(form, 'kind') ?? 'PROJECT') as 'PROJECT' | 'CONTRACT',
     sequence: Number(optional(form, 'sequence') ?? 0),
     taskTypeIds: form.getAll('taskTypeIds').map(String),
-  }), page(projectId));
+  }), projectPages(projectId));
 }
 
 export async function updateMilestoneAction(_previous: FormState, form: FormData): Promise<FormState> {
@@ -176,58 +177,55 @@ export async function updateMilestoneAction(_previous: FormState, form: FormData
   return settle(await updateMilestone(String(form.get('milestoneId')), {
     ...(name === undefined ? {} : { name }),
     taskTypeIds: form.getAll('taskTypeIds').map(String),
-  }), page(projectId));
+  }), projectPages(projectId));
 }
 
 export async function deleteMilestoneAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
-  return settle(await deleteMilestone(String(form.get('milestoneId'))), page(projectId));
+  return settle(await deleteMilestone(String(form.get('milestoneId'))), projectPages(projectId));
 }
 
-export async function createTaskAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const projectId = String(form.get('projectId'));
-  const siteId = optional(form, 'siteId');
-  const taskTypeId = optional(form, 'taskTypeId');
-  const title = optional(form, 'title');
-  if (!siteId || !taskTypeId || !title) return { error: 'A site, a task type and a title are required.' };
-  return settle(await createTask(projectId, { siteId, taskTypeId, title, origin: 'AD_HOC' }), page(projectId));
-}
+/**
+ * Every page a project's status is rendered on.
+ *
+ * Unlike the sub-resources above, a project is not shown on its own page
+ * alone: the status appears as the list badge, as the detail header, and as
+ * the edit form's `<select>`. `revalidatePath` invalidates only the exact path
+ * it is given, so all three are named here. The edit page matters most — it is
+ * the page these two actions are submitted from, and an uncontrolled `<select>`
+ * re-applies whichever `defaultValue` the refreshed payload carries, so leaving
+ * it stale made a saved status visibly snap back to the previous one.
+ */
+const statusPages = (projectId: string) => [...projectPages(projectId), `${page(projectId)}/edit`, '/projects'];
 
-export async function updateTaskAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const projectId = String(form.get('projectId'));
-  const title = optional(form, 'title');
-  const status = optional(form, 'status');
-  const assignee = optional(form, 'assigneeId');
-  return settle(await updateTask(String(form.get('taskId')), {
-    ...(title === undefined ? {} : { title }),
-    ...(status === undefined ? {} : { status: status as TaskStatus }),
-    // An empty assignee field means "unassign", which is null rather than absent.
-    ...(form.has('assigneeId') ? { assigneeId: assignee ?? null } : {}),
-  }), page(projectId));
-}
-
-export async function deleteTaskAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const projectId = String(form.get('projectId'));
-  return settle(await deleteTask(String(form.get('taskId'))), page(projectId));
-}
-
+/**
+ * On success this returns to the project page rather than staying on the form,
+ * for the reason `updateSiteAction` does: `FormState` carries an error and
+ * nothing else, so the rendered project — with its new status — is the only
+ * acknowledgement a save can give. It also unmounts the edit form, which is
+ * what puts the `<select>` beyond doubt.
+ */
 export async function updateProjectAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
   const name = optional(form, 'name');
   const clientName = optional(form, 'clientName');
   const phase = optional(form, 'phase');
   const status = optional(form, 'status');
-  return settle(await updateProject(projectId, {
+  const state = await settle(await updateProject(projectId, {
     ...(name === undefined ? {} : { name }),
     ...(clientName === undefined ? {} : { clientName }),
     ...(phase === undefined ? {} : { phase }),
     ...(status === undefined ? {} : { status: status as ProjectStatus }),
-  }), page(projectId));
+  }), statusPages(projectId));
+  if (state.error) return state;
+  redirect(page(projectId));
 }
 
 export async function archiveProjectAction(_previous: FormState, form: FormData): Promise<FormState> {
   const projectId = String(form.get('projectId'));
-  return settle(await archiveProject(projectId), page(projectId));
+  const state = await settle(await archiveProject(projectId), statusPages(projectId));
+  if (state.error) return state;
+  redirect(page(projectId));
 }
 
 /**

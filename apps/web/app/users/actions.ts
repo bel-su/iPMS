@@ -1,0 +1,129 @@
+'use server';
+import { redirect } from 'next/navigation';
+import {
+  changePassword, createUser, deactivateUser, reactivateUser,
+  resetUserPassword, setUserRoles, updateUser,
+} from '../lib/user-api';
+import { type FormState } from '../lib/form-state';
+import { clearable, optional, settle } from '../lib/settle';
+
+/**
+ * One Server Action per mutation.
+ *
+ * They run on the server, so they reach `authFetch` and its http-only cookie
+ * directly and the forms they back work without client JavaScript. The checks
+ * below duplicate rules the service enforces anyway: a round trip to be told
+ * "the two passwords do not match" is a worse answer than an immediate one.
+ */
+
+/** Matches `NewPasswordSchema` in @ipms/contracts. Keep the two in step. */
+const MIN_PASSWORD = 12;
+
+/** Both password forms take the value twice; neither should reach the API disagreeing. */
+function readNewPassword(form: FormData): { password: string } | { error: string } {
+  const password = optional(form, 'password') ?? optional(form, 'newPassword');
+  const confirmation = optional(form, 'confirmPassword');
+  if (!password) return { error: 'A password is required.' };
+  if (password.length < MIN_PASSWORD) return { error: `The password must be at least ${MIN_PASSWORD} characters.` };
+  if (password !== confirmation) return { error: 'The two passwords do not match.' };
+  return { password };
+}
+
+/** A user's name is rendered on their own page and in the list, and both must refresh. */
+const pages = (userId: string) => [`/users/${userId}`, '/users'];
+
+export async function createUserAction(_previous: FormState, form: FormData): Promise<FormState> {
+  const username = optional(form, 'username');
+  const email = optional(form, 'email');
+  const fullName = optional(form, 'fullName');
+  if (!username || !email || !fullName) {
+    return { error: 'A username, an email address and a full name are required.' };
+  }
+
+  const password = readNewPassword(form);
+  if ('error' in password) return { error: password.error };
+
+  const employeeCode = optional(form, 'employeeCode');
+  const result = await createUser({
+    username, email, fullName, password: password.password,
+    // An unchecked box sends nothing, so this is the empty set when no role
+    // was picked — which the API accepts and the service treats as "no roles".
+    roleCodes: form.getAll('roleCodes').map(String),
+    ...(employeeCode === undefined ? {} : { employeeCode }),
+  });
+
+  const state = await settle(result, '/users');
+  if (state.error) return state;
+  if (result.state === 'ready') redirect(`/users/${result.data.id}`);
+  return state;
+}
+
+/**
+ * Every field arrives on every submit, so an empty one is a deliberate clear
+ * rather than a field the user skipped — hence `clearable` for the optional
+ * employee code. On success it returns to the detail page: `FormState` carries
+ * an error and nothing else, so the re-rendered profile is the only
+ * acknowledgement a save can give.
+ */
+export async function updateUserAction(_previous: FormState, form: FormData): Promise<FormState> {
+  const userId = String(form.get('userId'));
+  const fullName = optional(form, 'fullName');
+  const email = optional(form, 'email');
+  if (!fullName || !email) return { error: 'A full name and an email address are required.' };
+
+  const state = await settle(await updateUser(userId, {
+    fullName, email, ...clearable(form, 'employeeCode'),
+  }), pages(userId));
+  if (state.error) return state;
+  redirect(`/users/${userId}`);
+}
+
+export async function setUserRolesAction(_previous: FormState, form: FormData): Promise<FormState> {
+  const userId = String(form.get('userId'));
+  return settle(await setUserRoles(userId, {
+    roleCodes: form.getAll('roleCodes').map(String),
+  }), pages(userId));
+}
+
+export async function deactivateUserAction(_previous: FormState, form: FormData): Promise<FormState> {
+  const userId = String(form.get('userId'));
+  return settle(await deactivateUser(userId), pages(userId));
+}
+
+export async function reactivateUserAction(_previous: FormState, form: FormData): Promise<FormState> {
+  const userId = String(form.get('userId'));
+  return settle(await reactivateUser(userId), pages(userId));
+}
+
+export async function resetUserPasswordAction(_previous: FormState, form: FormData): Promise<FormState> {
+  const userId = String(form.get('userId'));
+  const password = readNewPassword(form);
+  if ('error' in password) return { error: password.error };
+  return settle(await resetUserPassword(userId, { password: password.password }), pages(userId));
+}
+
+/**
+ * Self-service, and the last thing this session does.
+ *
+ * The change bumps `tokenVersion`, so the cookie in this browser is dead by the
+ * time the call returns — there is no authenticated page left to land on, and
+ * signing in again is what hands the user a token carrying their real
+ * permissions for the first time.
+ */
+export async function changePasswordAction(_previous: FormState, form: FormData): Promise<FormState> {
+  const currentPassword = optional(form, 'currentPassword');
+  if (!currentPassword) return { error: 'Enter your current password.' };
+
+  const password = readNewPassword(form);
+  if ('error' in password) return { error: password.error };
+  if (password.password === currentPassword) {
+    return { error: 'The new password must be different from the current one.' };
+  }
+
+  const state = await settle(
+    await changePassword({ currentPassword, newPassword: password.password }),
+    '/users',
+  );
+  if (state.error) return state;
+  redirect('/login?changed=1');
+}

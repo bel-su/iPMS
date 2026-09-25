@@ -19,6 +19,9 @@ describe('permissions on the destructive routes', () => {
     ['removeMilestone', 'milestone.update'],
     ['removeTask', 'task.delete'],
     ['tasks', 'task.view'],
+    ['internalScope', 'task.view'],
+    ['siteRefs', 'site.view'],
+    ['assignable', 'task.assign'],
   ];
 
   for (const [method, permission] of EXPECTED) {
@@ -33,7 +36,8 @@ describe('id parsing', () => {
     const service = { deleteProject: vi.fn() };
     // The import service is irrelevant to id parsing, but the constructor takes it.
     const controller = new ProjectController(service as unknown as ProjectService, {} as unknown as SiteImportService);
-    expect(() => controller.remove('not-a-uuid')).toThrow();
+    const scope = { global: true, projectIds: [], siteIds: [] };
+    expect(() => controller.remove(scope, 'not-a-uuid', { user: { id: 'actor' } } as never)).toThrow();
     expect(service.deleteProject).not.toHaveBeenCalled();
   });
 });

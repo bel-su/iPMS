@@ -7,7 +7,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 // `@prisma/client` package — see the `output` comment in schema.prisma.
 import { PrismaClient } from '@prisma-clients/iam';
 import { PERMISSIONS, validatePermissionSet } from '@ipms/authz';
-import { seedIam } from './seed.js';
+import { seedDemoUsers, seedIam } from './seed.js';
 
 let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
@@ -83,9 +83,99 @@ describe('seedIam', () => {
     }
   });
 
+  it('gives a project manager authority over users but not over roles', async () => {
+    const role = await prisma.role.findUniqueOrThrow({
+      where: { code: 'PROJECT_MANAGER' },
+      include: { permissions: { include: { permission: true } } },
+    });
+    const codes = role.permissions.map((rp) => rp.permission.code);
+
+    expect(codes).toContain('user.create');
+    expect(codes).toContain('user.update');
+    expect(codes).toContain('user.deactivate');
+    expect(codes).toContain('role.assign');
+    // The object gate is what stops a project manager minting an administrator;
+    // being unable to *edit a role's permissions* is a separate guarantee, and
+    // this is it.
+    expect(codes).not.toContain('role.create');
+    expect(codes).not.toContain('role.update');
+  });
+
+  it('gives QC managers and field engineers no authority over users', async () => {
+    for (const code of ['QC_MANAGER', 'FIELD_ENGINEER']) {
+      const role = await prisma.role.findUniqueOrThrow({
+        where: { code },
+        include: { permissions: { include: { permission: true } } },
+      });
+      const codes = role.permissions.map((rp) => rp.permission.code);
+      expect(codes, `${code} must not hold user.create`).not.toContain('user.create');
+      expect(codes, `${code} must not hold role.assign`).not.toContain('role.assign');
+    }
+  });
+
+  it('leaves the template library to QC managers: project managers may only view it', async () => {
+    const role = await prisma.role.findUniqueOrThrow({
+      where: { code: 'PROJECT_MANAGER' }, include: { permissions: { include: { permission: true } } },
+    });
+    const codes = role.permissions.map((rp) => rp.permission.code);
+    expect(codes).toContain('qc_template.view');
+    for (const code of ['qc_template.create', 'qc_template.update', 'qc_template.publish', 'qc_template.import']) {
+      expect(codes).not.toContain(code);
+    }
+  });
+
+  it('keeps field engineers out of the template library', async () => {
+    const role = await prisma.role.findUniqueOrThrow({
+      where: { code: 'FIELD_ENGINEER' }, include: { permissions: { include: { permission: true } } },
+    });
+    expect(role.permissions.map((rp) => rp.permission.code).filter((code) => code.startsWith('qc_template.'))).toEqual([]);
+  });
+
   it('is idempotent', async () => {
     await seedIam(prisma);
     expect(await prisma.permission.count()).toBe(PERMISSIONS.length);
     expect(await prisma.role.count()).toBe(5);
+  });
+});
+
+/**
+ * The seed writes admin's global grant straight to the table, so it has to
+ * publish the event too. Other services learn scope only from
+ * `iam.scope.granted` -- a row without an event leaves the seeded administrator
+ * holding every permission and able to see nothing, and it fails silently,
+ * because the row is present and looks correct.
+ *
+ * Caught by running the real stack, not by any unit test.
+ */
+describe('seedDemoUsers global scope replication', () => {
+  beforeAll(async () => {
+    process.env['IAM_DEMO_PASSWORD'] = 'test-only-password';
+    await seedDemoUsers(prisma);
+  }, 120_000);
+
+  it('grants admin global scope', async () => {
+    const admin = await prisma.user.findUniqueOrThrow({ where: { username: 'admin' } });
+    expect(await prisma.userGlobalScope.findUnique({ where: { userId: admin.id } })).not.toBeNull();
+  });
+
+  it('emits iam.scope.granted at level GLOBAL so other services learn about it', async () => {
+    const admin = await prisma.user.findUniqueOrThrow({ where: { username: 'admin' } });
+    const events = await prisma.outboxEvent.findMany({ where: { subject: 'iam.scope.granted' } });
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload).toEqual({
+      userId: admin.id, level: 'GLOBAL', projectId: null, siteId: null,
+    });
+  });
+
+  it('grants nobody else global scope', async () => {
+    // Only the administrator. A PM is granted the projects they run, explicitly,
+    // which is the whole point of enforcing scope.
+    expect(await prisma.userGlobalScope.count()).toBe(1);
+  });
+
+  it('is idempotent: a second seed adds no row and no second event', async () => {
+    await seedDemoUsers(prisma);
+    expect(await prisma.userGlobalScope.count()).toBe(1);
+    expect(await prisma.outboxEvent.count({ where: { subject: 'iam.scope.granted' } })).toBe(1);
   });
 });

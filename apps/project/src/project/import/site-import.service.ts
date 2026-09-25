@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma-clients/project';
+import type { AuthzScope } from '@ipms/authz';
+import { visibleProject } from '../../scope/project-scope.js';
+import { recordAudit } from '../../outbox/audit.js';
 import {
   uuidv7, type ImportColumn, type SiteImportCommitDto, type SiteImportFieldChange,
   type SiteImportPreviewDto, type SiteImportRowDto, type SiteImportRowReport,
@@ -60,8 +63,8 @@ export function diffSite(existing: ExistingSite, row: SiteImportRowDto, columns:
 export class SiteImportService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async preview(projectId: string, file: Buffer): Promise<SiteImportPreviewDto> {
-    await this.requireProject(projectId);
+  async preview(scope: AuthzScope, projectId: string, file: Buffer): Promise<SiteImportPreviewDto> {
+    await this.requireProject(scope, projectId);
     const sheet = await readSheet(file);
     const parsed = parseRows(sheet);
 
@@ -104,8 +107,8 @@ export class SiteImportService {
    * Re-validates against the database rather than trusting the preview: rows
    * arrive as JSON from the client, and the project may have changed since.
    */
-  async commit(projectId: string, dto: SiteImportCommitDto): Promise<{ created: number; updated: number }> {
-    await this.requireProject(projectId);
+  async commit(scope: AuthzScope, projectId: string, dto: SiteImportCommitDto, actorId: string): Promise<{ created: number; updated: number }> {
+    await this.requireProject(scope, projectId);
 
     const duplicates = dto.rows.map((row) => row.siteCode).filter((code, index, all) => all.indexOf(code) !== index);
     if (duplicates.length > 0) throw new BadRequestException(`Duplicate site codes in this import: ${[...new Set(duplicates)].join(', ')}`);
@@ -166,11 +169,38 @@ export class SiteImportService {
         if (id) await tx.site.update({ where: { id }, data: fields(row) });
       }
 
+      /**
+        * One ledger entry per run, not per site.
+        *
+        * The import is the accountable act -- an operator uploaded a workbook and
+        * committed it. Six hundred `site.created` rows would bury that act in
+        * its own consequences and make the ledger unreadable at exactly the
+        * moment someone is trying to work out what happened. The entry records
+        * the shape of the change and the codes touched, which is what an
+        * investigation actually starts from.
+        */
+      await recordAudit(tx, {
+        actorId, action: 'site.imported', objectType: 'Project', objectId: projectId,
+        previousState: {},
+        newState: {
+          created: creates.length,
+          updated: updates.length,
+          siteCodes: dto.rows.map((row) => row.siteCode),
+        },
+      });
+
       return { created: creates.length, updated: updates.length };
     });
   }
 
-  private async requireProject(id: string): Promise<void> {
-    if (!(await this.prisma.project.findUnique({ where: { id } }))) throw new NotFoundException('Project not found');
+  /**
+   * NotFound for a project outside the caller's scope, indistinguishably from
+   * one that does not exist. Bulk import writes sites in quantity, so an
+   * unscoped parent check here is the widest write in the service.
+   */
+  private async requireProject(scope: AuthzScope, id: string): Promise<void> {
+    if (!(await this.prisma.project.findFirst({ where: visibleProject(scope, id), select: { id: true } }))) {
+      throw new NotFoundException('Project not found');
+    }
   }
 }

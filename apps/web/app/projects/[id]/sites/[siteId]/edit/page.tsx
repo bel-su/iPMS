@@ -23,7 +23,7 @@ export default async function EditSitePage({ params }: { params: Promise<{ id: s
     return (
       <StatePage title="Cannot edit this site">
         <p>This project has no such site.</p>
-        <p className="subtle"><a href={`/projects/${data.id}`}>Back to the project</a></p>
+        <p className="subtle"><a href={`/projects/${data.id}/sites`}>Back to sites</a></p>
       </StatePage>
     );
   }
@@ -32,7 +32,7 @@ export default async function EditSitePage({ params }: { params: Promise<{ id: s
   if (!(user.state === 'ready' && hasPermission(user.data, 'site.update'))) {
     return (
       <StatePage title="You cannot edit sites">
-        <p className="subtle"><a href={`/projects/${data.id}`}>Back to the project</a></p>
+        <p className="subtle"><a href={`/projects/${data.id}/sites`}>Back to sites</a></p>
       </StatePage>
     );
   }
@@ -45,6 +45,7 @@ export default async function EditSitePage({ params }: { params: Promise<{ id: s
           <div className="crumbs">
             <a href="/projects">Projects</a><b>/</b>
             <a href={`/projects/${data.id}`}>{data.code}</a><b>/</b>
+            <a href={`/projects/${data.id}/sites`}>Sites</a><b>/</b>
             <strong>{site.siteCode}</strong>
           </div>
           <TopActions />

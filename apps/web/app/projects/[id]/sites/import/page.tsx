@@ -11,6 +11,7 @@ export default async function SiteImportPage({ params }: { params: Promise<{ id:
           <div className="crumbs">
             <a href="/projects">Projects</a><b>/</b>
             <a href={`/projects/${id}`}>Project</a><b>/</b>
+            <a href={`/projects/${id}/sites`}>Sites</a><b>/</b>
             <strong>Import sites</strong>
           </div>
           <TopActions />

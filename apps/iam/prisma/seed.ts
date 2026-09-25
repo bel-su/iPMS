@@ -2,6 +2,8 @@
 // `@prisma/client` package — see the `output` comment in schema.prisma.
 import type { PrismaClient } from '@prisma-clients/iam';
 import { PERMISSIONS, expandDependencies } from '@ipms/authz';
+import { SUBJECTS } from '@ipms/events';
+import { buildOutboxRecord } from '@ipms/persistence';
 import { hashPassword } from '../src/auth/password.js';
 import { uuidv7 } from '@ipms/contracts';
 
@@ -22,9 +24,15 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
       'site.view', 'site.create', 'site.update', 'site.import',
       'milestone.view', 'milestone.create', 'milestone.update', 'milestone.declare',
       'task.view', 'task.create', 'task.update', 'task.assign', 'task.generate', 'task.cancel',
-      'qc_template.view', 'qc_template.create', 'qc_template.update', 'qc_template.publish', 'qc_template.import',
+      'qc_template.view',
       'qc_submission.view', 'qc_review.view', 'qc_review.approve', 'qc_review.reject',
       'qc_evidence.export', 'audit.view', 'user.view', 'scope.view',
+      // Managing their own team: creating field engineers and QC managers, and
+      // editing or deactivating the people they created. Which roles they may
+      // actually confer is not decided here — the permission is only the verb.
+      // ROLE_ASSIGNMENT in @ipms/authz is the object gate, and it lets a
+      // project manager reach FIELD_ENGINEER and QC_MANAGER and nothing else.
+      'user.create', 'user.update', 'user.deactivate', 'role.assign',
     ],
   },
   {
@@ -43,7 +51,7 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
     description: 'Executes assigned checklists and submits evidence. No approval authority by design.',
     permissions: [
       'project.view', 'site.view', 'task.view', 'task.update',
-      'qc_template.view', 'qc_submission.view', 'qc_submission.create',
+      'qc_submission.view', 'qc_submission.create',
       'qc_submission.update', 'qc_submission.submit', 'qc_evidence.upload',
     ],
   },
@@ -145,6 +153,49 @@ export async function seedDemoUsers(prisma: PrismaClient): Promise<void> {
       await prisma.userRole.create({
         data: { id: uuidv7(), userId: user.id, roleId: role.id, createdBy: user.id },
       });
+    }
+
+    /**
+     * The SUPER_ADMIN needs global scope, not just every permission.
+     *
+     * Permissions answer "may you do this kind of thing"; scope answers "to
+     * which projects". Now that `project` enforces scope at query level, an
+     * account with every permission and no scope row sees nothing at all — so
+     * without this the seeded administrator cannot administer anything.
+     *
+     * Deliberately only `admin`. The other three demo accounts are left
+     * unscoped, which is the correct default and the whole point of the
+     * change: a PM is granted the projects they run, explicitly, through
+     * `POST /users/:id/projects`. They will see empty lists until someone does.
+     */
+    if (demo.role === 'SUPER_ADMIN') {
+      /**
+       * Create-if-absent rather than upsert, because the row is only half the
+       * job: other services learn about scope from `iam.scope.granted`, never
+       * by reading this table. Writing the row alone leaves the seeded
+       * administrator holding every permission and able to see nothing, which
+       * is exactly the lockout this grant exists to prevent -- and it fails
+       * silently, because the row is present and looks correct.
+       *
+       * An upsert cannot tell a fresh grant from a re-seed, and re-emitting on
+       * every boot would be harmless but dishonest. Consumers deduplicate on
+       * eventId, so the cost of a duplicate is nil; the cost of a missing first
+       * event is a locked-out administrator.
+       */
+      const existing = await prisma.userGlobalScope.findUnique({ where: { userId: user.id } });
+      if (!existing) {
+        await prisma.$transaction(async (tx) => {
+          await tx.userGlobalScope.create({ data: { id: uuidv7(), userId: user.id, createdBy: user.id } });
+          await tx.outboxEvent.create({
+            data: buildOutboxRecord(
+              SUBJECTS.IAM_SCOPE_GRANTED,
+              { userId: user.id, level: 'GLOBAL', projectId: null, siteId: null },
+              'seed',
+              user.id,
+            ),
+          });
+        });
+      }
     }
   }
 }

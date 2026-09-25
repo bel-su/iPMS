@@ -9,17 +9,22 @@ const deleteProject = vi.fn();
 const createSite = vi.fn().mockResolvedValue({ state: 'ready', data: {} });
 const updateSite = vi.fn().mockResolvedValue({ state: 'ready', data: {} });
 const updateTask = vi.fn().mockResolvedValue({ state: 'ready', data: {} });
+const updateProject = vi.fn().mockResolvedValue({ state: 'ready', data: {} });
+const archiveProject = vi.fn().mockResolvedValue({ state: 'ready', data: {} });
 vi.mock('../lib/project-api', () => ({
-  deleteProject, updateTask,
-  createProject: vi.fn(), updateProject: vi.fn(), archiveProject: vi.fn(),
+  deleteProject, updateTask, updateProject, archiveProject,
+  createProject: vi.fn(),
   createSite, updateSite, deleteSite: vi.fn(),
   createTaskType: vi.fn(), updateTaskType: vi.fn(), deleteTaskType: vi.fn(),
   createMilestone: vi.fn(), updateMilestone: vi.fn(), deleteMilestone: vi.fn(),
   createTask: vi.fn(), deleteTask: vi.fn(),
 }));
 
-const { settle } = await import('./settle');
-const { createSiteAction, deleteProjectAction, updateSiteAction, updateTaskAction } = await import('./actions');
+const { settle } = await import('../lib/settle');
+const {
+  archiveProjectAction, createSiteAction, deleteProjectAction,
+  updateProjectAction, updateSiteAction,
+} = await import('./actions');
 
 beforeEach(() => {
   revalidatePath.mockClear();
@@ -28,6 +33,8 @@ beforeEach(() => {
   updateTask.mockClear();
   createSite.mockClear();
   updateSite.mockClear();
+  updateProject.mockClear();
+  archiveProject.mockClear();
 });
 
 describe('settle', () => {
@@ -84,26 +91,6 @@ describe('deleteProjectAction', () => {
     const state = await deleteProjectAction({}, form('ALPHA'));
     expect(state).toEqual({ error: 'This project still has 3 task(s).', correlationId: 'corr-2' });
     expect(redirect).not.toHaveBeenCalled();
-  });
-});
-
-describe('updateTaskAction', () => {
-  it('unassigns with an explicit null when the field is present but empty', async () => {
-    const data = new FormData();
-    data.set('projectId', 'p-1');
-    data.set('taskId', 't-1');
-    data.set('assigneeId', '');
-    await updateTaskAction({}, data);
-    expect(updateTask).toHaveBeenCalledWith('t-1', { assigneeId: null });
-  });
-
-  it('leaves the assignee alone when the field is absent from the form', async () => {
-    const data = new FormData();
-    data.set('projectId', 'p-1');
-    data.set('taskId', 't-1');
-    data.set('title', 'Renamed');
-    await updateTaskAction({}, data);
-    expect(updateTask).toHaveBeenCalledWith('t-1', { title: 'Renamed' });
   });
 });
 
@@ -222,15 +209,87 @@ describe('updateSiteAction', () => {
     expect(updateSite).not.toHaveBeenCalled();
   });
 
-  it('lands the user back on the row they changed', async () => {
+  it('lands the user back on the sites tab, with the overview refreshed too', async () => {
     await expect(updateSiteAction({}, form())).rejects.toThrow('NEXT_REDIRECT');
     expect(revalidatePath).toHaveBeenCalledWith('/projects/p-1');
-    expect(redirect).toHaveBeenCalledWith('/projects/p-1#sites');
+    expect(revalidatePath).toHaveBeenCalledWith('/projects/p-1/sites');
+    expect(redirect).toHaveBeenCalledWith('/projects/p-1/sites');
   });
 
   it("shows the API's refusal and does not redirect", async () => {
     updateSite.mockResolvedValueOnce({ state: 'forbidden', message: 'Not allowed' });
     expect(await updateSiteAction({}, form())).toEqual({ error: 'Not allowed' });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A project's status is rendered on three pages: the list badge, the detail
+ * header, and the edit form's own `<select>`. Revalidating only the detail page
+ * left the other two showing the previous status until a browser refresh — the
+ * edit form worst of all, because an uncontrolled `<select>` re-applies
+ * whichever `defaultValue` the refreshed payload carries, so a saved status
+ * visibly snapped back to the old one.
+ */
+describe('updateProjectAction', () => {
+  function form(overrides: Record<string, string> = {}): FormData {
+    const data = new FormData();
+    const fields: Record<string, string> = {
+      projectId: 'p-1', name: 'Project One', clientName: 'Acme',
+      phase: 'Phase 1', status: 'ON_HOLD', ...overrides,
+    };
+    for (const [key, value] of Object.entries(fields)) data.set(key, value);
+    return data;
+  }
+
+  it('sends the edited fields', async () => {
+    await expect(updateProjectAction({}, form())).rejects.toThrow('NEXT_REDIRECT');
+    expect(updateProject.mock.calls[0]![0]).toBe('p-1');
+    expect(updateProject.mock.calls[0]![1]).toEqual({
+      name: 'Project One', clientName: 'Acme', phase: 'Phase 1', status: 'ON_HOLD',
+    });
+  });
+
+  it('refreshes every page that shows the status, not just the detail page', async () => {
+    await expect(updateProjectAction({}, form())).rejects.toThrow('NEXT_REDIRECT');
+    expect(revalidatePath).toHaveBeenCalledWith('/projects/p-1');
+    expect(revalidatePath).toHaveBeenCalledWith('/projects/p-1/edit');
+    expect(revalidatePath).toHaveBeenCalledWith('/projects');
+  });
+
+  // Leaving the user on the edit form gives a save no acknowledgement at all,
+  // and leaves the stale `<select>` on screen. The project page shows the result.
+  it('lands the user on the project page, where the new status is rendered', async () => {
+    await expect(updateProjectAction({}, form())).rejects.toThrow('NEXT_REDIRECT');
+    expect(redirect).toHaveBeenCalledWith('/projects/p-1');
+  });
+
+  it("shows the API's refusal and does not redirect", async () => {
+    updateProject.mockResolvedValueOnce({ state: 'forbidden', message: 'Not allowed' });
+    expect(await updateProjectAction({}, form())).toEqual({ error: 'Not allowed' });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe('archiveProjectAction', () => {
+  function form(): FormData {
+    const data = new FormData();
+    data.set('projectId', 'p-1');
+    return data;
+  }
+
+  it('refreshes every page that shows the status, then lands on the project page', async () => {
+    await expect(archiveProjectAction({}, form())).rejects.toThrow('NEXT_REDIRECT');
+    expect(archiveProject).toHaveBeenCalledWith('p-1');
+    expect(revalidatePath).toHaveBeenCalledWith('/projects/p-1');
+    expect(revalidatePath).toHaveBeenCalledWith('/projects/p-1/edit');
+    expect(revalidatePath).toHaveBeenCalledWith('/projects');
+    expect(redirect).toHaveBeenCalledWith('/projects/p-1');
+  });
+
+  it("shows the API's refusal and does not redirect", async () => {
+    archiveProject.mockResolvedValueOnce({ state: 'forbidden', message: 'Not allowed' });
+    expect(await archiveProjectAction({}, form())).toEqual({ error: 'Not allowed' });
     expect(redirect).not.toHaveBeenCalled();
   });
 });

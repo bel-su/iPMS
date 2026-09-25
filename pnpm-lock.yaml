@@ -111,6 +111,52 @@ importers:
         specifier: 12.1.0
         version: 12.1.0
 
+  apps/docs:
+    dependencies:
+      '@ipms/authz':
+        specifier: workspace:*
+        version: link:../../libs/authz
+      '@ipms/contracts':
+        specifier: workspace:*
+        version: link:../../libs/contracts
+      '@ipms/observability':
+        specifier: workspace:*
+        version: link:../../libs/observability
+      '@ipms/persistence':
+        specifier: workspace:*
+        version: link:../../libs/persistence
+      '@nestjs/common':
+        specifier: 12.0.3
+        version: 12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/config':
+        specifier: 12.0.0
+        version: 12.0.0(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: 12.0.3
+        version: 12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/platform-fastify':
+        specifier: 12.0.3
+        version: 12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))
+      '@prisma/adapter-pg':
+        specifier: 7.10.0
+        version: 7.10.0
+      '@prisma/client':
+        specifier: 7.10.0
+        version: 7.10.0(prisma@7.10.0(@types/node@22.13.0)(@types/react-dom@19.2.2(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3))(typescript@5.9.3)
+      '@prisma/client-runtime-utils':
+        specifier: 7.10.0
+        version: 7.10.0
+      pg:
+        specifier: 8.23.0
+        version: 8.23.0
+    devDependencies:
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      prisma:
+        specifier: 7.10.0
+        version: 7.10.0(@types/node@22.13.0)(@types/react-dom@19.2.2(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)
+
   apps/gateway:
     dependencies:
       '@fastify/cookie':
@@ -224,6 +270,98 @@ importers:
         specifier: 4.20.6
         version: 4.20.6
 
+  apps/media:
+    dependencies:
+      '@ipms/authz':
+        specifier: workspace:*
+        version: link:../../libs/authz
+      '@ipms/contracts':
+        specifier: workspace:*
+        version: link:../../libs/contracts
+      '@ipms/observability':
+        specifier: workspace:*
+        version: link:../../libs/observability
+      '@ipms/persistence':
+        specifier: workspace:*
+        version: link:../../libs/persistence
+      '@nestjs/common':
+        specifier: 12.0.3
+        version: 12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/config':
+        specifier: 12.0.0
+        version: 12.0.0(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: 12.0.3
+        version: 12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/platform-fastify':
+        specifier: 12.0.3
+        version: 12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))
+      '@prisma/adapter-pg':
+        specifier: 7.10.0
+        version: 7.10.0
+      '@prisma/client':
+        specifier: 7.10.0
+        version: 7.10.0(prisma@7.10.0(@types/node@22.13.0)(@types/react-dom@19.2.2(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3))(typescript@5.9.3)
+      '@prisma/client-runtime-utils':
+        specifier: 7.10.0
+        version: 7.10.0
+      pg:
+        specifier: 8.23.0
+        version: 8.23.0
+    devDependencies:
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      prisma:
+        specifier: 7.10.0
+        version: 7.10.0(@types/node@22.13.0)(@types/react-dom@19.2.2(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)
+
+  apps/notification:
+    dependencies:
+      '@ipms/authz':
+        specifier: workspace:*
+        version: link:../../libs/authz
+      '@ipms/contracts':
+        specifier: workspace:*
+        version: link:../../libs/contracts
+      '@ipms/observability':
+        specifier: workspace:*
+        version: link:../../libs/observability
+      '@ipms/persistence':
+        specifier: workspace:*
+        version: link:../../libs/persistence
+      '@nestjs/common':
+        specifier: 12.0.3
+        version: 12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/config':
+        specifier: 12.0.0
+        version: 12.0.0(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: 12.0.3
+        version: 12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/platform-fastify':
+        specifier: 12.0.3
+        version: 12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))
+      '@prisma/adapter-pg':
+        specifier: 7.10.0
+        version: 7.10.0
+      '@prisma/client':
+        specifier: 7.10.0
+        version: 7.10.0(prisma@7.10.0(@types/node@22.13.0)(@types/react-dom@19.2.2(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3))(typescript@5.9.3)
+      '@prisma/client-runtime-utils':
+        specifier: 7.10.0
+        version: 7.10.0
+      pg:
+        specifier: 8.23.0
+        version: 8.23.0
+    devDependencies:
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      prisma:
+        specifier: 7.10.0
+        version: 7.10.0(@types/node@22.13.0)(@types/react-dom@19.2.2(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)
+
   apps/project:
     dependencies:
       '@fastify/multipart':
@@ -235,6 +373,79 @@ importers:
       '@ipms/contracts':
         specifier: workspace:*
         version: link:../../libs/contracts
+      '@ipms/events':
+        specifier: workspace:*
+        version: link:../../libs/events
+      '@ipms/geo':
+        specifier: workspace:*
+        version: link:../../libs/geo
+      '@ipms/observability':
+        specifier: workspace:*
+        version: link:../../libs/observability
+      '@ipms/persistence':
+        specifier: workspace:*
+        version: link:../../libs/persistence
+      '@nestjs/common':
+        specifier: 12.0.3
+        version: 12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/config':
+        specifier: 12.0.0
+        version: 12.0.0(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: 12.0.3
+        version: 12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/platform-fastify':
+        specifier: 12.0.3
+        version: 12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))
+      '@prisma/adapter-pg':
+        specifier: 7.10.0
+        version: 7.10.0
+      '@prisma/client':
+        specifier: 7.10.0
+        version: 7.10.0(prisma@7.10.0(@types/node@22.13.0)(@types/react-dom@19.2.2(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3))(typescript@5.9.3)
+      '@prisma/client-runtime-utils':
+        specifier: 7.10.0
+        version: 7.10.0
+      exceljs:
+        specifier: 4.4.0
+        version: 4.4.0
+      fastify:
+        specifier: 5.12.4
+        version: 5.12.4
+      ioredis:
+        specifier: 6.0.0
+        version: 6.0.0
+      pg:
+        specifier: 8.23.0
+        version: 8.23.0
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: 12.1.0
+        version: 12.1.0
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      prisma:
+        specifier: 7.10.0
+        version: 7.10.0(@types/node@22.13.0)(@types/react-dom@19.2.2(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)
+      reflect-metadata:
+        specifier: 0.2.2
+        version: 0.2.2
+
+  apps/qc:
+    dependencies:
+      '@fastify/multipart':
+        specifier: 10.1.1
+        version: 10.1.1
+      '@ipms/authz':
+        specifier: workspace:*
+        version: link:../../libs/authz
+      '@ipms/contracts':
+        specifier: workspace:*
+        version: link:../../libs/contracts
+      '@ipms/events':
+        specifier: workspace:*
+        version: link:../../libs/events
       '@ipms/geo':
         specifier: workspace:*
         version: link:../../libs/geo
@@ -287,55 +498,12 @@ importers:
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
-
-  apps/qc:
-    dependencies:
-      '@ipms/authz':
-        specifier: workspace:*
-        version: link:../../libs/authz
-      '@ipms/contracts':
-        specifier: workspace:*
-        version: link:../../libs/contracts
-      '@ipms/geo':
-        specifier: workspace:*
-        version: link:../../libs/geo
-      '@ipms/observability':
-        specifier: workspace:*
-        version: link:../../libs/observability
-      '@ipms/persistence':
-        specifier: workspace:*
-        version: link:../../libs/persistence
-      '@nestjs/common':
-        specifier: 12.0.3
-        version: 12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/config':
-        specifier: 12.0.0
-        version: 12.0.0(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
-      '@nestjs/core':
-        specifier: 12.0.3
-        version: 12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/platform-fastify':
-        specifier: 12.0.3
-        version: 12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.3(@nestjs/common@12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))
-      '@prisma/adapter-pg':
-        specifier: 7.10.0
-        version: 7.10.0
-      '@prisma/client':
-        specifier: 7.10.0
-        version: 7.10.0(prisma@7.10.0(@types/node@22.13.0)(@types/react-dom@19.2.2(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3))(typescript@5.9.3)
-      '@prisma/client-runtime-utils':
-        specifier: 7.10.0
-        version: 7.10.0
-      pg:
-        specifier: 8.23.0
-        version: 8.23.0
-    devDependencies:
-      '@types/pg':
-        specifier: 8.23.1
-        version: 8.23.1
-      prisma:
-        specifier: 7.10.0
-        version: 7.10.0(@types/node@22.13.0)(@types/react-dom@19.2.2(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
 
   apps/web:
     dependencies:
@@ -364,6 +532,8 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+
+  e2e: {}
 
   libs/authz:
     dependencies:

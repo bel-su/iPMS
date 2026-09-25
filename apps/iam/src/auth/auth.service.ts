@@ -1,8 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 // This app's own generated client, not the shared @prisma/client package — see
 // the `output` comment in prisma/schema.prisma.
 import type { PrismaClient } from '@prisma-clients/iam';
-import type { LoginDto, TokenPair } from '@ipms/contracts';
+import type { ChangePasswordDto, LoginDto, TokenPair } from '@ipms/contracts';
 import { resolvePermissions, type AuthzOverride } from '@ipms/authz';
 import { PasswordService } from './password.service.js';
 import { TokenService } from './token.service.js';
@@ -70,9 +70,10 @@ export class AuthService {
     user: { id: string; tokenVersion: number },
     roles: string[],
     permissions: string[],
+    mustChangePassword = false,
   ): Promise<TokenPair> {
     await this.versions.publish(user.id, user.tokenVersion, this.tokens.refreshTtlSeconds);
-    return this.tokens.issue(user, roles, permissions);
+    return this.tokens.issue(user, roles, permissions, mustChangePassword);
   }
 
   private isLive(assignment: RoleAssignment, now: Date): boolean {
@@ -136,9 +137,23 @@ export class AuthService {
     if (!user.isActive) throw new UnauthorizedException(GENERIC_FAILURE);
 
     const now = new Date();
-    const { roles, permissions } = this.claimsFor(user as never, now);
-
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: now } });
+
+    /**
+     * An account that owes a password change gets a token with no roles and no
+     * permissions.
+     *
+     * The creator of the account — or the administrator who reset it — knows
+     * this password, so the account must be unusable until its holder replaces
+     * it. Every service's `AuthzGuard` already refuses a permission absent from
+     * the claim, so an empty claim disables every guarded route in the platform
+     * with no new enforcement code anywhere. `GET /auth/me` and
+     * `POST /auth/change-password` need authentication but no permission, which
+     * is exactly the surface the holder needs to fix it.
+     */
+    if (user.mustChangePassword) return this.issue(user, [], [], true);
+
+    const { roles, permissions } = this.claimsFor(user as never, now);
     return this.issue(user, roles, permissions);
   }
 
@@ -162,6 +177,10 @@ export class AuthService {
     // A revoked session presents an old version and must not be refreshable.
     if (user.tokenVersion !== payload.tokenVersion) throw new UnauthorizedException('Session revoked');
 
+    // Same branch as login: a refresh must not roll an authority-free token
+    // forward into a real one.
+    if (user.mustChangePassword) return this.issue(user, [], [], true);
+
     const now = new Date();
     const { roles, permissions } = this.claimsFor(user as never, now);
     return this.issue(user, roles, permissions);
@@ -183,5 +202,32 @@ export class AuthService {
       data: { tokenVersion: { increment: 1 } },
     });
     await this.versions.publish(userId, updated.tokenVersion, this.tokens.refreshTtlSeconds);
+  }
+
+  /**
+   * Self-service password change. Requires authentication but no permission,
+   * which is what keeps it reachable by a holder whose token carries neither.
+   *
+   * Ends by revoking every session, including the caller's own. That is
+   * deliberate: their current token carries no authority, and signing in again
+   * is the only way to obtain one that does.
+   */
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.isActive) throw new UnauthorizedException(GENERIC_FAILURE);
+
+    if (!(await this.passwords.verify(user.passwordHash, dto.currentPassword))) {
+      throw new UnauthorizedException(GENERIC_FAILURE);
+    }
+    if (dto.currentPassword === dto.newPassword) {
+      throw new BadRequestException('The new password must differ from the current one');
+    }
+
+    const passwordHash = await this.passwords.hash(dto.newPassword);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: false },
+    });
+    await this.revokeAll(userId);
   }
 }
