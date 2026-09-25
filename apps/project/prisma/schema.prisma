@@ -152,3 +152,24 @@ model ProjectionWatermark {
 
   @@map("projection_watermark")
 }
+
+/// Embedded verbatim from OUTBOX_MODEL_SQL in @ipms/persistence, as every
+/// service that publishes does.
+///
+/// A mutation writes its audit row in the same transaction as the change, so a
+/// crash between commit and publish cannot lose it. Publishing to NATS directly
+/// from a service method would: the process dies after the write lands and the
+/// ledger never hears about a mutation that happened, which is the one thing an
+/// append-only ledger must never do.
+model OutboxEvent {
+  id            String    @id @db.Uuid
+  subject       String    @db.VarChar(100)
+  payload       Json
+  correlationId String    @db.VarChar(64)
+  actorId       String?   @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  publishedAt   DateTime? @db.Timestamptz(6)
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_event")
+}
