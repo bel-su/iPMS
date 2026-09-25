@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { loginWithPassword, writeSession } from '../../../lib/session';
 
 /**
- * Exchanges a username and password for a session this browser holds in
+ * Exchanges an email and password for a session this browser holds in
  * http-only cookies, so the access token is never readable from client script.
  *
  * The credentials are checked by iam, not here. This handler only refuses a
@@ -14,18 +14,18 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ message: 'Enter a username and password.' }, { status: 400 });
+    return NextResponse.json({ message: 'Enter your email and password.' }, { status: 400 });
   }
 
-  const { username, password } = (body ?? {}) as { username?: unknown; password?: unknown };
-  if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
-    return NextResponse.json({ message: 'Enter a username and password.' }, { status: 400 });
+  const { email, password } = (body ?? {}) as { email?: unknown; password?: unknown };
+  if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
+    return NextResponse.json({ message: 'Enter your email and password.' }, { status: 400 });
   }
 
-  const result = await loginWithPassword({ username, password });
+  const result = await loginWithPassword({ email, password });
 
   if (result.state === 'rejected') {
-    return NextResponse.json({ message: 'Invalid username or password.' }, { status: 401 });
+    return NextResponse.json({ message: 'Invalid email or password.' }, { status: 401 });
   }
   if (result.state === 'unavailable') {
     return NextResponse.json({ message: 'The iPMS API is not available. Try again in a moment.' }, { status: 503 });

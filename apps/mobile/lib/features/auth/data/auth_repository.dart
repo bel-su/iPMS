@@ -14,14 +14,14 @@ class AuthRepository {
   final TokenStorage tokenStorage;
 
   Future<AuthUser> login({
-    required String username,
+    required String email,
     required String password,
   }) async {
     try {
       final response = await apiClient.dio.post<Map<String, dynamic>>(
         '/api/iam/auth/login',
         data: {
-          'username': username.trim(),
+          'email': email.trim().toLowerCase(),
           'password': password,
         },
       );
@@ -45,7 +45,7 @@ class AuthRepository {
       return await getCurrentUser();
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
-        throw const ApiException(message: 'Incorrect username or password.');
+        throw const ApiException(message: 'Incorrect email or password.');
       }
       throw ApiException(
         message: e.response?.data?['message']?.toString() ??

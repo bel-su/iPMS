@@ -1,35 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import {
   AssignRolesSchema, ChangePasswordSchema, CreateUserSchema,
-  UpdateUserSchema, UserListQuerySchema, UsernameSchema,
+  EmailSchema, UpdateUserSchema, UserListQuerySchema,
 } from './user.js';
 
-describe('UsernameSchema', () => {
+describe('EmailSchema', () => {
   it('trims and lowercases, so the same person cannot register twice', () => {
-    expect(UsernameSchema.parse('  Field.Engineer_01  ')).toBe('field.engineer_01');
+    expect(EmailSchema.parse('  Field.Engineer@IPMS.local  ')).toBe('field.engineer@ipms.local');
   });
 
-  // The seeded `qc` account is two characters; a policy the repository's own
-  // seed violates is the wrong policy.
-  it('accepts a two-character username', () => {
-    expect(UsernameSchema.parse('qc')).toBe('qc');
-  });
-
-  it('refuses a single character, a leading digit, and a space', () => {
-    expect(UsernameSchema.safeParse('a').success).toBe(false);
-    expect(UsernameSchema.safeParse('1abc').success).toBe(false);
-    expect(UsernameSchema.safeParse('ab cd').success).toBe(false);
+  it('refuses something that is not an address', () => {
+    expect(EmailSchema.safeParse('engineer').success).toBe(false);
+    expect(EmailSchema.safeParse('').success).toBe(false);
   });
 });
 
 describe('CreateUserSchema', () => {
   const valid = {
-    username: 'new.engineer', email: 'new@ipms.local', fullName: 'New Engineer',
+    email: 'new@ipms.local', fullName: 'New Engineer',
     password: 'Correct-horse-1', roleCodes: ['FIELD_ENGINEER'],
   };
 
   it('accepts a complete body', () => {
-    expect(CreateUserSchema.parse(valid).username).toBe('new.engineer');
+    expect(CreateUserSchema.parse(valid).email).toBe('new@ipms.local');
   });
 
   it('defaults roleCodes to none', () => {
@@ -68,8 +61,8 @@ describe('CreateUserSchema', () => {
 });
 
 describe('UpdateUserSchema', () => {
-  it('has no username field: renaming would rewrite who past audit entries are about', () => {
-    expect(UpdateUserSchema.parse({ username: 'renamed' })).not.toHaveProperty('username');
+  it('normalizes a changed email the same way creation does', () => {
+    expect(UpdateUserSchema.parse({ email: ' Ann@IPMS.local ' }).email).toBe('ann@ipms.local');
   });
 
   it('has no password field: a credential change must revoke sessions, so it has its own endpoint', () => {

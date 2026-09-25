@@ -32,7 +32,6 @@ export default async function ProfilePage() {
           <section className="panel">
             <h2 className="panel-title">Details</h2>
             <dl className="profile-grid">
-              <div><dt>Username</dt><dd>{user.username}</dd></div>
               <div><dt>Email</dt><dd>{user.email}</dd></div>
               <div><dt>Employee code</dt><dd>{user.employeeCode ?? '—'}</dd></div>
               <div><dt>Roles</dt><dd>{user.roles.length > 0 ? user.roles.map((r) => r.name).join(', ') : 'None'}</dd></div>

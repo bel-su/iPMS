@@ -41,7 +41,7 @@ function form(fields: Record<string, string | string[]>): FormData {
 }
 
 const NEW_USER = {
-  username: 'new.one', email: 'new.one@ipms.local', fullName: 'New One',
+  email: 'new.one@ipms.local', fullName: 'New One',
   password: 'Long-enough-1', confirmPassword: 'Long-enough-1',
 };
 
@@ -50,7 +50,7 @@ describe('createUserAction', () => {
     await expect(createUserAction({}, form({ ...NEW_USER, roleCodes: ['FIELD_ENGINEER', 'QC_MANAGER'] })))
       .rejects.toThrow('NEXT_REDIRECT');
     expect(createUser).toHaveBeenCalledWith({
-      username: 'new.one', email: 'new.one@ipms.local', fullName: 'New One',
+      email: 'new.one@ipms.local', fullName: 'New One',
       password: 'Long-enough-1', roleCodes: ['FIELD_ENGINEER', 'QC_MANAGER'],
     });
   });
@@ -81,9 +81,9 @@ describe('createUserAction', () => {
     expect(createUser).not.toHaveBeenCalled();
   });
 
-  it('requires a username, an email and a name', async () => {
-    expect(await createUserAction({}, form({ username: 'only.this' })))
-      .toEqual({ error: 'A username, an email address and a full name are required.' });
+  it('requires an email and a name', async () => {
+    expect(await createUserAction({}, form({ email: 'only.this@ipms.local' })))
+      .toEqual({ error: 'An email address and a full name are required.' });
   });
 
   it('lands on the new users page', async () => {

@@ -50,31 +50,31 @@ describe('loginWithPassword', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, TOKENS));
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await loginWithPassword({ username: 'ada', password: 'correct-horse' });
+    const result = await loginWithPassword({ email: 'ada@ipms.local', password: 'correct-horse' });
 
     expect(result).toEqual({ state: 'ok', tokens: TOKENS });
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe('http://127.0.0.1:3000/api/v1/auth/login');
     expect(init.method).toBe('POST');
     expect(init.cache).toBe('no-store');
-    expect(JSON.parse(init.body as string)).toEqual({ username: 'ada', password: 'correct-horse' });
+    expect(JSON.parse(init.body as string)).toEqual({ email: 'ada@ipms.local', password: 'correct-horse' });
   });
 
   it('reports bad credentials as rejected, not unavailable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(401, { error: { code: 'UNAUTHENTICATED' } })));
-    expect(await loginWithPassword({ username: 'ada', password: 'wrong-password' })).toEqual({ state: 'rejected' });
+    expect(await loginWithPassword({ email: 'ada@ipms.local', password: 'wrong-password' })).toEqual({ state: 'rejected' });
   });
 
   it('reports an unreachable gateway as unavailable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
-    expect(await loginWithPassword({ username: 'ada', password: 'correct-horse' })).toEqual({ state: 'unavailable' });
+    expect(await loginWithPassword({ email: 'ada@ipms.local', password: 'correct-horse' })).toEqual({ state: 'unavailable' });
   });
 
   // A 5xx is the gateway failing, not the password being wrong. Calling it
   // 'rejected' would tell the user their credentials are bad when they are not.
   it('reports a gateway error as unavailable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(503, { error: { code: 'INTERNAL' } })));
-    expect(await loginWithPassword({ username: 'ada', password: 'correct-horse' })).toEqual({ state: 'unavailable' });
+    expect(await loginWithPassword({ email: 'ada@ipms.local', password: 'correct-horse' })).toEqual({ state: 'unavailable' });
   });
 
   // The pair is what every later request depends on. A 200 carrying something
@@ -82,7 +82,7 @@ describe('loginWithPassword', () => {
   // cannot authenticate anything.
   it('refuses a 200 that is not a token pair', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { accessToken: 'only-half' })));
-    expect(await loginWithPassword({ username: 'ada', password: 'correct-horse' })).toEqual({ state: 'unavailable' });
+    expect(await loginWithPassword({ email: 'ada@ipms.local', password: 'correct-horse' })).toEqual({ state: 'unavailable' });
   });
 });
 

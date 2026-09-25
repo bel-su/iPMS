@@ -65,7 +65,7 @@ async function makeUser(username: string, roleId: string, isActive = true): Prom
   const id = uuidv7();
   await prisma.user.create({
     data: {
-      id, username, email: `${username}@ipms.local`, fullName: username,
+      id, email: `${username}@ipms.local`, fullName: username,
       passwordHash: 'not-a-real-hash', isActive,
     },
   });

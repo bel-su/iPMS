@@ -75,7 +75,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
         <div className="dashboard">
           <div className="toolbar">
             <div>
-              <p className="eyebrow">{subject.username.toUpperCase()}</p>
+              <p className="eyebrow">{subject.email.toUpperCase()}</p>
               <h1>{subject.fullName}</h1>
             </div>
             <span className={subject.isActive ? 'badge green' : 'badge'}>

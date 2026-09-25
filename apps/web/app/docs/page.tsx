@@ -18,7 +18,7 @@ const CHAPTERS: readonly Chapter[] = [
     title: 'Getting started',
     summary: 'Signing in and finding your way around.',
     steps: [
-      'Sign in with the username and temporary password your manager gave you.',
+      'Sign in with your email address and the temporary password your manager gave you.',
       'You will be asked to choose a new password on first sign-in.',
       'Use the left sidebar to move between Overview, Projects, Quality & EHS and Users. You only see the areas your role allows.',
       'Open the account menu (your initials, top right) to see your profile, change your password or sign out.',

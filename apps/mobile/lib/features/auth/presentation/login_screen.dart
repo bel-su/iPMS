@@ -13,13 +13,13 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -27,7 +27,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _submit() {
     if (_formKey.currentState?.validate() ?? false) {
       ref.read(authStateProvider.notifier).login(
-            _usernameController.text.trim(),
+            _emailController.text.trim(),
             _passwordController.text,
           );
     }
@@ -124,21 +124,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             const SizedBox(height: 16),
                           ],
 
-                          // Username Field
+                          // Email Field
                           Text(
-                            'Username',
+                            'Email',
                             style: AppTypography.titleMedium,
                           ),
                           const SizedBox(height: 8),
                           TextFormField(
-                            controller: _usernameController,
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
                             decoration: const InputDecoration(
-                              hintText: 'e.g. engineer, manager, admin',
-                              prefixIcon: Icon(Icons.person_outline, size: 20),
+                              hintText: 'e.g. engineer@ipms.local',
+                              prefixIcon: Icon(Icons.mail_outline, size: 20),
                             ),
                             validator: (val) {
                               if (val == null || val.trim().isEmpty) {
-                                return 'Please enter your username';
+                                return 'Please enter your email';
                               }
                               return null;
                             },

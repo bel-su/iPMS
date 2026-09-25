@@ -14,7 +14,12 @@ import { UuidSchema } from '../common/ids.js';
  * `permissions` claim so it can never reach the handler.
  */
 export const LoginSchema = z.object({
-  username: z.string().min(1).max(150),
+  /**
+   * Normalized exactly as `EmailSchema` stores it, but not held to the email
+   * format: a malformed address simply matches no account, and answering it
+   * with the generic failure reveals less than a validation error would.
+   */
+  email: z.string().trim().toLowerCase().min(1).max(255),
   password: z.string().min(8).max(200),
 }).strip();
 export type LoginDto = z.infer<typeof LoginSchema>;

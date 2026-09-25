@@ -54,11 +54,10 @@ function readNewPassword(form: FormData): { password: string } | { error: string
 const pages = (userId: string) => [`/users/${userId}`, '/users'];
 
 export async function createUserAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const username = optional(form, 'username');
   const email = optional(form, 'email');
   const fullName = optional(form, 'fullName');
-  if (!username || !email || !fullName) {
-    return { error: 'A username, an email address and a full name are required.' };
+  if (!email || !fullName) {
+    return { error: 'An email address and a full name are required.' };
   }
 
   const password = readNewPassword(form);
@@ -66,7 +65,7 @@ export async function createUserAction(_previous: FormState, form: FormData): Pr
 
   const employeeCode = optional(form, 'employeeCode');
   const result = await createUser({
-    username, email, fullName, password: password.password,
+    email, fullName, password: password.password,
     // An unchecked box sends nothing, so this is the empty set when no role
     // was picked — which the API accepts and the service treats as "no roles".
     roleCodes: form.getAll('roleCodes').map(String),

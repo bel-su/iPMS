@@ -10,7 +10,7 @@ void main() {
       (WidgetTester tester) async {
     const user = AuthUser(
       id: 'user-123',
-      username: 'mohammad_hasan',
+      email: 'mohammad.hasan@ipms.local',
       displayName: 'Mohammad Oalid Hasan',
       role: 'Field Engineer',
     );

@@ -27,7 +27,7 @@ describe('POST /api/auth/login', () => {
   it('stores both tokens as http-only cookies on success', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, TOKENS)));
 
-    const response = await login(loginRequest({ username: 'ada', password: 'correct-horse' }));
+    const response = await login(loginRequest({ email: 'ada@ipms.local', password: 'correct-horse' }));
 
     expect(response.status).toBe(200);
     expect(response.cookies.get(ACCESS_COOKIE)?.value).toBe('access.jwt');
@@ -40,7 +40,7 @@ describe('POST /api/auth/login', () => {
   it('does not return the tokens in the response body', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, TOKENS)));
 
-    const response = await login(loginRequest({ username: 'ada', password: 'correct-horse' }));
+    const response = await login(loginRequest({ email: 'ada@ipms.local', password: 'correct-horse' }));
 
     expect(await response.text()).not.toContain('access.jwt');
   });
@@ -48,10 +48,10 @@ describe('POST /api/auth/login', () => {
   it('answers 401 for bad credentials', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(401, { error: { code: 'UNAUTHENTICATED' } })));
 
-    const response = await login(loginRequest({ username: 'ada', password: 'wrong-password' }));
+    const response = await login(loginRequest({ email: 'ada@ipms.local', password: 'wrong-password' }));
 
     expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ message: 'Invalid username or password.' });
+    expect(await response.json()).toEqual({ message: 'Invalid email or password.' });
   });
 
   // Distinct from 401 on purpose: telling someone their password is wrong when
@@ -59,7 +59,7 @@ describe('POST /api/auth/login', () => {
   it('answers 503 when the gateway cannot be reached', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
 
-    const response = await login(loginRequest({ username: 'ada', password: 'correct-horse' }));
+    const response = await login(loginRequest({ email: 'ada@ipms.local', password: 'correct-horse' }));
 
     expect(response.status).toBe(503);
   });
@@ -68,7 +68,7 @@ describe('POST /api/auth/login', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    for (const body of [{}, { username: 'ada' }, { username: '', password: 'correct-horse' }, { username: 1, password: 2 }]) {
+    for (const body of [{}, { email: 'ada@ipms.local' }, { email: '', password: 'correct-horse' }, { email: 1, password: 2 }]) {
       const response = await login(loginRequest(body));
       expect(response.status).toBe(400);
     }

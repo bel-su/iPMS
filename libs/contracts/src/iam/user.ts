@@ -9,20 +9,14 @@ import { RoleCodeSchema } from './role.js';
 // `mustChangePassword` is discarded rather than reaching the handler.
 
 /**
- * Lowercased before the pattern is applied, so `Ann.Lee` and `ann.lee` cannot
- * become two accounts that look identical in every list.
+ * The login identifier, and the only one: there is no separate username.
  *
- * Two characters minimum: the seeded `qc` account is two, and a policy the
- * repository's own seed violates is the wrong policy.
+ * Trimmed and lowercased before validation, so `Ann.Lee@example.com` and
+ * `ann.lee@example.com` cannot become two accounts that look identical in every
+ * list — and so the unique constraint on the column is a case-insensitive one
+ * in practice.
  */
-export const UsernameSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .regex(
-    /^[a-z][a-z0-9._-]{1,149}$/,
-    'Username must start with a letter and contain only letters, digits, dots, underscores or hyphens',
-  );
+export const EmailSchema = z.string().trim().toLowerCase().pipe(z.email().max(255));
 
 /**
  * Anything set through the API: at least eight characters, with an uppercase
@@ -41,8 +35,7 @@ export const NewPasswordSchema = z
   .regex(/[^A-Za-z0-9]/, 'Password must contain a symbol');
 
 export const CreateUserSchema = z.object({
-  username: UsernameSchema,
-  email: z.email().max(255),
+  email: EmailSchema,
   fullName: z.string().trim().min(1).max(200),
   employeeCode: z.string().trim().min(1).max(50).optional(),
   password: NewPasswordSchema,
@@ -51,18 +44,17 @@ export const CreateUserSchema = z.object({
 export type CreateUserDto = z.infer<typeof CreateUserSchema>;
 
 /**
- * Deliberately without `username` or `password`.
+ * Deliberately without `password`.
  *
- * `username` is the login identifier and it appears in audit ledger entries
- * written before any rename, so changing it silently rewrites who those entries
- * appear to be about. Changing a username means creating an account.
+ * `email` may change, and with it the address the holder signs in with. The
+ * ledger records users by id, so older entries still name the same person.
  *
  * `password` has its own endpoint because a credential change must revoke the
  * target's sessions, and folding that into a general-purpose PATCH makes it
  * easy to forget.
  */
 export const UpdateUserSchema = z.object({
-  email: z.email().max(255).optional(),
+  email: EmailSchema.optional(),
   fullName: z.string().trim().min(1).max(200).optional(),
   employeeCode: z.string().trim().min(1).max(50).nullable().optional(),
 }).strip();
@@ -95,7 +87,7 @@ export const UserStatusFilterSchema = z.enum(['ACTIVE', 'INACTIVE', 'ALL']);
 export type UserStatusFilter = z.infer<typeof UserStatusFilterSchema>;
 
 export const UserListQuerySchema = PaginationSchema.extend({
-  /** Matched against username, email and full name, case-insensitively. */
+  /** Matched against email and full name, case-insensitively. */
   search: z.string().trim().min(1).max(150).optional(),
   status: UserStatusFilterSchema.default('ALL'),
   role: RoleCodeSchema.optional(),
@@ -110,7 +102,6 @@ export const UserRoleSummarySchema = z.object({
 /** Never carries `passwordHash`, and never gains a field by being spread from a row. */
 export const UserResponseSchema = z.object({
   id: UuidSchema,
-  username: z.string(),
   email: z.string(),
   fullName: z.string(),
   employeeCode: z.string().nullable(),

@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { DEMO_PASSWORD, api, waitForReady } from './helpers/stack.js';
 
-async function login(username: string): Promise<string> {
-  const res = await api<{ accessToken: string }>('/api/v1/auth/login', { method: 'POST', body: { username, password: DEMO_PASSWORD } });
+async function login(user: string): Promise<string> {
+  const res = await api<{ accessToken: string }>('/api/v1/auth/login', { method: 'POST', body: { email: `${user}@ipms.local`, password: DEMO_PASSWORD } });
   expect(res.status).toBe(201);
   return res.body.accessToken;
 }

@@ -22,7 +22,6 @@ export interface UserRoleSummary { code: string; name: string }
 
 export interface User {
   id: string;
-  username: string;
   email: string;
   fullName: string;
   employeeCode: string | null;

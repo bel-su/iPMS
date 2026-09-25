@@ -154,12 +154,12 @@ describe('seedDemoUsers global scope replication', () => {
   }, 120_000);
 
   it('grants admin global scope', async () => {
-    const admin = await prisma.user.findUniqueOrThrow({ where: { username: 'admin' } });
+    const admin = await prisma.user.findUniqueOrThrow({ where: { email: 'admin@ipms.local' } });
     expect(await prisma.userGlobalScope.findUnique({ where: { userId: admin.id } })).not.toBeNull();
   });
 
   it('emits iam.scope.granted at level GLOBAL so other services learn about it', async () => {
-    const admin = await prisma.user.findUniqueOrThrow({ where: { username: 'admin' } });
+    const admin = await prisma.user.findUniqueOrThrow({ where: { email: 'admin@ipms.local' } });
     const events = await prisma.outboxEvent.findMany({ where: { subject: 'iam.scope.granted' } });
     expect(events).toHaveLength(1);
     expect(events[0]?.payload).toEqual({

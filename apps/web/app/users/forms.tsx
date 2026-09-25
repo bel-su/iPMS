@@ -36,7 +36,7 @@ export function UserFilterBar({ search, status }: { search: string; status: stri
     <form className="filter-bar" action="/users" method="get">
       <label className="field">
         Search
-        <input name="search" defaultValue={search} placeholder="Name, username or email" maxLength={150} />
+        <input name="search" defaultValue={search} placeholder="Name or email" maxLength={150} />
       </label>
       <label className="field">
         Status
@@ -95,11 +95,10 @@ export function CreateUserForm({ grantable }: { grantable: Role[] }) {
       <div className="form-grid">
         <label className="field">Full name<input name="fullName" required maxLength={200} /></label>
         <label className="field">
-          Username
-          <input name="username" required pattern="[A-Za-z][A-Za-z0-9._\-]+" maxLength={150} />
-          <span className="hint">Letters, digits, dot, underscore or hyphen. Cannot be changed later.</span>
+          Email
+          <input name="email" type="email" required maxLength={255} />
+          <span className="hint">The user signs in with this address.</span>
         </label>
-        <label className="field">Email<input name="email" type="email" required maxLength={255} /></label>
         <label className="field">Employee code<input name="employeeCode" maxLength={50} /></label>
         <label className="field">
           Temporary password
@@ -138,7 +137,7 @@ export function EditUserForm({ user }: { user: User }) {
       </div>
       <FormError state={state} />
       <p className="form-note">
-        The username is the login identifier and appears in the audit ledger, so it cannot be changed.
+        The email is what this user signs in with. Changing it changes their sign-in address.
       </p>
       <SubmitButton>Save changes</SubmitButton>
     </form>

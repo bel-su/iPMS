@@ -134,11 +134,11 @@ cmd_up() {
 
 Stack is up. Everything goes through the gateway on :$GATEWAY_PORT.
 
-  Log in (any of admin / manager / qc / engineer, password $IAM_DEMO_PASSWORD):
+  Log in (any of admin / manager / qc / engineer @ipms.local, password $IAM_DEMO_PASSWORD):
 
     curl -s localhost:$GATEWAY_PORT/api/v1/auth/login \\
       -H 'content-type: application/json' \\
-      -d '{"username":"admin","password":"$IAM_DEMO_PASSWORD"}'
+      -d '{"email":"admin@ipms.local","password":"$IAM_DEMO_PASSWORD"}'
 
   Then, with TOKEN set to the accessToken from that response:
 

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { DEMO_PASSWORD, api, waitForReady } from './helpers/stack.js';
 
-const ADMIN = { username: 'admin', password: DEMO_PASSWORD };
+const ADMIN = { email: 'admin@ipms.local', password: DEMO_PASSWORD };
 
 let adminToken: string;
 
@@ -15,7 +15,7 @@ beforeAll(async () => {
 describe('authentication', () => {
   it('rejects bad credentials with 401', async () => {
     const res = await api('/api/v1/auth/login', {
-      method: 'POST', body: { username: 'admin', password: 'wrong-password' },
+      method: 'POST', body: { email: 'admin@ipms.local', password: 'wrong-password' },
     });
     expect(res.status).toBe(401);
   });
@@ -45,7 +45,7 @@ describe('authorization', () => {
 
   it('denies a field engineer the roles endpoint with 403, not 401', async () => {
     const login = await api<{ accessToken: string }>('/api/v1/auth/login', {
-      method: 'POST', body: { username: 'engineer', password: DEMO_PASSWORD },
+      method: 'POST', body: { email: 'engineer@ipms.local', password: DEMO_PASSWORD },
     });
     const res = await api('/api/v1/roles', { token: login.body.accessToken });
     expect(res.status).toBe(403);
@@ -84,10 +84,10 @@ describe('access simulator', () => {
   });
 
   it('explains a denied decision by naming the failing gate', async () => {
-    const engineer = await api<{ items: Array<{ id: string; username: string }> }>(
+    const engineer = await api<{ items: Array<{ id: string; email: string }> }>(
       '/api/v1/users?search=engineer', { token: adminToken },
     );
-    const target = engineer.body.items.find((u) => u.username === 'engineer')!;
+    const target = engineer.body.items.find((u) => u.email === 'engineer@ipms.local')!;
     const res = await api<{ allowed: boolean; reason: string }>('/api/v1/access/check', {
       method: 'POST', token: adminToken,
       body: { userId: target.id, permissionCode: 'role.delete' },
@@ -129,7 +129,7 @@ describe('audit ledger', () => {
 describe('revocation', () => {
   it('invalidates outstanding tokens on logout', async () => {
     const login = await api<{ accessToken: string }>('/api/v1/auth/login', {
-      method: 'POST', body: { username: 'manager', password: DEMO_PASSWORD },
+      method: 'POST', body: { email: 'manager@ipms.local', password: DEMO_PASSWORD },
     });
     const token = login.body.accessToken;
     expect((await api('/api/v1/auth/me', { token })).status).toBe(200);
