@@ -7,7 +7,7 @@ const BASE = process.env['E2E_GATEWAY_URL'] ?? 'http://localhost:3000';
  * configuration. Read it from here rather than hardcoding one per spec: a
  * spec that disagrees with the seed fails every test at login.
  */
-export const DEMO_PASSWORD = process.env['IAM_DEMO_PASSWORD'] ?? 'password123';
+export const DEMO_PASSWORD = process.env['IAM_DEMO_PASSWORD'] ?? 'P@ssw0rd1234';
 
 export interface ApiResponse<T> {
   status: number;

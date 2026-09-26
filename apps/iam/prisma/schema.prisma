@@ -17,7 +17,8 @@ datasource db {
 
 model User {
   id           String    @id @db.Uuid
-  username     String    @unique @db.VarChar(150)
+  /// The login identifier. Always stored lowercased (see EmailSchema), so the
+  /// unique constraint is case-insensitive in practice.
   email        String    @unique @db.VarChar(255)
   fullName     String    @db.VarChar(200)
   employeeCode String?   @unique @db.VarChar(50)

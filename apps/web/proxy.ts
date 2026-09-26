@@ -63,6 +63,6 @@ export const config = {
      * times per page load, in parallel, each one racing the others to write a
      * different pair.
      */
-    '/((?!api/auth|_next/static|_next/image|favicon.ico).*)',
+    '/((?!api/auth|_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|manifest.webmanifest|brand/).*)',
   ],
 };

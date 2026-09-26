@@ -86,13 +86,12 @@ export default async function UsersPage({
               ? <div className="empty-list"><strong>No users match</strong><p>Try a different search or status.</p></div>
               : <table className="data-table">
                   <thead>
-                    <tr><th>Name</th><th>Username</th><th>Email</th><th>Roles</th><th>Status</th><th>Last sign-in</th><th></th></tr>
+                    <tr><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th>Last sign-in</th><th></th></tr>
                   </thead>
                   <tbody>
                     {items.map((user) => (
                       <tr key={user.id}>
                         <td><a href={`/users/${user.id}`}>{user.fullName}</a></td>
-                        <td><code>{user.username}</code></td>
                         <td>{user.email}</td>
                         <td>{user.roles.length === 0 ? '—' : user.roles.map((role) => role.name).join(', ')}</td>
                         <td>

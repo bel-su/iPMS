@@ -11,7 +11,7 @@ const MANAGER = ['PROJECT_MANAGER'];
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
-    id: TARGET, username: 'field.one', email: 'field.one@ipms.local',
+    id: TARGET, email: 'field.one@ipms.local',
     fullName: 'Field One', employeeCode: null, isActive: true,
     mustChangePassword: false, lastLoginAt: null, createdAt: new Date('2026-01-01T00:00:00Z'),
     roles: [{ role: { code: 'FIELD_ENGINEER', name: 'Field Engineer' } }],
@@ -66,7 +66,7 @@ describe('UsersService.list', () => {
     const where = prisma.user.findMany.mock.calls[0]![0].where;
     expect(where.isActive).toBe(true);
     expect(where.roles).toEqual({ some: { role: { code: 'FIELD_ENGINEER' } } });
-    expect(where.OR).toHaveLength(3);
+    expect(where.OR).toHaveLength(2);
   });
 
   it('leaves isActive unconstrained for the ALL status', async () => {
@@ -127,7 +127,7 @@ describe('UsersService.get', () => {
 
 describe('UsersService.create', () => {
   const dto = {
-    username: 'new.one', email: 'new.one@ipms.local', fullName: 'New One',
+    email: 'new.one@ipms.local', fullName: 'New One',
     password: 'a-long-enough-password', roleCodes: ['FIELD_ENGINEER'],
   };
 
@@ -157,15 +157,9 @@ describe('UsersService.create', () => {
       .rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('refuses a duplicate username, naming the field', async () => {
-    const { service, tx } = build(null);
-    tx.user.findUnique.mockResolvedValueOnce(row());
-    await expect(service.create(dto, ACTOR, ADMIN)).rejects.toThrow(/username/i);
-  });
-
   it('refuses a duplicate email, naming the field', async () => {
     const { service, tx } = build(null);
-    tx.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(row());
+    tx.user.findUnique.mockResolvedValueOnce(row());
     await expect(service.create(dto, ACTOR, ADMIN)).rejects.toThrow(/email/i);
   });
 

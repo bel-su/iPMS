@@ -26,7 +26,7 @@ export async function hashPassword(plain: string): Promise<string> {
 /**
  * Returns false rather than throwing on a malformed stored hash: a corrupt or
  * legacy row must fail the login, not surface as a 500 that tells the caller
- * the username exists.
+ * the email exists.
  */
 export async function verifyPassword(hash: string, plain: string): Promise<boolean> {
   try {

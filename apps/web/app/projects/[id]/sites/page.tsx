@@ -1,7 +1,8 @@
 import { getCurrentUser, hasPermission } from '../../../lib/iam-api';
 import { getProject } from '../../../lib/project-api';
 import { deleteSiteAction } from '../../actions';
-import { CreateSiteForm, RowAction } from '../../forms';
+import { RowAction } from '../../../components/forms';
+import { CreateSiteForm } from '../../forms';
 import { ProjectFrame, projectProblem } from '../frame';
 
 export default async function ProjectSitesPage({ params }: { params: Promise<{ id: string }> }) {

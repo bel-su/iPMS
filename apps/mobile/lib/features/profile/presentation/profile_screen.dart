@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/config/env.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../shared/widgets/brand_mark.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/providers/biometric_provider.dart';
 import '../../projects/providers/project_providers.dart';
@@ -232,7 +233,7 @@ class ProfileScreen extends ConsumerWidget {
 
             // User Identity & Role
             Text(
-              user?.displayName ?? user?.username ?? 'Field Staff',
+              user?.displayName ?? user?.email ?? 'Field Staff',
               style: AppTypography.headingMedium,
             ),
             const SizedBox(height: 4),
@@ -433,6 +434,8 @@ class ProfileScreen extends ConsumerWidget {
             ),
 
             const SizedBox(height: 20),
+            const Center(child: BrandMark(size: 28)),
+            const SizedBox(height: 8),
             Center(
               child: Text(
                 'iPMS Mobile v1.0.0 • Pure Stateless Client',

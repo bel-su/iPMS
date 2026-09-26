@@ -24,16 +24,16 @@ function build() {
 describe('AuthController.login', () => {
   it('delegates a valid credential pair to the service', async () => {
     const { controller, auth } = build();
-    const pair = await controller.login({ username: 'engineer', password: 'demo12345' });
+    const pair = await controller.login({ email: 'engineer@ipms.local', password: 'demo12345' });
 
-    expect(auth.login).toHaveBeenCalledWith({ username: 'engineer', password: 'demo12345' });
+    expect(auth.login).toHaveBeenCalledWith({ email: 'engineer@ipms.local', password: 'demo12345' });
     expect(pair.accessToken).toBe('a');
   });
 
   it('refuses a password below the policy length with 401, not a 500', async () => {
     const { controller, auth } = build();
 
-    await expect(controller.login({ username: 'engineer', password: 'short' }))
+    await expect(controller.login({ email: 'engineer@ipms.local', password: 'short' }))
       .rejects.toBeInstanceOf(UnauthorizedException);
     expect(auth.login).not.toHaveBeenCalled();
   });
@@ -41,13 +41,13 @@ describe('AuthController.login', () => {
   it('answers a refused body with the same message as a wrong password, disclosing no policy', async () => {
     const { controller } = build();
 
-    await expect(controller.login({ username: 'engineer', password: 'short' }))
+    await expect(controller.login({ email: 'engineer@ipms.local', password: 'short' }))
       .rejects.toThrow(GENERIC_FAILURE);
   });
 
   it.each([
-    ['a missing password', { username: 'engineer' }],
-    ['an empty username', { username: '', password: 'demo12345' }],
+    ['a missing password', { email: 'engineer@ipms.local' }],
+    ['an empty email', { email: '', password: 'demo12345' }],
     ['a non-object body', 'not-a-body'],
     ['null', null],
   ])('refuses %s with 401', async (_label, body) => {

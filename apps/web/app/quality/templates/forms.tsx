@@ -1,7 +1,7 @@
 'use client';
 import { useActionState } from 'react';
 import { EMPTY } from '../../lib/form-state';
-import { FormError, SubmitButton } from '../../projects/forms';
+import { FormError, SubmitButton } from '../../components/forms';
 import { createTemplateAction, renameTemplateAction } from './actions';
 import { CATEGORIES, CATEGORY_LABELS } from './labels';
 import type { TemplateCategory } from '../../lib/qc-api';

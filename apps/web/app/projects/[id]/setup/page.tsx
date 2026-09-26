@@ -1,7 +1,8 @@
 import { getCurrentUser, hasPermission } from '../../../lib/iam-api';
 import { getProject } from '../../../lib/project-api';
 import { deleteMilestoneAction, deleteTaskTypeAction } from '../../actions';
-import { CreateMilestoneForm, CreateTaskTypeForm, RowAction } from '../../forms';
+import { RowAction } from '../../../components/forms';
+import { CreateMilestoneForm, CreateTaskTypeForm } from '../../forms';
 import { ProjectFrame, projectProblem } from '../frame';
 
 /** The project's structure: the kinds of work it contains, and the milestones they add up to. */

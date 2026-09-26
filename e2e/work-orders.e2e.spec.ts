@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { DEMO_PASSWORD, api, waitForReady } from './helpers/stack.js';
 
-async function login(username: string): Promise<string> {
-  const res = await api<{ accessToken: string }>('/api/v1/auth/login', { method: 'POST', body: { username, password: DEMO_PASSWORD } });
+async function login(user: string): Promise<string> {
+  const res = await api<{ accessToken: string }>('/api/v1/auth/login', { method: 'POST', body: { email: `${user}@ipms.local`, password: DEMO_PASSWORD } });
   expect(res.status).toBe(201);
   return res.body.accessToken;
 }
@@ -42,55 +42,62 @@ describe('work orders', () => {
     const antenna = await project(`ANT-${stamp}`);
     const power = await project(`PWR-${stamp}`);
     const [antennaSite, powerSite] = await Promise.all([site(antenna), site(power)]);
-    await api(`/api/v1/users/${engineerId}/projects`, { method: 'POST', token: admin, body: { level: 'PROJECT', projectId: antenna } });
-    await sleep(1500); // scope replicates to project over NATS
+    const scope = { level: 'PROJECT', projectId: antenna };
+    await api(`/api/v1/users/${engineerId}/projects`, { method: 'POST', token: admin, body: scope });
+    // project-scope.e2e asserts the seeded engineer starts with no projects, and
+    // the stack's database outlives the run, so hand the grant back either way.
+    try {
+      await sleep(1500); // scope replicates to project over NATS
 
-    const batch = (projectId: string, siteId: string) => api<{ created: { id: string; title: string; project: { code: string } }[] }>(
-      '/api/v1/work-orders',
-      { method: 'POST', token: admin, body: { projectId, workOrderType: 'QUALITY_SELF_CHECK', templateId, siteIds: [siteId], assigneeId: engineerId, plannedCompletionAt: '2026-12-31T18:14:59Z' } },
-    );
-    // The engineer holds the antenna project only: the same site code under the power project is out of reach.
-    expect((await batch(power, powerSite)).status).toBe(400);
-    const made = await batch(antenna, antennaSite);
-    expect(made.status).toBe(201);
-    expect(made.body.created[0]).toMatchObject({ title: '[Quality Self-check]KOS102X', project: { code: `ANT-${stamp}` } });
-    const id = made.body.created[0]!.id;
+      const batch = (projectId: string, siteId: string) => api<{ created: { id: string; title: string; project: { code: string } }[] }>(
+        '/api/v1/work-orders',
+        { method: 'POST', token: admin, body: { projectId, workOrderType: 'QUALITY_SELF_CHECK', templateId, siteIds: [siteId], assigneeId: engineerId, plannedCompletionAt: '2026-12-31T18:14:59Z' } },
+      );
+      // The engineer holds the antenna project only: the same site code under the power project is out of reach.
+      expect((await batch(power, powerSite)).status).toBe(400);
+      const made = await batch(antenna, antennaSite);
+      expect(made.status).toBe(201);
+      expect(made.body.created[0]).toMatchObject({ title: '[Quality Self-check]KOS102X', project: { code: `ANT-${stamp}` } });
+      const id = made.body.created[0]!.id;
 
-    const checklist = await api<{ version: { id: string; sections: { items: { id: string }[] }[] } }>(`/api/v1/qc/tasks/${id}/checklist`, { token: engineer });
-    const submit = () => api<{ id: string }>('/api/v1/qc/submissions', {
-      method: 'POST', token: engineer,
-      body: {
-        taskId: id, siteId: antennaSite, projectId: antenna, templateVersionId: checklist.body.version.id, idempotencyKey: `e2e-${Math.random()}`,
-        responses: [{ itemId: checklist.body.version.sections[0]!.items[0]!.id, selfCheckResult: 'PASS', photoMediaIds: [mediaId()] }],
-      },
-    });
-    const review = (submissionId: string, decision: string, result: string) => api(`/api/v1/qc/submissions/${submissionId}/review`, {
-      method: 'POST', token: qc,
-      body: { decision, comment: 'e2e', itemReviews: [{ itemId: checklist.body.version.sections[0]!.items[0]!.id, result }] },
-    });
+      const checklist = await api<{ version: { id: string; sections: { items: { id: string }[] }[] } }>(`/api/v1/qc/tasks/${id}/checklist`, { token: engineer });
+      const submit = () => api<{ id: string }>('/api/v1/qc/submissions', {
+        method: 'POST', token: engineer,
+        body: {
+          taskId: id, siteId: antennaSite, projectId: antenna, templateVersionId: checklist.body.version.id, idempotencyKey: `e2e-${Math.random()}`,
+          responses: [{ itemId: checklist.body.version.sections[0]!.items[0]!.id, selfCheckResult: 'PASS', photoMediaIds: [mediaId()] }],
+        },
+      });
+      const review = (submissionId: string, decision: string, result: string) => api(`/api/v1/qc/submissions/${submissionId}/review`, {
+        method: 'POST', token: qc,
+        body: { decision, comment: 'e2e', itemReviews: [{ itemId: checklist.body.version.sections[0]!.items[0]!.id, result }] },
+      });
 
-    const first = await submit();
-    expect(first.status).toBe(201);
-    expect(await statusOf(id)).toBe('REVIEWING');
-    await review(first.body.id, 'REJECT_REWORK', 'REJECTED');
-    expect(await statusOf(id)).toBe('RECTIFYING');
-    const second = await submit();
-    expect(second.status).toBe(201);
-    expect(await statusOf(id)).toBe('REVIEWING');
-    await review(second.body.id, 'APPROVE', 'APPROVED');
-    expect(await statusOf(id)).toBe('COMPLETED');
+      const first = await submit();
+      expect(first.status).toBe(201);
+      expect(await statusOf(id)).toBe('REVIEWING');
+      await review(first.body.id, 'REJECT_REWORK', 'REJECTED');
+      expect(await statusOf(id)).toBe('RECTIFYING');
+      const second = await submit();
+      expect(second.status).toBe(201);
+      expect(await statusOf(id)).toBe('REVIEWING');
+      await review(second.body.id, 'APPROVE', 'APPROVED');
+      expect(await statusOf(id)).toBe('COMPLETED');
 
-    const detail = await api<{ actualCompletionAt: string | null; events: { kind: string }[] }>(`/api/v1/work-orders/${id}`, { token: admin });
-    expect(detail.body.actualCompletionAt).not.toBeNull();
-    expect(detail.body.events.map((e) => e.kind)).toEqual(['CREATED', 'SUBMITTED', 'REJECTED', 'SUBMITTED', 'APPROVED']);
+      const detail = await api<{ actualCompletionAt: string | null; events: { kind: string }[] }>(`/api/v1/work-orders/${id}`, { token: admin });
+      expect(detail.body.actualCompletionAt).not.toBeNull();
+      expect(detail.body.events.map((e) => e.kind)).toEqual(['CREATED', 'SUBMITTED', 'REJECTED', 'SUBMITTED', 'APPROVED']);
 
-    const queue = await api<{ total: number; items: { id: string }[] }>(`/api/v1/work-orders?projectId=${antenna}&status=COMPLETED`, { token: admin });
-    expect(queue.body.items.map((item) => item.id)).toContain(id);
-    const brief = await api<{ id: string }[]>(`/api/v1/work-orders/by-project/${antenna}`, { token: admin });
-    expect(brief.body.map((row) => row.id)).toContain(id);
+      const queue = await api<{ total: number; items: { id: string }[] }>(`/api/v1/work-orders?projectId=${antenna}&status=COMPLETED`, { token: admin });
+      expect(queue.body.items.map((item) => item.id)).toContain(id);
+      const brief = await api<{ id: string }[]>(`/api/v1/work-orders/by-project/${antenna}`, { token: admin });
+      expect(brief.body.map((row) => row.id)).toContain(id);
 
-    // The site still has a work order in qc, so project will not delete it.
-    expect((await api(`/api/v1/sites/${antennaSite}`, { method: 'DELETE', token: admin })).status).toBe(409);
+      // The site still has a work order in qc, so project will not delete it.
+      expect((await api(`/api/v1/sites/${antennaSite}`, { method: 'DELETE', token: admin })).status).toBe(409);
+    } finally {
+      await api(`/api/v1/users/${engineerId}/projects`, { method: 'DELETE', token: admin, body: scope });
+    }
   }, 60_000);
 
   it('keeps /internal endpoints off the gateway', async () => {

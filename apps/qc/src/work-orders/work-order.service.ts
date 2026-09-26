@@ -58,7 +58,7 @@ export class WorkOrderService {
       projectId: refs.project.id, projectCode: refs.project.code, projectName: refs.project.name,
       siteId: site.id, siteCode: site.siteCode, siteName: site.name, siteCity: site.city, siteArea: site.area,
       templateId: template.id, templateName: template.name, workOrderType: dto.workOrderType,
-      title: workOrderTitle(dto.workOrderType, site.name, dto.note),
+      title: workOrderTitle(dto.workOrderType, site.siteCode, dto.note),
       status: 'NOT_STARTED', assigneeId: dto.assigneeId, plannedCompletionAt: dto.plannedCompletionAt,
       createdBy: actorId, createdAt: now,
     }));

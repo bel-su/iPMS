@@ -70,7 +70,7 @@ describe('ListWorkOrdersQuerySchema', () => {
 
 describe('workOrderTitle', () => {
   it('prefixes the site name with the type label and appends the note', () => {
-    expect(workOrderTitle('QUALITY_SELF_CHECK', 'SAKUWA GACHHI')).toBe('[Quality Self-check]SAKUWA GACHHI');
+    expect(workOrderTitle('QUALITY_SELF_CHECK', 'KOS001')).toBe('[Quality Self-check]KOS001');
     expect(workOrderTitle('EHS_SPOT_CHECK', 'KOS102X', '  sector 2 ')).toBe('[EHS Spot Check]KOS102X sector 2');
   });
 

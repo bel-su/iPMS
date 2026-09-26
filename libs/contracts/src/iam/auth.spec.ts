@@ -4,20 +4,24 @@ import { uuidv7 } from '../common/ids.js';
 
 describe('LoginSchema', () => {
   it('accepts a valid credential pair', () => {
-    expect(LoginSchema.safeParse({ username: 'engineer', password: 'demo12345' }).success).toBe(true);
+    expect(LoginSchema.safeParse({ email: 'engineer@ipms.local', password: 'demo12345' }).success).toBe(true);
   });
 
-  it('rejects an empty username', () => {
-    expect(LoginSchema.safeParse({ username: '', password: 'demo12345' }).success).toBe(false);
+  it('rejects an empty email', () => {
+    expect(LoginSchema.safeParse({ email: '', password: 'demo12345' }).success).toBe(false);
   });
 
   it('rejects a password under 8 characters', () => {
-    expect(LoginSchema.safeParse({ username: 'engineer', password: 'short' }).success).toBe(false);
+    expect(LoginSchema.safeParse({ email: 'engineer@ipms.local', password: 'short' }).success).toBe(false);
+  });
+
+  it('normalizes the email as it is stored, so sign-in is case-insensitive', () => {
+    expect(LoginSchema.parse({ email: ' Engineer@IPMS.local ', password: 'demo12345' }).email).toBe('engineer@ipms.local');
   });
 
   it('strips unknown fields so clients cannot inject claims', () => {
-    const parsed = LoginSchema.parse({ username: 'a', password: 'demo12345', role: 'SUPER_ADMIN' });
-    expect(parsed).toEqual({ username: 'a', password: 'demo12345' });
+    const parsed = LoginSchema.parse({ email: 'a@ipms.local', password: 'demo12345', role: 'SUPER_ADMIN' });
+    expect(parsed).toEqual({ email: 'a@ipms.local', password: 'demo12345' });
   });
 });
 

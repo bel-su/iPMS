@@ -12,6 +12,8 @@
 export interface FormState {
   error?: string;
   correlationId?: string;
+  /** Set by an action that finishes on its own page rather than redirecting. */
+  done?: boolean;
 }
 
 export const EMPTY: FormState = {};

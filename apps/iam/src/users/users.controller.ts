@@ -36,6 +36,17 @@ export class UsersController {
   }
 
   /**
+   * The caller's own record, for their profile page. No permission: anyone
+   * signed in may read themselves, and the id comes from the token, never the
+   * request, so it cannot be aimed at another user. Declared before
+   * `users/:id` for the same reason as `directory`.
+   */
+  @Get('users/me')
+  async me(@Req() req: { user: AuthzUser }) {
+    return this.users.get(req.user.id);
+  }
+
+  /**
    * Not object-gated: `user.view` grants the directory, and a project manager
    * needs an administrator's name to know who to ask. What they cannot do is
    * change one.

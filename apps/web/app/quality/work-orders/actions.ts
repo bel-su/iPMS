@@ -5,7 +5,6 @@ import { cancelWorkOrder, createWorkOrders, updateWorkOrder } from '../../lib/wo
 import { getVersion, type ChecklistSection } from '../../lib/qc-api';
 import type { FormState } from '../../lib/form-state';
 import { optional, settle } from '../../lib/settle';
-import { projectPages } from '../../projects/[id]/paths';
 import { WORK_ORDERS_PATH, isWorkOrderType, workOrderPath } from './labels';
 
 export type ChecklistPreview =
@@ -21,9 +20,13 @@ export type ProjectContext =
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const validDate = (value: string | undefined): value is string => value !== undefined && !Number.isNaN(new Date(value).getTime());
 
-/** Every page a work order change shows on. */
+/**
+ * Every page a work order change shows on: the queue, its own page, and the
+ * project overview that summarises it. Workspace overview counts are read
+ * fresh on each render.
+ */
 const pages = (projectId: string, workOrderId?: string) => [
-  WORK_ORDERS_PATH, ...(workOrderId ? [workOrderPath(workOrderId)] : []), ...projectPages(projectId),
+  WORK_ORDERS_PATH, ...(workOrderId ? [workOrderPath(workOrderId)] : []), `/projects/${projectId}`,
 ];
 
 export async function createWorkOrdersAction(_previous: FormState, form: FormData): Promise<FormState> {

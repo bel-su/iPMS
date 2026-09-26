@@ -4,9 +4,8 @@ import { listProjectWorkOrders } from '../../lib/work-order-api';
 import type { ApiResult } from '../../lib/api-client';
 import { StatePage } from '../../shell';
 import { ProjectFrame, projectProblem } from './frame';
-import { projectWorkOrders } from './paths';
 import { STATUS_LABEL, formatDay, landingFor, myTasks, summarizeProject, workOf, type Work } from './summary';
-import { taskKind, workOrderPath } from '../../quality/work-orders/labels';
+import { projectWorkOrdersPath, taskKind, workOrderPath } from '../../quality/work-orders/labels';
 
 function Metric({ icon, label, value, detail, tone }: { icon: string; label: string; value: number; detail: string; tone: string }) {
   return <article className="metric-card"><div className="metric-heading"><span className={`metric-icon ${tone}`}>{icon}</span><span>{label}</span></div><strong>{value}</strong><p>{detail}</p></article>;
@@ -100,7 +99,7 @@ function ProjectOverview({ project, tasks, user }: { project: ProjectDetail; tas
         </article>
 
         <article className="panel attention-panel">
-          <div className="panel-header"><div><h2>Needs your attention</h2><p>{summary.attentionTotal === 0 ? 'Nothing needs follow-up' : `${summary.attentionTotal} item${summary.attentionTotal === 1 ? '' : 's'} require follow-up`}</p></div><a href={projectWorkOrders(project.id)}>See all <span>→</span></a></div>
+          <div className="panel-header"><div><h2>Needs your attention</h2><p>{summary.attentionTotal === 0 ? 'Nothing needs follow-up' : `${summary.attentionTotal} item${summary.attentionTotal === 1 ? '' : 's'} require follow-up`}</p></div><a href={projectWorkOrdersPath(project.id)}>See all <span>→</span></a></div>
           {summary.attention.length === 0
             ? <div className="empty-list"><strong>All clear</strong><p>No tasks are in review, returned for rework, or close to their due date.</p></div>
             : <div className="attention-list">
@@ -117,7 +116,7 @@ function ProjectOverview({ project, tasks, user }: { project: ProjectDetail; tas
 
       <section className="bottom-grid">
         <article className="panel activity-panel">
-          <div className="panel-header"><div><h2>Upcoming deadlines</h2><p>Open tasks by planned completion</p></div><a href={projectWorkOrders(project.id)}>All work orders <span>→</span></a></div>
+          <div className="panel-header"><div><h2>Upcoming deadlines</h2><p>Open tasks by planned completion</p></div><a href={projectWorkOrdersPath(project.id)}>All work orders <span>→</span></a></div>
           {summary.deadlines.length === 0
             ? <div className="empty-list"><strong>No upcoming deadlines</strong><p>Open tasks with a planned completion date appear here.</p></div>
             : <div className="activity-list">

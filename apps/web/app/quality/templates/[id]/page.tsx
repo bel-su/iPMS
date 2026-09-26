@@ -1,6 +1,6 @@
 import { getCurrentUser, hasPermission } from '../../../lib/iam-api';
 import { getTemplate, getVersion } from '../../../lib/qc-api';
-import { RowAction } from '../../../projects/forms';
+import { RowAction } from '../../../components/forms';
 import { Sidebar, StatePage, TopActions } from '../../../shell';
 import { disableTemplateAction, enableTemplateAction, startDraftAction } from '../actions';
 import { RenameTemplateForm } from '../forms';

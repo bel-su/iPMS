@@ -29,14 +29,13 @@ type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
  * time someone added a field to the response shape.
  */
 const USER_SELECT = {
-  id: true, username: true, email: true, fullName: true, employeeCode: true,
+  id: true, email: true, fullName: true, employeeCode: true,
   isActive: true, mustChangePassword: true, lastLoginAt: true, createdAt: true,
   roles: { select: { role: { select: { code: true, name: true } } } },
 } as const;
 
 interface UserRow {
   id: string;
-  username: string;
   email: string;
   fullName: string;
   employeeCode: string | null;
@@ -61,7 +60,6 @@ function toResponse(row: UserRow): UserResponse {
   for (const assignment of row.roles) seen.set(assignment.role.code, assignment.role.name);
   return {
     id: row.id,
-    username: row.username,
     email: row.email,
     fullName: row.fullName,
     employeeCode: row.employeeCode,
@@ -181,7 +179,7 @@ export class UsersService {
    * Names only, for anyone who works with tasks: the responsible-person picker
    * on a work order, and the name printed where a task shows its assignee.
    *
-   * Deliberately narrower than `list` — no username, email, roles or login
+   * Deliberately narrower than `list` — no email, roles or login
    * history — because it is granted by `task.view` rather than `user.view`,
    * and a QC Manager raising a spot check needs to name the engineer without
    * being handed the staff directory. Inactive users are included, flagged, so
@@ -203,7 +201,6 @@ export class UsersService {
       ...(query.status === 'ALL' ? {} : { isActive: query.status === 'ACTIVE' }),
       ...(query.search === undefined ? {} : {
         OR: [
-          { username: { contains: query.search, mode: 'insensitive' as const } },
           { email: { contains: query.search, mode: 'insensitive' as const } },
           { fullName: { contains: query.search, mode: 'insensitive' as const } },
         ],
@@ -248,9 +245,6 @@ export class UsersService {
       // Checked explicitly rather than left to the unique constraint, so a
       // collision is a 400 naming the field rather than a Prisma error
       // surfacing as a 500.
-      if (await tx.user.findUnique({ where: { username: dto.username } })) {
-        throw new BadRequestException(`Username ${dto.username} is already in use`);
-      }
       if (await tx.user.findUnique({ where: { email: dto.email } })) {
         throw new BadRequestException(`Email ${dto.email} is already in use`);
       }
@@ -261,7 +255,6 @@ export class UsersService {
       await tx.user.create({
         data: {
           id,
-          username: dto.username,
           email: dto.email,
           fullName: dto.fullName,
           ...(dto.employeeCode === undefined ? {} : { employeeCode: dto.employeeCode }),
@@ -283,7 +276,7 @@ export class UsersService {
       }
 
       await this.audit(tx, actorId, 'user.created', id, {}, {
-        username: dto.username, email: dto.email, fullName: dto.fullName,
+        email: dto.email, fullName: dto.fullName,
         roleCodes: roles.map((role) => role.code),
       });
 

@@ -8,11 +8,13 @@ import { PasswordService } from './password.service.js';
 import { TokenService } from './token.service.js';
 
 /**
- * Identical for every failure mode, so responses never reveal whether a
- * username exists. Exported because the controller answers a body the schema
+ * Identical for every failure mode, so responses never reveal whether an
+ * email exists. Exported because the controller answers a body the schema
  * refuses with this same message, for the same reason.
  */
-export const GENERIC_FAILURE = 'Invalid username or password';
+export const GENERIC_FAILURE = 'Invalid email or password';
+
+export const CURRENT_PASSWORD_WRONG = 'Your current password is incorrect';
 
 /**
  * Publishes each user's current token version to the shared cache the gateway
@@ -122,7 +124,7 @@ export class AuthService {
 
   async login(dto: LoginDto): Promise<TokenPair> {
     const user = await this.prisma.user.findUnique({
-      where: { username: dto.username },
+      where: { email: dto.email },
       include: USER_INCLUDE,
     });
 
@@ -216,8 +218,12 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.isActive) throw new UnauthorizedException(GENERIC_FAILURE);
 
+    // 400, not 401. The caller is already authenticated, so there is no
+    // email to protect, and every client reads a 401 as "session expired":
+    // the web app answered one by sending the user to sign in, which looked
+    // exactly like a successful change.
     if (!(await this.passwords.verify(user.passwordHash, dto.currentPassword))) {
-      throw new UnauthorizedException(GENERIC_FAILURE);
+      throw new BadRequestException(CURRENT_PASSWORD_WRONG);
     }
     if (dto.currentPassword === dto.newPassword) {
       throw new BadRequestException('The new password must differ from the current one');

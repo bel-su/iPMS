@@ -24,6 +24,19 @@ const WORK_ORDERS = `
     FROM task t JOIN project p ON p.id = t."projectId" JOIN site s ON s.id = t."siteId"
    WHERE t."workOrderType" IS NOT NULL`;
 
+/**
+ * Work order names carry the site ID, not the site name. Project named them by
+ * site name, so copied rows are renamed the way migration
+ * 20260926000200_work_order_title_site_code renamed rows already here.
+ */
+const TITLE_BY_SITE_CODE = `
+  UPDATE work_order
+     SET title = left(substr(title, 1, position(']' IN title)) || "siteCode" || substr(title, position(']' IN title) + 1 + length("siteName")), 250)
+   WHERE id = ANY($1::uuid[])
+     AND "siteName" <> "siteCode"
+     AND position(']' IN title) > 0
+     AND substr(title, position(']' IN title) + 1, length("siteName")) = "siteName"`;
+
 async function hasWorkOrders(project: pg.Client): Promise<boolean> {
   const found = await project.query(
     `SELECT 1 FROM information_schema.columns WHERE table_name = 'task' AND column_name = 'workOrderType'`,
@@ -64,6 +77,7 @@ export async function importProjectWorkOrders(projectUrl: string, qcUrl: string)
         );
         copied += result.rowCount ?? 0;
       }
+      await qc.query(TITLE_BY_SITE_CODE, [orders.map((order) => order.id)]);
       for (const e of events) {
         const result = await qc.query(
           `INSERT INTO work_order_event (id, "workOrderId", kind, at, "actorId", detail) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING`,

@@ -41,18 +41,26 @@ function form(fields: Record<string, string | string[]>): FormData {
 }
 
 const NEW_USER = {
-  username: 'new.one', email: 'new.one@ipms.local', fullName: 'New One',
-  password: 'a-long-enough-password', confirmPassword: 'a-long-enough-password',
+  email: 'new.one@ipms.local', fullName: 'New One',
+  password: 'Long-enough-1', confirmPassword: 'Long-enough-1', roleCodes: 'FIELD_ENGINEER',
 };
 
 describe('createUserAction', () => {
-  it('sends the whole form, with the checked roles as an array', async () => {
-    await expect(createUserAction({}, form({ ...NEW_USER, roleCodes: ['FIELD_ENGINEER', 'QC_MANAGER'] })))
+  it('sends the whole form, with the chosen role as a one-element array', async () => {
+    await expect(createUserAction({}, form(NEW_USER)))
       .rejects.toThrow('NEXT_REDIRECT');
     expect(createUser).toHaveBeenCalledWith({
-      username: 'new.one', email: 'new.one@ipms.local', fullName: 'New One',
-      password: 'a-long-enough-password', roleCodes: ['FIELD_ENGINEER', 'QC_MANAGER'],
+      email: 'new.one@ipms.local', fullName: 'New One',
+      password: 'Long-enough-1', roleCodes: ['FIELD_ENGINEER'],
     });
+  });
+
+  it('requires exactly one role', async () => {
+    const { roleCodes: _none, ...withoutRole } = NEW_USER;
+    expect(await createUserAction({}, form(withoutRole))).toEqual({ error: 'Choose a role for this user.' });
+    expect(await createUserAction({}, form({ ...NEW_USER, roleCodes: ['FIELD_ENGINEER', 'QC_MANAGER'] })))
+      .toEqual({ error: 'Choose a role for this user.' });
+    expect(createUser).not.toHaveBeenCalled();
   });
 
   it('omits employeeCode when it was left blank rather than sending an empty string', async () => {
@@ -71,13 +79,19 @@ describe('createUserAction', () => {
   // worse answer than an immediate one.
   it('refuses a short password without a round trip', async () => {
     expect(await createUserAction({}, form({ ...NEW_USER, password: 'short', confirmPassword: 'short' })))
-      .toEqual({ error: 'The password must be at least 12 characters.' });
+      .toEqual({ error: 'The password must be at least 8 characters.' });
     expect(createUser).not.toHaveBeenCalled();
   });
 
-  it('requires a username, an email and a name', async () => {
-    expect(await createUserAction({}, form({ username: 'only.this' })))
-      .toEqual({ error: 'A username, an email address and a full name are required.' });
+  it('names every character class a password is missing', async () => {
+    expect(await createUserAction({}, form({ ...NEW_USER, password: 'lowercase', confirmPassword: 'lowercase' })))
+      .toEqual({ error: 'The password must contain an uppercase letter, a digit and a symbol.' });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('requires an email and a name', async () => {
+    expect(await createUserAction({}, form({ email: 'only.this@ipms.local' })))
+      .toEqual({ error: 'An email address and a full name are required.' });
   });
 
   it('lands on the new users page', async () => {
@@ -113,14 +127,15 @@ describe('updateUserAction', () => {
 });
 
 describe('setUserRolesAction', () => {
-  // An unchecked box sends nothing, which is how the form says "no roles".
-  it('sends the empty set when every box is unchecked', async () => {
-    expect(await setUserRolesAction({}, form({ userId: 'u-1' }))).toEqual({});
-    expect(setUserRoles).toHaveBeenCalledWith('u-1', { roleCodes: [] });
+  it('requires exactly one role', async () => {
+    expect(await setUserRolesAction({}, form({ userId: 'u-1' }))).toEqual({ error: 'Choose a role for this user.' });
+    expect(await setUserRolesAction({}, form({ userId: 'u-1', roleCodes: ['QC_MANAGER', 'VIEWER'] })))
+      .toEqual({ error: 'Choose a role for this user.' });
+    expect(setUserRoles).not.toHaveBeenCalled();
   });
 
-  it('sends every checked role', async () => {
-    await setUserRolesAction({}, form({ userId: 'u-1', roleCodes: ['QC_MANAGER'] }));
+  it('sends the chosen role as the whole set', async () => {
+    await setUserRolesAction({}, form({ userId: 'u-1', roleCodes: 'QC_MANAGER' }));
     expect(setUserRoles).toHaveBeenCalledWith('u-1', { roleCodes: ['QC_MANAGER'] });
   });
 });
@@ -151,40 +166,54 @@ describe('deactivateUserAction and reactivateUserAction', () => {
 describe('resetUserPasswordAction', () => {
   it('sends the new password once both copies agree', async () => {
     expect(await resetUserPasswordAction({}, form({
-      userId: 'u-1', password: 'a-long-enough-password', confirmPassword: 'a-long-enough-password',
+      userId: 'u-1', password: 'Long-enough-1', confirmPassword: 'Long-enough-1',
     }))).toEqual({});
-    expect(resetUserPassword).toHaveBeenCalledWith('u-1', { password: 'a-long-enough-password' });
+    expect(resetUserPassword).toHaveBeenCalledWith('u-1', { password: 'Long-enough-1' });
   });
 
   it('refuses a mismatch without a round trip', async () => {
     expect(await resetUserPasswordAction({}, form({
-      userId: 'u-1', password: 'a-long-enough-password', confirmPassword: 'different-enough-one',
+      userId: 'u-1', password: 'Long-enough-1', confirmPassword: 'Different-one-2',
     }))).toEqual({ error: 'The two passwords do not match.' });
     expect(resetUserPassword).not.toHaveBeenCalled();
   });
 });
 
 describe('changePasswordAction', () => {
-  /**
-   * The change bumps tokenVersion, so the cookie in this browser is already
-   * dead by the time the action returns. Signing out locally and going to the
-   * login page is the only coherent next screen.
-   */
-  it('sends the user to sign in again', async () => {
-    await expect(changePasswordAction({}, form({
-      currentPassword: 'old-password', newPassword: 'a-long-enough-password',
-      confirmPassword: 'a-long-enough-password',
-    }))).rejects.toThrow('NEXT_REDIRECT');
+  // The form confirms the change on its own page before offering sign-in,
+  // rather than landing the user on the login screen unannounced.
+  it('reports success instead of redirecting', async () => {
+    expect(await changePasswordAction({}, form({
+      currentPassword: 'old-password', newPassword: 'Long-enough-1',
+      confirmPassword: 'Long-enough-1',
+    }))).toEqual({ done: true });
+    expect(redirect).not.toHaveBeenCalled();
     expect(changePassword).toHaveBeenCalledWith({
-      currentPassword: 'old-password', newPassword: 'a-long-enough-password',
+      currentPassword: 'old-password', newPassword: 'Long-enough-1',
     });
-    expect(redirect).toHaveBeenCalledWith('/login?changed=1');
+  });
+
+  // iam answers a wrong current password with a 400, which must reach the form
+  // rather than being mistaken for an expired session.
+  it('shows a wrong current password on the form instead of redirecting', async () => {
+    changePassword.mockResolvedValueOnce({ state: 'unavailable', status: 400, message: 'Your current password is incorrect' });
+    expect(await changePasswordAction({}, form({
+      currentPassword: 'wrong-one', newPassword: 'Long-enough-1', confirmPassword: 'Long-enough-1',
+    }))).toEqual({ error: 'Your current password is incorrect' });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('sends passwords exactly as typed, spaces included', async () => {
+    await changePasswordAction({}, form({
+      currentPassword: ' old-password ', newPassword: 'Long-enough-1 ', confirmPassword: 'Long-enough-1 ',
+    }));
+    expect(changePassword).toHaveBeenCalledWith({ currentPassword: ' old-password ', newPassword: 'Long-enough-1 ' });
   });
 
   it('refuses a new password equal to the current one without a round trip', async () => {
     expect(await changePasswordAction({}, form({
-      currentPassword: 'a-long-enough-password', newPassword: 'a-long-enough-password',
-      confirmPassword: 'a-long-enough-password',
+      currentPassword: 'Long-enough-1', newPassword: 'Long-enough-1',
+      confirmPassword: 'Long-enough-1',
     }))).toEqual({ error: 'The new password must be different from the current one.' });
     expect(changePassword).not.toHaveBeenCalled();
   });

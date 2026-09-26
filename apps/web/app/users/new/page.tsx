@@ -1,10 +1,10 @@
 import { getCurrentUser } from '../../lib/iam-api';
-import { listRoles } from '../../lib/user-api';
+import { listPermissions, listRoles } from '../../lib/user-api';
 import { Sidebar, StatePage, TopActions } from '../../shell';
 import { CreateUserForm } from '../forms';
 
 export default async function NewUserPage() {
-  const [roles, viewer] = await Promise.all([listRoles(), getCurrentUser()]);
+  const [roles, viewer, permissions] = await Promise.all([listRoles(), getCurrentUser(), listPermissions()]);
 
   if (roles.state === 'unauthenticated' || viewer.state === 'unauthenticated') {
     return <StatePage title="Sign in to add a user"><a className="primary-button" href="/login">Sign in</a></StatePage>;
@@ -42,7 +42,7 @@ export default async function NewUserPage() {
             <div><p className="eyebrow">ADD SOMEONE</p><h1>New user</h1></div>
           </div>
           <section className="panel">
-            <CreateUserForm grantable={grantable} />
+            <CreateUserForm grantable={grantable} catalog={permissions.state === 'ready' ? permissions.data : []} />
           </section>
         </div>
       </section>

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { DEMO_PASSWORD, api, waitForReady } from './helpers/stack.js';
 
-const ADMIN = { username: 'admin', password: DEMO_PASSWORD };
+const ADMIN = { email: 'admin@ipms.local', password: DEMO_PASSWORD };
 
 let adminToken: string;
 
@@ -15,7 +15,7 @@ beforeAll(async () => {
 describe('authentication', () => {
   it('rejects bad credentials with 401', async () => {
     const res = await api('/api/v1/auth/login', {
-      method: 'POST', body: { username: 'admin', password: 'wrong-password' },
+      method: 'POST', body: { email: 'admin@ipms.local', password: 'wrong-password' },
     });
     expect(res.status).toBe(401);
   });
@@ -45,7 +45,7 @@ describe('authorization', () => {
 
   it('denies a field engineer the roles endpoint with 403, not 401', async () => {
     const login = await api<{ accessToken: string }>('/api/v1/auth/login', {
-      method: 'POST', body: { username: 'engineer', password: DEMO_PASSWORD },
+      method: 'POST', body: { email: 'engineer@ipms.local', password: DEMO_PASSWORD },
     });
     const res = await api('/api/v1/roles', { token: login.body.accessToken });
     expect(res.status).toBe(403);
@@ -53,14 +53,14 @@ describe('authorization', () => {
 
   it('rejects a role whose permission set breaks a dependency', async () => {
     // qc_review.approve depends on qc_review.view and qc_submission.view.
-    const res = await api<{ message: string }>('/api/v1/roles', {
+    const res = await api<{ error: { message: string } }>('/api/v1/roles', {
       method: 'POST', token: adminToken,
       body: { name: 'Broken', code: 'BROKEN_ROLE', description: '', permissionCodes: ['qc_review.approve'] },
     });
     expect(res.status).toBe(400);
     // An unknown code is also a 400, so the status alone cannot tell this
     // rejection apart from a stale code in the request.
-    expect(res.body.message).toMatch(/Permission set is incomplete/);
+    expect(res.body.error.message).toMatch(/Permission set is incomplete/);
   });
 
   it('refuses to delete a system role', async () => {
@@ -84,10 +84,10 @@ describe('access simulator', () => {
   });
 
   it('explains a denied decision by naming the failing gate', async () => {
-    const engineer = await api<{ items: Array<{ id: string; username: string }> }>(
+    const engineer = await api<{ items: Array<{ id: string; email: string }> }>(
       '/api/v1/users?search=engineer', { token: adminToken },
     );
-    const target = engineer.body.items.find((u) => u.username === 'engineer')!;
+    const target = engineer.body.items.find((u) => u.email === 'engineer@ipms.local')!;
     const res = await api<{ allowed: boolean; reason: string }>('/api/v1/access/check', {
       method: 'POST', token: adminToken,
       body: { userId: target.id, permissionCode: 'role.delete' },
@@ -106,13 +106,21 @@ describe('audit ledger', () => {
     });
     expect(created.status).toBe(201);
 
-    // The outbox drainer polls every 500ms; allow for the round trip.
-    await new Promise((r) => setTimeout(r, 3000));
+    // The suite runs against the dev stack's database, so a role left active
+    // here shows up in every user's role picker. Deactivate it however the
+    // assertions below turn out.
+    try {
+      // The outbox drainer polls every 500ms; allow for the round trip.
+      await new Promise((r) => setTimeout(r, 3000));
 
-    const events = await api<{ items: Array<{ action: string; objectId: string }> }>(
-      `/api/v1/audit/events?objectType=Role&objectId=${created.body.id}`, { token: adminToken },
-    );
-    expect(events.body.items.some((e) => e.action === 'role.created')).toBe(true);
+      const events = await api<{ items: Array<{ action: string; objectId: string }> }>(
+        `/api/v1/audit/events?objectType=Role&objectId=${created.body.id}`, { token: adminToken },
+      );
+      expect(events.body.items.some((e) => e.action === 'role.created')).toBe(true);
+    } finally {
+      const removed = await api(`/api/v1/roles/${created.body.id}`, { method: 'DELETE', token: adminToken });
+      expect(removed.status).toBe(200);
+    }
   }, 30_000);
 
   it('reports the chain as intact', async () => {
@@ -129,7 +137,7 @@ describe('audit ledger', () => {
 describe('revocation', () => {
   it('invalidates outstanding tokens on logout', async () => {
     const login = await api<{ accessToken: string }>('/api/v1/auth/login', {
-      method: 'POST', body: { username: 'manager', password: DEMO_PASSWORD },
+      method: 'POST', body: { email: 'manager@ipms.local', password: DEMO_PASSWORD },
     });
     const token = login.body.accessToken;
     expect((await api('/api/v1/auth/me', { token })).status).toBe(200);

@@ -17,11 +17,11 @@ import { DEMO_PASSWORD, api, waitForReady } from './helpers/stack.js';
 
 interface Project { id: string; code: string }
 
-async function login(username: string): Promise<string> {
+async function login(user: string): Promise<string> {
   const res = await api<{ accessToken: string }>('/api/v1/auth/login', {
-    method: 'POST', body: { username, password: DEMO_PASSWORD },
+    method: 'POST', body: { email: `${user}@ipms.local`, password: DEMO_PASSWORD },
   });
-  expect(res.status, `${username} login`).toBe(201);
+  expect(res.status, `${user} login`).toBe(201);
   return res.body.accessToken;
 }
 
@@ -67,10 +67,10 @@ beforeAll(async () => {
   await waitForReady();
   adminToken = await login('admin');
 
-  const users = await api<{ items: Array<{ id: string; username: string }> }>(
+  const users = await api<{ items: Array<{ id: string; email: string }> }>(
     '/api/v1/users?search=engineer', { token: adminToken },
   );
-  engineerId = users.body.items.find((u) => u.username === 'engineer')!.id;
+  engineerId = users.body.items.find((u) => u.email === 'engineer@ipms.local')!.id;
 
   const visible = await projectsFor(adminToken);
   expect(visible.length, 'the stack needs at least one project to scope against').toBeGreaterThan(0);
