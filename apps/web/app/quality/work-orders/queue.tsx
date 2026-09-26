@@ -129,9 +129,8 @@ function QueueRow({ order, names, now }: { order: WorkOrder; names: ReadonlyMap<
         <a className="queue-title" href={workOrderPath(order.id)}>{order.title}</a>
         <div className="queue-meta">
           <span className="du" title={`Project ID (DU): ${order.project.name}`}>{order.project.code}</span>
-          <span className="site"><b>{order.site.siteCode}</b>{order.site.name !== order.site.siteCode ? ` ${order.site.name}` : ''}</span>
-          {order.site.city ? <span>{order.site.city}</span> : null}
-          <span className="checklist" title={order.templateName ?? ''}>{order.templateName ?? 'No checklist'}</span>
+          <span className="site"><b>{order.site.name !== order.site.siteCode ? ` ${order.site.name}` : ''}</b></span>
+          {/* {order.site.city ? <span>{order.site.city}</span> : null} */}
         </div>
       </div>
       <span className="who" title={assignee}><i aria-hidden="true">{initials(assignee)}</i><span>{assignee}</span></span>

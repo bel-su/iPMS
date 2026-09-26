@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../shared/widgets/brand_mark.dart';
 import '../domain/models/project_item.dart';
 import '../providers/project_providers.dart';
 import 'project_sites_screen.dart';
@@ -16,6 +17,11 @@ class ProjectListScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 16),
+          child: BrandMark(),
+        ),
+        leadingWidth: 52,
         title: const Text('Assigned Projects', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         actions: [
           IconButton(

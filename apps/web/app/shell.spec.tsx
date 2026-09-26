@@ -6,6 +6,9 @@ vi.mock('./lib/iam-api', async () => {
   return { ...actual, getCurrentUser };
 });
 
+const cookieStore = { get: vi.fn() };
+vi.mock('next/headers', () => ({ cookies: () => Promise.resolve(cookieStore) }));
+
 const getMyProfile = vi.fn();
 vi.mock('./lib/user-api', () => ({ getMyProfile }));
 
@@ -25,7 +28,10 @@ function hrefs(node: unknown): string[] {
   return [...here, ...list.flatMap(hrefs)];
 }
 
-beforeEach(() => getCurrentUser.mockReset());
+beforeEach(() => {
+  getCurrentUser.mockReset();
+  cookieStore.get.mockReset();
+});
 
 describe('Sidebar', () => {
   it('offers Users to a viewer who may see them', async () => {
@@ -87,6 +93,23 @@ describe('Sidebar', () => {
     const links = hrefs(await Sidebar({ active: 'projects' }));
     expect(links).not.toContain('/docs');
     expect(links.some((href) => href.includes('settings'))).toBe(false);
+  });
+});
+
+describe('Sidebar collapse', () => {
+  it('renders expanded by default', async () => {
+    getCurrentUser.mockResolvedValue(user(['project.view']));
+    const tree = await Sidebar({ active: 'projects' });
+    expect(tree.props.className).toBe('sidebar');
+  });
+
+  // Read on the server, so a collapsed rail does not flash open on each page load.
+  it('renders collapsed when the cookie says so', async () => {
+    getCurrentUser.mockResolvedValue(user(['project.view']));
+    cookieStore.get.mockImplementation((name: string) => (name === 'ipms-sidebar' ? { value: 'collapsed' } : undefined));
+    const tree = await Sidebar({ active: 'projects' });
+    expect(tree.props.className).toBe('sidebar collapsed');
+    expect(hrefs(tree)).toContain('/projects');
   });
 });
 

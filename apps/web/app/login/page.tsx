@@ -1,5 +1,6 @@
 'use client';
 import { FormEvent, useState } from 'react';
+import { BrandLogo } from '../components/brand';
 import { PasswordInput } from '../components/forms';
 
 export default function LoginPage() {
@@ -18,5 +19,5 @@ export default function LoginPage() {
     window.location.assign(payload.mustChangePassword ? '/change-password' : '/');
   }
 
-  return <main className="login-page"><form className="login-card" onSubmit={submit}><a className="brand" href="/"><span>i</span>PMS</a><p className="eyebrow">SECURE WORKSPACE</p><h1>Sign in to iPMS</h1><p>Use an account created by your administrator.</p><label>Email<input name="email" type="email" autoComplete="username" required /></label><label>Password<PasswordInput name="password" autoComplete="current-password" minLength={8} required /></label>{message && <p className="form-error" role="alert">{message}</p>}<button className="primary-button" type="submit">Sign in</button></form></main>;
+  return <main className="login-page"><form className="login-card" onSubmit={submit}><a className="brand" href="/" aria-label="iPMS home"><BrandLogo /></a><p className="eyebrow">SECURE WORKSPACE</p><h1>Sign in to iPMS</h1><p>Use an account created by your administrator.</p><label>Email<input name="email" type="email" autoComplete="username" required /></label><label>Password<PasswordInput name="password" autoComplete="current-password" minLength={8} required /></label>{message && <p className="form-error" role="alert">{message}</p>}<button className="primary-button" type="submit">Sign in</button></form></main>;
 }

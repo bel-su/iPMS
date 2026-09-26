@@ -91,5 +91,9 @@ describe('proxy — where it runs', () => {
   it('does not run on static assets', () => {
     expect(matches('/_next/static/chunk.js')).toBe(false);
     expect(matches('/favicon.ico')).toBe(false);
+    expect(matches('/icon.svg')).toBe(false);
+    expect(matches('/apple-icon.png')).toBe(false);
+    expect(matches('/manifest.webmanifest')).toBe(false);
+    expect(matches('/brand/axiom-mark.svg')).toBe(false);
   });
 });

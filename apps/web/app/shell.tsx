@@ -4,6 +4,10 @@
  * is laid out against an empty gutter.
  */
 
+import { cookies } from 'next/headers';
+import { BrandLogo, BrandMark } from './components/brand';
+import { SIDEBAR_COLLAPSED, SIDEBAR_COOKIE } from './components/sidebar-state';
+import { SidebarToggle } from './components/sidebar-toggle';
 import { getCurrentUser, hasPermission, mayReadDocs } from './lib/iam-api';
 import { getMyProfile } from './lib/user-api';
 
@@ -19,7 +23,7 @@ function NavItem({ section, active, href, icon, children, nested = false }: {
   const current = section === active;
   return (
     <a className={`nav-item${nested ? ' nested' : ''}${current ? ' active' : ''}`} href={href} aria-current={current ? 'page' : undefined}>
-      <Icon>{icon}</Icon>{children}
+      <Icon>{icon}</Icon><span className="nav-label">{children}</span>
     </a>
   );
 }
@@ -40,10 +44,13 @@ export async function Sidebar({ active }: { active: Section }) {
   const mayViewTemplates = viewer.state === 'ready' && hasPermission(viewer.data, 'qc_template.view');
   const mayViewTasks = viewer.state === 'ready' && hasPermission(viewer.data, 'task.view');
   const mayReadDocumentation = viewer.state === 'ready' && mayReadDocs(viewer.data);
+  const collapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === SIDEBAR_COLLAPSED;
 
   return (
-    <aside className="sidebar">
-      <a className="brand" href="/" aria-label="iPMS home"><span>i</span>PMS</a>
+    <aside className={collapsed ? 'sidebar collapsed' : 'sidebar'}>
+      <SidebarToggle initiallyCollapsed={collapsed} />
+      {/* Both rendered: the toggle flips the class client-side, so CSS picks which shows. */}
+      <a className="brand" href="/" aria-label="iPMS home"><BrandLogo width={184} /><BrandMark size={34} /></a>
       <p className="workspace-label">WORKSPACE</p>
       <nav aria-label="Primary navigation">
         <NavItem section="overview" active={active} href="/" icon="▦">Overview</NavItem>
@@ -52,7 +59,7 @@ export async function Sidebar({ active }: { active: Section }) {
           ? <div className="nav-group" role="group" aria-label="Quality & EHS">
               {/* The heading is a link to whichever of its pages the viewer can open, work orders first. */}
               <a className={QUALITY.includes(active) ? 'nav-item nav-parent open' : 'nav-item nav-parent'} href={mayViewTasks ? '/quality/work-orders' : '/quality/templates'}>
-                <Icon>✓</Icon>Quality &amp; EHS
+                <Icon>✓</Icon><span className="nav-label">Quality &amp; EHS</span>
               </a>
               {mayViewTemplates ? <NavItem section="checklists" active={active} href="/quality/templates" icon="▤" nested>Checklist library</NavItem> : null}
               {mayViewTasks ? <NavItem section="work-orders" active={active} href="/quality/work-orders" icon="☰" nested>Work orders</NavItem> : null}
@@ -109,7 +116,7 @@ export function StatePage({ eyebrow, title, children }: { eyebrow?: string; titl
   return (
     <main className="state-page">
       <section className="state-card">
-        <a className="brand" href="/"><span>i</span>PMS</a>
+        <a className="brand" href="/" aria-label="iPMS home"><BrandMark /></a>
         {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
         <h1>{title}</h1>
         {children}

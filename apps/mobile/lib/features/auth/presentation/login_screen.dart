@@ -78,47 +78,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Brand Header with Enhanced App Icon
+                  // Full logo: the sign-in screen is the only place it appears.
                   Center(
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(22),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 18,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(22),
-                        child: Image.asset(
-                          'assets/icons/app_icon.png',
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(
-                            color: AppColors.primaryLavender,
-                            child: const Icon(
-                              Icons.engineering_outlined,
-                              size: 40,
-                              color: AppColors.darkSlate,
-                            ),
-                          ),
-                        ),
-                      ),
+                    child: Image.asset(
+                      'assets/brand/axiom_logo_stacked.png',
+                      width: 220,
+                      semanticLabel: 'AXIOM — Engineering Project Assurance Platform',
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'iPMS Field App',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.headingLarge,
-                  ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
                   Text(
                     'Sign in to access your assigned tasks and sites',
                     textAlign: TextAlign.center,
