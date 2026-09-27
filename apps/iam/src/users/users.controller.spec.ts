@@ -13,6 +13,7 @@ function build() {
     get: vi.fn().mockResolvedValue({ id: ID }),
     create: vi.fn().mockResolvedValue({ id: ID }),
     update: vi.fn().mockResolvedValue({ id: ID }),
+    updateSelf: vi.fn().mockResolvedValue({ id: ID }),
     deactivate: vi.fn().mockResolvedValue({ id: ID }),
     reactivate: vi.fn().mockResolvedValue({ id: ID }),
     setRoles: vi.fn().mockResolvedValue({ id: ID }),
@@ -86,5 +87,12 @@ describe('UsersController.me', () => {
     await controller.me(req);
     expect(users.get).toHaveBeenCalledWith(ACTOR);
     expect(permissionOf('me')).toBeUndefined();
+  });
+
+  it('updates the caller profile via updateMe with no permission required', async () => {
+    const { controller, users } = build();
+    await controller.updateMe({ fullName: 'Updated Self' }, req);
+    expect(users.updateSelf).toHaveBeenCalledWith(ACTOR, { fullName: 'Updated Self' });
+    expect(permissionOf('updateMe')).toBeUndefined();
   });
 });

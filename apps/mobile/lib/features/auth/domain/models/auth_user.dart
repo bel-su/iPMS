@@ -1,3 +1,4 @@
+// ignore_for_file: prefer_initializing_formals
 /// Immutable representation of the logged-in user in memory.
 class AuthUser {
   const AuthUser({
@@ -5,20 +6,37 @@ class AuthUser {
     required this.email,
     this.displayName,
     this.role,
-  });
+    this.employeeCode,
+    String? username,
+  }) : _username = username;
 
   final String id;
   final String email;
   final String? displayName;
   final String? role;
+  final String? employeeCode;
+  final String? _username;
+
+  String get username {
+    if (_username != null && _username.isNotEmpty) {
+      return _username;
+    }
+    if (email.contains('@')) {
+      return email.split('@').first;
+    }
+    return email.isNotEmpty ? email : (displayName ?? 'engineer');
+  }
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
+    final email = json['email'] as String? ?? json['username'] as String? ?? '';
     return AuthUser(
       id: json['id'] as String? ?? json['sub'] as String? ?? '',
-      email: json['email'] as String? ?? '',
-      displayName: json['displayName'] as String? ?? json['fullName'] as String?,
+      email: email,
+      displayName: json['displayName'] as String? ?? json['fullName'] as String? ?? json['username'] as String?,
       role: json['role'] as String? ??
           ((json['roles'] as List<dynamic>?)?.firstOrNull?.toString()),
+      employeeCode: json['employeeCode'] as String?,
+      username: json['username'] as String?,
     );
   }
 
@@ -27,5 +45,7 @@ class AuthUser {
         'email': email,
         'displayName': displayName,
         'role': role,
+        'employeeCode': employeeCode,
+        'username': username,
       };
 }

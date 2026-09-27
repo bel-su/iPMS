@@ -42,7 +42,7 @@ class AuthRepository {
       );
 
       // Fetch user profile
-      return await getCurrentUser(username: username.trim());
+      return await getCurrentUser(username: email.trim());
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
         throw const ApiException(message: 'Incorrect email or password.');
@@ -53,7 +53,7 @@ class AuthRepository {
           e.response == null;
 
       if (isConnectionIssue) {
-        return _fallbackLogin(username.trim());
+        return _fallbackLogin(email.trim());
       }
 
       throw ApiException(
@@ -80,7 +80,9 @@ class AuthRepository {
         return AuthUser(
           id: user.id,
           username: username,
-          email: user.email,
+          email: user.email.isNotEmpty
+              ? user.email
+              : (username.contains('@') ? username : '$username@ipms.local'),
           displayName: user.displayName?.isNotEmpty == true ? user.displayName : username,
           role: user.role,
         );
@@ -103,28 +105,70 @@ class AuthRepository {
     }
   }
 
-  Future<AuthUser> _fallbackLogin(String username) async {
-    final lower = username.toLowerCase();
+  Future<AuthUser> updateProfile({
+    String? fullName,
+    String? email,
+    String? employeeCode,
+    String? phone,
+  }) async {
+    try {
+      final payload = <String, dynamic>{};
+      if (fullName != null && fullName.trim().isNotEmpty) {
+        payload['fullName'] = fullName.trim();
+      }
+      if (email != null && email.trim().isNotEmpty) {
+        payload['email'] = email.trim().toLowerCase();
+      }
+      if (employeeCode != null) {
+        payload['employeeCode'] = employeeCode.trim().isEmpty ? null : employeeCode.trim();
+      }
+      if (phone != null) {
+        payload['phone'] = phone.trim().isEmpty ? null : phone.trim();
+      }
+
+      final response = await apiClient.dio.patch<Map<String, dynamic>>(
+        '/api/v1/users/me',
+        data: payload,
+      );
+
+      final data = response.data;
+      if (data == null) {
+        throw const ApiException(message: 'Failed to update user profile.');
+      }
+
+      return AuthUser.fromJson(data);
+    } on DioException catch (e) {
+      throw ApiException(
+        message: e.response?.data?['message']?.toString() ?? 'Failed to update user profile.',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  Future<AuthUser> _fallbackLogin(String input) async {
+    final clean = input.trim();
+    final lower = clean.toLowerCase();
+    final rawUser = lower.contains('@') ? lower.split('@').first : lower;
     String role = 'FIELD_ENGINEER';
     String displayName = 'Field Engineer';
 
-    if (lower == 'manager') {
+    if (rawUser == 'manager') {
       role = 'PROJECT_MANAGER';
       displayName = 'Project Manager';
-    } else if (lower == 'admin') {
+    } else if (rawUser == 'admin') {
       role = 'SUPER_ADMIN';
       displayName = 'System Administrator';
-    } else if (lower == 'qc') {
+    } else if (rawUser == 'qc') {
       role = 'QC_MANAGER';
       displayName = 'QC Manager';
-    } else if (username.isNotEmpty) {
-      displayName = username;
+    } else if (clean.isNotEmpty) {
+      displayName = rawUser;
     }
 
     final user = AuthUser(
-      id: 'usr-${lower.isNotEmpty ? lower : "engineer"}-101',
-      username: lower.isNotEmpty ? lower : 'engineer',
-      email: '$lower@ipms.local',
+      id: 'usr-${rawUser.isNotEmpty ? rawUser : "engineer"}-101',
+      username: rawUser.isNotEmpty ? rawUser : 'engineer',
+      email: lower.contains('@') ? lower : '${rawUser.isNotEmpty ? rawUser : "engineer"}@ipms.local',
       displayName: displayName,
       role: role,
     );

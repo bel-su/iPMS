@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AssignRolesSchema, ChangePasswordSchema, CreateUserSchema,
-  EmailSchema, UpdateUserSchema, UserListQuerySchema,
+  EmailSchema, UpdateSelfProfileSchema, UpdateUserSchema, UserListQuerySchema,
 } from './user.js';
 
 describe('EmailSchema', () => {
@@ -76,6 +76,38 @@ describe('UpdateUserSchema', () => {
   it('lets employeeCode be cleared with null but not blanked with a space', () => {
     expect(UpdateUserSchema.parse({ employeeCode: null }).employeeCode).toBeNull();
     expect(UpdateUserSchema.parse({ employeeCode: ' EMP-1 ' }).employeeCode).toBe('EMP-1');
+  });
+});
+
+describe('UpdateSelfProfileSchema', () => {
+  it('parses valid profile fields and normalizes email and strings', () => {
+    const res = UpdateSelfProfileSchema.parse({
+      fullName: '  Jane Doe  ',
+      email: ' Jane@IPMS.local ',
+      employeeCode: ' EMP-042 ',
+      phone: ' +977-9800000000 ',
+      preferredLocale: 'en',
+    });
+    expect(res).toEqual({
+      fullName: 'Jane Doe',
+      email: 'jane@ipms.local',
+      employeeCode: 'EMP-042',
+      phone: '+977-9800000000',
+      preferredLocale: 'en',
+    });
+  });
+
+  it('strips unauthorized fields such as roles, permissions, or password', () => {
+    const res = UpdateSelfProfileSchema.parse({
+      fullName: 'Jane Doe',
+      roles: ['SUPER_ADMIN'],
+      permissions: ['user.create'],
+      password: 'HackedPassword-1',
+    });
+    expect(res).toEqual({ fullName: 'Jane Doe' });
+    expect(res).not.toHaveProperty('roles');
+    expect(res).not.toHaveProperty('permissions');
+    expect(res).not.toHaveProperty('password');
   });
 });
 

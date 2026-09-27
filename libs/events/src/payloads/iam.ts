@@ -30,3 +30,11 @@ export interface IamUserDeactivated {
   userId: string;
   tokenVersion: number;
 }
+
+export interface IamUserUpdated {
+  userId: string;
+  fullName?: string;
+  email?: string;
+  employeeCode?: string | null;
+  phone?: string | null;
+}

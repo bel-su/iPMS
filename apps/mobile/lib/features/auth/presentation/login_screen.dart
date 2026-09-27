@@ -15,23 +15,23 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _showPasswordForm = false;
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (_formKey.currentState?.validate() ?? false) {
-      final username = _usernameController.text.trim();
+      final email = _emailController.text.trim();
       await ref.read(authStateProvider.notifier).login(
-            username,
+            email,
             _passwordController.text,
           );
 
@@ -40,7 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (authUser != null && mounted) {
         final biometricState = ref.read(biometricAuthStateProvider);
         if (biometricState.isHardwareSupported && !biometricState.isConfigured) {
-          await BiometricEnrollmentSheet.show(context, username);
+          await BiometricEnrollmentSheet.show(context, authUser.username);
         }
       }
     }
@@ -233,21 +233,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               const SizedBox(height: 16),
                             ],
 
-                            // Username Field
+                            // Email Field
                             Text(
-                              'Username',
+                              'Email',
                               style: AppTypography.titleMedium,
                             ),
                             const SizedBox(height: 8),
                             TextFormField(
-                              controller: _usernameController,
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
                               decoration: const InputDecoration(
-                                hintText: 'Enter your username',
-                                prefixIcon: Icon(Icons.person_outline, size: 20),
+                                hintText: 'e.g. engineer@ipms.local',
+                                prefixIcon: Icon(Icons.mail_outline, size: 20),
                               ),
                               validator: (val) {
                                 if (val == null || val.trim().isEmpty) {
-                                  return 'Please enter your username';
+                                  return 'Please enter your email';
                                 }
                                 return null;
                               },

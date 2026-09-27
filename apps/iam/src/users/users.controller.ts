@@ -3,7 +3,7 @@ import { RequirePermission } from '@ipms/authz';
 import type { AuthzUser } from '@ipms/authz';
 import {
   AssignRolesSchema, CreateUserSchema, ResetPasswordSchema,
-  UpdateUserSchema, UserListQuerySchema, UuidSchema,
+  UpdateSelfProfileSchema, UpdateUserSchema, UserListQuerySchema, UuidSchema,
 } from '@ipms/contracts';
 import { UsersService } from './users.service.js';
 
@@ -44,6 +44,15 @@ export class UsersController {
   @Get('users/me')
   async me(@Req() req: { user: AuthzUser }) {
     return this.users.get(req.user.id);
+  }
+
+  /**
+   * The caller's own profile edit. No permission: anyone signed in may update
+   * their own name, email, or employee code.
+   */
+  @Patch('users/me')
+  async updateMe(@Body() body: unknown, @Req() req: { user: AuthzUser }) {
+    return this.users.updateSelf(req.user.id, UpdateSelfProfileSchema.parse(body));
   }
 
   /**

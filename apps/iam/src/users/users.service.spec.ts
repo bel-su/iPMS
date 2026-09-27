@@ -242,6 +242,25 @@ describe('UsersService.update', () => {
   });
 });
 
+describe('UsersService.updateSelf', () => {
+  it('allows any user to update their own full name without role checks', async () => {
+    const { service, tx } = build(row({ id: ACTOR, fullName: 'Old Name' }));
+    await service.updateSelf(ACTOR, { fullName: 'Updated Self Name' });
+    expect(tx.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: ACTOR },
+      data: expect.objectContaining({ fullName: 'Updated Self Name' }),
+    }));
+  });
+
+  it('records user.self_updated in the audit ledger', async () => {
+    const { service, tx } = build(row({ id: ACTOR }));
+    await service.updateSelf(ACTOR, { employeeCode: 'EMP-999' });
+    const audit = tx.outboxEvent.create.mock.calls[0]![0].data;
+    expect(audit.payload.action).toBe('user.self_updated');
+    expect(audit.payload.newState).toEqual({ employeeCode: 'EMP-999' });
+  });
+});
+
 describe('UsersService.deactivate', () => {
   it('sets isActive false and revokes every outstanding token', async () => {
     const { service, tx, versions } = build();

@@ -4,6 +4,7 @@ export const SUBJECTS = {
   IAM_ROLE_ASSIGNED: 'iam.role.assigned',
   IAM_ROLE_REMOVED: 'iam.role.removed',
   IAM_USER_DEACTIVATED: 'iam.user.deactivated',
+  IAM_USER_UPDATED: 'iam.user.updated',
   AUDIT_EVENT: 'audit.event.recorded',
   QC_SUBMISSION_SUBMITTED: 'qc.submission.submitted',
   QC_SUBMISSION_REVIEWED: 'qc.submission.reviewed',

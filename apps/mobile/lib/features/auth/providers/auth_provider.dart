@@ -55,6 +55,23 @@ class AuthNotifier extends AsyncNotifier<AuthUser?> {
     });
   }
 
+  Future<void> updateProfile({
+    String? fullName,
+    String? email,
+    String? employeeCode,
+    String? phone,
+  }) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      return await ref.read(authRepositoryProvider).updateProfile(
+            fullName: fullName,
+            email: email,
+            employeeCode: employeeCode,
+            phone: phone,
+          );
+    });
+  }
+
   Future<void> logout({bool purgeBiometrics = false}) async {
     state = const AsyncValue.loading();
     await ref.read(authRepositoryProvider).logout();
