@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation';
 import { getProject, listAssignable, type AssignableUser } from '../../lib/project-api';
 import { cancelWorkOrder, createWorkOrders, updateWorkOrder } from '../../lib/work-order-api';
-import { getVersion, type ChecklistSection } from '../../lib/qc-api';
+import { getVersion, reviewSubmission, type ChecklistSection } from '../../lib/qc-api';
 import type { FormState } from '../../lib/form-state';
 import { optional, settle } from '../../lib/settle';
 import { WORK_ORDERS_PATH, isWorkOrderType, workOrderPath } from './labels';
@@ -98,3 +98,33 @@ export async function loadProjectAction(projectId: string): Promise<ProjectConte
     assignable: assignable.data,
   };
 }
+
+export async function reviewSubmissionAction(_previous: FormState, form: FormData): Promise<FormState> {
+  const submissionId = String(form.get('submissionId'));
+  const projectId = String(form.get('projectId'));
+  const workOrderId = String(form.get('workOrderId'));
+  const decision = String(form.get('decision')) as 'APPROVE' | 'REJECT_REWORK';
+  const comment = optional(form, 'comment');
+  const rawReviews = optional(form, 'itemReviews');
+
+  if (!submissionId || !decision) return { error: 'Invalid submission review request.' };
+  if (decision !== 'APPROVE' && decision !== 'REJECT_REWORK') return { error: 'Decision must be APPROVE or REJECT_REWORK.' };
+  if (decision === 'REJECT_REWORK' && (!comment || comment.trim().length === 0)) {
+    return { error: 'A rework decision requires summary remarks.' };
+  }
+
+  let itemReviews: { itemId: string; result: 'APPROVED' | 'REJECTED' | 'NA'; description?: string }[] = [];
+  try {
+    itemReviews = rawReviews ? JSON.parse(rawReviews) : [];
+  } catch {
+    return { error: 'Malformed item reviews data.' };
+  }
+
+  const result = await reviewSubmission(submissionId, {
+    decision,
+    ...(comment ? { comment } : {}),
+    itemReviews,
+  });
+  return settle(result, pages(projectId, workOrderId));
+}
+

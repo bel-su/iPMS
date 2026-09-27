@@ -7,6 +7,7 @@
 import { cookies } from 'next/headers';
 import { BrandMark } from './components/brand';
 import { SIDEBAR_COLLAPSED, SIDEBAR_COOKIE } from './components/sidebar-state';
+import { NotificationCenter } from './components/notification-center';
 import { SidebarToggle } from './components/sidebar-toggle';
 import { getCurrentUser, hasPermission, mayReadDocs } from './lib/iam-api';
 import { getMyProfile } from './lib/user-api';
@@ -215,7 +216,7 @@ export async function Sidebar({ active }: { active: Section }) {
         </div>
       </nav>
 
-      {/* Footer Area with Documentation, Live Status & Profile Flyout */}
+      {/* Footer Area with Documentation, Live Status & User Profile / Logout */}
       <div className="sidebar-bottom">
         {mayReadDocumentation ? (
           <NavItem section="docs" active={active} href="/docs" icon={<DocsIcon />}>
@@ -227,15 +228,32 @@ export async function Sidebar({ active }: { active: Section }) {
             <span className="pulse-dot" aria-hidden="true" />
             <span className="status-text">Online</span>
           </div>
-          <a
-            href="/profile"
-            className="footer-icon-btn"
-            title="Account Profile"
-            aria-label="Account Profile"
-            data-tooltip="Profile"
-          >
-            <ProfileIcon size={15} />
-          </a>
+          <div className="sidebar-user-actions">
+            <a
+              href="/profile"
+              className="footer-user-btn"
+              title="Account Profile"
+              aria-label="Account Profile"
+              data-tooltip="Profile"
+            >
+              <ProfileIcon size={15} />
+            </a>
+            <form action="/api/auth/logout" method="post" className="sidebar-logout-form">
+              <button
+                type="submit"
+                className="footer-icon-btn logout"
+                title="Sign out"
+                aria-label="Sign out"
+                data-tooltip="Sign out"
+              >
+                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </aside>
@@ -252,29 +270,14 @@ export function initialsOf(fullName: string): string {
 }
 
 /**
- * The right-hand end of the topbar. Anything passed in sits before the profile
- * menu; the wrapper is what pushes the group away from the breadcrumbs.
- *
- * The menu is a `<details>` so it opens without client-side JavaScript.
- * Signing out stays a POST, so it cannot be triggered by a link. When the
- * profile call fails the button shows "?" and the menu still works.
+ * The right-hand end of the topbar. Houses active action buttons passed in
+ * and the interactive NotificationCenter bell and flyout panel.
  */
-export async function TopActions({ children }: { children?: React.ReactNode }) {
-  const me = await getMyProfile();
-  const name = me.state === 'ready' ? me.data.fullName : '';
+export function TopActions({ children }: { children?: React.ReactNode }) {
   return (
     <div className="top-actions">
       {children}
-      <details className="profile-menu">
-        <summary className="profile" aria-label="Account menu"><span>{initialsOf(name)}</span><i>⌄</i></summary>
-        <div className="profile-dropdown" role="menu">
-          {name ? <p className="profile-name">{name}</p> : null}
-          <a role="menuitem" href="/profile">Profile</a>
-          <form action="/api/auth/logout" method="post">
-            <button role="menuitem" type="submit">Sign out</button>
-          </form>
-        </div>
-      </details>
+      <NotificationCenter />
     </div>
   );
 }

@@ -34,6 +34,12 @@ class BiometricAuthService {
     }
   }
 
+  /// Whether the device has a Face ID sensor (iOS TrueDepth camera).
+  Future<bool> hasFaceIdSensor() async {
+    final biometrics = await getAvailableBiometrics();
+    return biometrics.contains(BiometricType.face);
+  }
+
   /// Whether the device has a dedicated fingerprint reader.
   Future<bool> hasFingerprintSensor() async {
     final biometrics = await getAvailableBiometrics();
@@ -41,19 +47,24 @@ class BiometricAuthService {
         biometrics.contains(BiometricType.strong);
   }
 
-  /// Invokes the native platform fingerprint / biometric authentication sheet.
+  /// Invokes the native platform Face ID / Touch ID / fingerprint authentication sheet.
   /// Returns `true` if verified, `false` if cancelled or rejected.
   Future<bool> authenticate({
-    String localizedReason =
-        'Scan your fingerprint to authenticate to iPMS Field App',
+    String? localizedReason,
   }) async {
     try {
       final canAuth = await canAuthenticateWithBiometrics();
       if (!canAuth) return false;
 
+      final isFace = await hasFaceIdSensor();
+      final reason = localizedReason ??
+          (isFace
+              ? 'Authenticate with Face ID to access iPMS Field App'
+              : 'Scan fingerprint to authenticate to iPMS Field App');
+
       return await _localAuth.authenticate(
-        localizedReason: localizedReason,
-        biometricOnly: true,
+        localizedReason: reason,
+        biometricOnly: false,
         persistAcrossBackgrounding: true,
       );
     } on LocalAuthException {

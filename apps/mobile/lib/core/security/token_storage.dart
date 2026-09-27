@@ -17,6 +17,8 @@ class TokenStorage {
   static const String _userIdKey = 'ipms_user_id';
   static const String _biometricEnabledKey = 'ipms_biometric_enabled';
   static const String _biometricUsernameKey = 'ipms_biometric_username';
+  static const String _biometricRefreshTokenKey = 'ipms_biometric_refresh_token';
+  static const String _biometricUserIdKey = 'ipms_biometric_user_id';
 
   Future<void> saveTokens({
     required String accessToken,
@@ -28,6 +30,13 @@ class TokenStorage {
     if (userId != null) {
       await _storage.write(key: _userIdKey, value: userId);
     }
+    final bioEnabled = await isBiometricEnabled();
+    if (bioEnabled) {
+      await _storage.write(key: _biometricRefreshTokenKey, value: refreshToken);
+      if (userId != null) {
+        await _storage.write(key: _biometricUserIdKey, value: userId);
+      }
+    }
   }
 
   Future<String?> getAccessToken() => _storage.read(key: _accessTokenKey);
@@ -35,6 +44,12 @@ class TokenStorage {
   Future<String?> getRefreshToken() => _storage.read(key: _refreshTokenKey);
 
   Future<String?> getUserId() => _storage.read(key: _userIdKey);
+
+  Future<String?> getBiometricRefreshToken() =>
+      _storage.read(key: _biometricRefreshTokenKey);
+
+  Future<String?> getBiometricUserId() =>
+      _storage.read(key: _biometricUserIdKey);
 
   Future<bool> isBiometricEnabled() async {
     final value = await _storage.read(key: _biometricEnabledKey);
@@ -54,6 +69,15 @@ class TokenStorage {
   Future<void> setBiometricUsername(String? username) async {
     if (username != null && username.isNotEmpty) {
       await _storage.write(key: _biometricUsernameKey, value: username);
+      // Sync current refresh token for biometric re-login
+      final currentRefresh = await getRefreshToken();
+      final currentUserId = await getUserId();
+      if (currentRefresh != null && currentRefresh.isNotEmpty) {
+        await _storage.write(key: _biometricRefreshTokenKey, value: currentRefresh);
+      }
+      if (currentUserId != null && currentUserId.isNotEmpty) {
+        await _storage.write(key: _biometricUserIdKey, value: currentUserId);
+      }
     } else {
       await _storage.delete(key: _biometricUsernameKey);
     }
@@ -62,6 +86,8 @@ class TokenStorage {
   Future<void> clearBiometric() async {
     await _storage.delete(key: _biometricEnabledKey);
     await _storage.delete(key: _biometricUsernameKey);
+    await _storage.delete(key: _biometricRefreshTokenKey);
+    await _storage.delete(key: _biometricUserIdKey);
   }
 
   Future<void> clearTokens({bool purgeBiometrics = false}) async {

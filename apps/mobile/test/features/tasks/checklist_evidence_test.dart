@@ -229,5 +229,82 @@ void main() {
       expect(remainingList.length, 2);
       expect(remainingList.any((e) => e.id == 'ev-2'), isFalse);
     });
+
+    test('manages unassigned session tray photos, assignToItem, and detachFromItem', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final unassignedPhoto = TaskEvidence(
+        id: 'ev-session-1',
+        taskId: 'task-200',
+        filePath: '/storage/session1.jpg',
+        capturedAt: DateTime.now(),
+        latitude: 27.7,
+        longitude: 85.3,
+        accuracy: 3.0,
+        siteCode: 'KOS121',
+        siteName: 'Site 1',
+        projectCode: 'PRJ-1',
+        capturedBy: 'Tech 1',
+        // No checklistItemId: unassigned
+      );
+
+      container.read(taskEvidenceProvider.notifier).addEvidence(unassignedPhoto);
+
+      // Verify unassigned tray detects the photo
+      final unassignedBefore = container.read(unassignedSessionPhotosProvider('task-200'));
+      expect(unassignedBefore.length, 1);
+      expect(unassignedBefore.first.id, 'ev-session-1');
+
+      // Assign to checklist item
+      container.read(taskEvidenceProvider.notifier).assignToItem(
+        taskId: 'task-200',
+        evidenceId: 'ev-session-1',
+        checklistItemId: 'item-CIV-01',
+        checklistItemTitle: 'CIV.01 Pre-work structural survey',
+      );
+
+      // Verify it is no longer unassigned
+      final unassignedAfter = container.read(unassignedSessionPhotosProvider('task-200'));
+      expect(unassignedAfter.isEmpty, isTrue);
+
+      // Verify it appears in item evidence
+      final itemEvidence = container.read(
+        checklistItemEvidenceProvider((taskId: 'task-200', itemId: 'item-CIV-01')),
+      );
+      expect(itemEvidence.length, 1);
+      expect(itemEvidence.first.id, 'ev-session-1');
+
+      // Detach back to unassigned session tray
+      container.read(taskEvidenceProvider.notifier).detachFromItem(
+        taskId: 'task-200',
+        evidenceId: 'ev-session-1',
+      );
+
+      final unassignedAfterDetach = container.read(unassignedSessionPhotosProvider('task-200'));
+      expect(unassignedAfterDetach.length, 1);
+      expect(unassignedAfterDetach.first.id, 'ev-session-1');
+
+      final itemEvidenceAfterDetach = container.read(
+        checklistItemEvidenceProvider((taskId: 'task-200', itemId: 'item-CIV-01')),
+      );
+      expect(itemEvidenceAfterDetach.isEmpty, isTrue);
+    });
+
+    test('ChecklistItem with verdict NA satisfies meetsEvidenceRequirements without photos', () {
+      final naItem = ChecklistItem(
+        id: 'item-na',
+        itemNumber: 'CIV.09',
+        title: 'Perimeter fencing check',
+        evidenceRequired: true,
+        minPhotos: 2,
+        isCompleted: true,
+        verdict: 'NA',
+      );
+
+      expect(naItem.hasEvidence, isFalse);
+      expect(naItem.meetsEvidenceRequirements, isTrue);
+      expect(naItem.verdict, 'NA');
+    });
   });
 }

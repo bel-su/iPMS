@@ -40,6 +40,24 @@ class AuthUser {
     );
   }
 
+  AuthUser copyWith({
+    String? id,
+    String? email,
+    String? displayName,
+    String? role,
+    String? employeeCode,
+    String? username,
+  }) {
+    return AuthUser(
+      id: id ?? this.id,
+      email: email ?? this.email,
+      displayName: displayName ?? this.displayName,
+      role: role ?? this.role,
+      employeeCode: employeeCode ?? this.employeeCode,
+      username: username ?? _username,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'email': email,

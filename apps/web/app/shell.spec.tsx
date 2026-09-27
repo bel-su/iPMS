@@ -113,13 +113,22 @@ describe('Sidebar collapse', () => {
   });
 });
 
-describe('TopActions', () => {
-  it('offers Profile and a POST sign-out in the account menu', async () => {
+describe('Sidebar user actions', () => {
+  it('offers Profile and a POST sign-out in the sidebar footer', async () => {
+    getCurrentUser.mockResolvedValue(user(['project.view']));
     getMyProfile.mockResolvedValue({ state: 'ready', data: { fullName: 'Jane Doe' } });
-    const tree = await TopActions({});
+    const tree = await Sidebar({ active: 'overview' });
     expect(hrefs(tree)).toContain('/profile');
     expect(JSON.stringify(tree)).toContain('/api/auth/logout');
-    expect(JSON.stringify(tree)).toContain('JD');
+  });
+});
+
+describe('TopActions', () => {
+  it('renders children and NotificationCenter', () => {
+    const tree = TopActions({ children: <button type="button">Custom Action</button> });
+    expect(tree.props.className).toBe('top-actions');
+    expect(JSON.stringify(tree)).toContain('Custom Action');
+    expect(tree.props.children[1].type.name).toBe('NotificationCenter');
   });
 });
 

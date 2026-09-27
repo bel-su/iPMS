@@ -31,7 +31,7 @@ class ChecklistItem {
   bool get hasEvidence => evidenceList.isNotEmpty;
 
   bool get meetsEvidenceRequirements =>
-      !evidenceRequired || evidenceList.length >= minPhotos;
+      verdict == 'NA' || !evidenceRequired || evidenceList.length >= minPhotos;
 
   ChecklistItem copyWith({
     String? id,

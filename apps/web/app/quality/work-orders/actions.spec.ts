@@ -8,7 +8,7 @@ const projectApi = { getProject: vi.fn(), listAssignable: vi.fn() };
 vi.mock('../../lib/project-api', () => projectApi);
 const workOrderApi = { createWorkOrders: vi.fn(), updateWorkOrder: vi.fn(), cancelWorkOrder: vi.fn() };
 vi.mock('../../lib/work-order-api', () => workOrderApi);
-const qcApi = { getVersion: vi.fn() };
+const qcApi = { getVersion: vi.fn(), reviewSubmission: vi.fn() };
 vi.mock('../../lib/qc-api', () => qcApi);
 
 const actions = await import('./actions');
@@ -82,6 +82,38 @@ describe('updateWorkOrderAction and cancelWorkOrderAction', () => {
     workOrderApi.cancelWorkOrder.mockResolvedValue({ state: 'ready', data: {} });
     await actions.cancelWorkOrderAction({}, form({ id: 'w-1', projectId: 'p-1', reason: 'Handed back' }));
     expect(workOrderApi.cancelWorkOrder).toHaveBeenCalledWith('w-1', { reason: 'Handed back' });
+  });
+});
+
+describe('reviewSubmissionAction', () => {
+  it('calls reviewSubmission with parsed reviews and settles', async () => {
+    qcApi.reviewSubmission.mockResolvedValue({ state: 'ready', data: { id: 'sub-1', status: 'APPROVED' } });
+    const payload = [
+      { itemId: 'item-1', result: 'APPROVED', description: 'Looks good' },
+      { itemId: 'item-2', result: 'APPROVED' },
+    ];
+    const data = form({
+      submissionId: 'sub-1',
+      projectId: 'p-1',
+      workOrderId: 'wo-1',
+      decision: 'APPROVE',
+      comment: 'All clear',
+      itemReviews: JSON.stringify(payload),
+    });
+    const result = await actions.reviewSubmissionAction({}, data);
+    expect(result.error).toBeUndefined();
+    expect(qcApi.reviewSubmission).toHaveBeenCalledWith('sub-1', {
+      decision: 'APPROVE',
+      comment: 'All clear',
+      itemReviews: payload,
+    });
+  });
+
+  it('rejects missing or invalid decision', async () => {
+    const data = form({ submissionId: 'sub-1', decision: 'MAYBE' });
+    const result = await actions.reviewSubmissionAction({}, data);
+    expect(result.error).toContain('Decision must be APPROVE or REJECT_REWORK');
+    expect(qcApi.reviewSubmission).not.toHaveBeenCalled();
   });
 });
 

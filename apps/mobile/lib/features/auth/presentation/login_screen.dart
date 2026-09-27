@@ -117,15 +117,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   width: 2,
                                 ),
                               ),
-                              child: const Icon(
-                                Icons.fingerprint_rounded,
+                              child: Icon(
+                                biometricState.biometricIcon,
                                 size: 36,
                                 color: AppColors.darkSlate,
                               ),
                             ),
                             const SizedBox(height: 14),
                             Text(
-                              'Fingerprint Unlock',
+                              '${biometricState.biometricName} Unlock',
                               style: AppTypography.titleLarge,
                             ),
                             const SizedBox(height: 4),
@@ -158,11 +158,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           color: Colors.white,
                                         ),
                                       )
-                                    : const Icon(Icons.fingerprint_rounded, size: 22),
+                                    : Icon(biometricState.biometricIcon, size: 22),
                                 label: Text(
                                   biometricState.isAuthenticating
-                                      ? 'Scanning Fingerprint...'
-                                      : 'Sign in with Fingerprint',
+                                      ? 'Verifying ${biometricState.biometricName}...'
+                                      : 'Sign in with ${biometricState.biometricName}',
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,

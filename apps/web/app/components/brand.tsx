@@ -1,17 +1,121 @@
+import React from 'react';
+
 /**
- * AXIOM brand artwork, served from /public/brand.
+ * Official iPMS Brand Artwork, matching apps/mobile/assets/icons/app_logo.svg.
  *
- * The full logo shows on the sign-in screen and in the expanded sidebar; the
- * collapsed rail and the standalone cards show just the "A" mark. Plain <img> on purpose: they are static SVGs
- * and gain nothing from the image optimiser.
+ * Implemented as self-contained inline vector SVG to guarantee instantaneous rendering
+ * on both light surfaces (login card, change password) and dark surfaces (capsule sidebar).
  */
 
 export function BrandMark({ size = 32 }: { size?: number }) {
-  // viewBox is 387×346, so the height follows from the width.
-  return <img className="brand-mark" src="/brand/axiom-mark.svg" alt="AXIOM" width={size} height={Math.round(size * 346 / 387)} />;
+  return (
+    <svg
+      className="brand-mark"
+      width={size}
+      height={size}
+      viewBox="0 0 1418 1418"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{
+        fillRule: 'evenodd',
+        clipRule: 'evenodd',
+        strokeLinejoin: 'round',
+        strokeMiterlimit: 2,
+        display: 'block',
+      }}
+      aria-label="iPMS Official Logo"
+    >
+      <g>
+        <path
+          d="M220.977,1172.954c-65.049,57.047 -63.486,58.719 -127.314,117.101c-9.243,8.454 -49.927,7.226 -41.488,-13.515c4.293,-10.552 357.822,-755.157 439.158,-924.745c97.615,-203.53 97.217,-205.047 112.129,-215.392c12.417,-8.614 25.677,-17.812 180.616,-13.143c44.737,1.348 51.524,35.236 116.15,170.369c14.857,31.066 145.189,303.586 186.207,387.999c9.102,18.731 19.516,37.256 9.524,39.66c-56.951,13.708 -56.876,11.985 -113.92,26.821c-55.2,14.357 -102.976,38.106 -108.519,28.065c-17.45,-31.607 -156.912,-340.055 -164.123,-340.023c-4.104,0.019 -25.33,48.19 -110.795,229.08c-103.074,218.163 -154.012,337.222 -162.949,343.796c-97.424,71.668 -99.096,67.803 -214.677,163.927Z"
+          fill="#0b63b8"
+        />
+        <path
+          d="M691.252,1056.375c-124.152,113.738 -188.41,234.137 -201.239,236.933c-23.5,5.122 -23.63,-1.505 -298.927,1.458c-17.1,0.184 6.06,-20.318 56.392,-70.607c360.305,-359.993 757.063,-461.341 953.847,-494.348c35.983,-6.035 190.472,-25.586 129.017,-6.109c-2.703,0.856 -274.314,35.54 -573.894,275.373c-33.751,27.019 -33.087,27.232 -65.196,57.3Z"
+          fill="#098edb"
+        />
+        <path
+          d="M1020.817,877.937c9.866,-5.682 113.764,-65.527 127.869,-59.32c3.65,1.605 151.671,316.387 164.667,344.023c33.868,72.025 60.972,117.694 50.757,128.313c-5.009,5.208 -244.943,4.232 -250.847,0.782c-6.584,-3.847 -170.201,-355.824 -170.521,-356.769c-4.812,-14.21 24.952,-28.086 78.076,-57.03Z"
+          fill="#043182"
+        />
+        <path
+          d="M652.017,741.846c3.512,-6.402 3.477,-6.229 20.745,-36.533c20.464,-35.912 33.069,-71.742 48.876,-43.844c80.696,142.412 84.554,144.692 78.944,150.132c-12.307,11.935 -17.077,-0.405 -153.475,70.713c-85.35,44.501 -83.306,52.142 -91.312,50.696c-8.861,-1.598 -3.273,-8.336 53.771,-113.79c21.071,-38.954 21.366,-38.213 42.45,-77.374Z"
+          fill="#04274c"
+        />
+      </g>
+    </svg>
+  );
 }
 
-export function BrandLogo({ width = 320 }: { width?: number }) {
-  // viewBox is 1267×346.
-  return <img className="brand-logo" src="/brand/axiom-logo-horizontal.svg" alt="AXIOM — Engineering Project Assurance Platform" width={width} height={Math.round(width * 346 / 1267)} />;
+export function BrandLogo({ width = 300 }: { width?: number }) {
+  return (
+    <div
+      className="brand-logo-container"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '14px',
+        maxWidth: '100%',
+      }}
+    >
+      <div
+        style={{
+          width: '50px',
+          height: '50px',
+          borderRadius: '14px',
+          background: '#ffffff',
+          boxShadow: '0 4px 18px rgba(9, 142, 219, 0.18)',
+          border: '1px solid rgba(9, 142, 219, 0.18)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '6px',
+          flexShrink: 0,
+        }}
+      >
+        <BrandMark size={36} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+          <span
+            style={{
+              fontSize: '26px',
+              fontWeight: 800,
+              letterSpacing: '-0.03em',
+              background: 'linear-gradient(135deg, #04274c 0%, #0b63b8 60%, #098edb 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              lineHeight: 1.1,
+            }}
+          >
+            iPMS
+          </span>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#098edb',
+              letterSpacing: '0.04em',
+              padding: '1px 7px',
+              background: 'rgba(9, 142, 219, 0.1)',
+              borderRadius: '999px',
+            }}
+          >
+            PLATFORM
+          </span>
+        </div>
+        <span
+          style={{
+            fontSize: '10.5px',
+            fontWeight: 600,
+            color: '#64748b',
+            letterSpacing: '0.05em',
+            marginTop: '2px',
+            textTransform: 'uppercase',
+          }}
+        >
+          Intelligent Project Assurance
+        </span>
+      </div>
+    </div>
+  );
 }

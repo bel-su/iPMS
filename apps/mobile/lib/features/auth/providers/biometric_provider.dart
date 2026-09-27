@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 import '../../../core/security/biometric_auth_service.dart';
@@ -20,9 +21,16 @@ class BiometricAuthState {
   final bool isAuthenticating;
   final String? statusMessage;
 
+  bool get hasFaceId => availableBiometrics.contains(BiometricType.face);
+
   bool get hasFingerprint =>
       availableBiometrics.contains(BiometricType.fingerprint) ||
       availableBiometrics.contains(BiometricType.strong);
+
+  String get biometricName => hasFaceId ? 'Face ID' : 'Fingerprint';
+
+  IconData get biometricIcon =>
+      hasFaceId ? Icons.face_rounded : Icons.fingerprint_rounded;
 
   BiometricAuthState copyWith({
     bool? isHardwareSupported,
@@ -78,9 +86,12 @@ class BiometricAuthNotifier extends Notifier<BiometricAuthState> {
     state = state.copyWith(isAuthenticating: true, statusMessage: null);
 
     try {
+      final reason = state.hasFaceId
+          ? 'Authenticate with Face ID to access iPMS Field App as @$enrolledUser'
+          : 'Scan fingerprint to access iPMS Field App as @$enrolledUser';
+
       final success = await service.authenticate(
-        localizedReason:
-            'Scan fingerprint to access iPMS Field App as @$enrolledUser',
+        localizedReason: reason,
       );
 
       if (success) {
@@ -110,8 +121,12 @@ class BiometricAuthNotifier extends Notifier<BiometricAuthState> {
     state = state.copyWith(isAuthenticating: true);
 
     try {
+      final reason = state.hasFaceId
+          ? 'Authenticate with Face ID to confirm biometric login enrollment'
+          : 'Scan fingerprint to confirm biometric login enrollment';
+
       final verified = await service.authenticate(
-        localizedReason: 'Scan fingerprint to confirm biometric login enrollment',
+        localizedReason: reason,
       );
 
       if (verified) {

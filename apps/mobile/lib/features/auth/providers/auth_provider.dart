@@ -51,7 +51,7 @@ class AuthNotifier extends AsyncNotifier<AuthUser?> {
     state = await AsyncValue.guard(() async {
       return await ref
           .read(authRepositoryProvider)
-          .getCurrentUser(username: username);
+          .loginWithBiometrics(username: username);
     });
   }
 

@@ -488,18 +488,18 @@ class ProfileScreen extends ConsumerWidget {
                       if (biometricState.isHardwareSupported) ...[
                         const Divider(height: 1, color: AppColors.subtleDivider),
                         SwitchListTile.adaptive(
-                          secondary: const Icon(
-                            Icons.fingerprint_rounded,
+                          secondary: Icon(
+                            biometricState.biometricIcon,
                             color: AppColors.darkSlate,
                           ),
                           title: Text(
-                            'Fingerprint login',
+                            '${biometricState.biometricName} Login',
                             style: AppTypography.titleMedium,
                           ),
                           subtitle: Text(
                             biometricState.isConfigured
                                 ? 'Active for @${biometricState.enrolledUsername ?? user?.username}'
-                                : 'Fast biometric access',
+                                : 'Fast ${biometricState.biometricName.toLowerCase()} access',
                             style: AppTypography.caption,
                           ),
                           value: biometricState.isConfigured,
@@ -511,9 +511,9 @@ class ProfileScreen extends ConsumerWidget {
                                   .enrollBiometric(user?.username ?? 'engineer');
                               if (context.mounted && !success) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text(
-                                        'Fingerprint enrollment was cancelled or failed.'),
+                                        '${biometricState.biometricName} enrollment was cancelled or failed.'),
                                   ),
                                 );
                               }

@@ -104,11 +104,19 @@ class CameraService {
       checklistItemTitle: checklistItemTitle,
     );
 
-    // 5. Apply bottom-left watermark
+    // 5. Apply bottom-left watermark (saved strictly to private in-app storage)
     final watermarkedFile = await WatermarkService.applyWatermark(
       imageBytes: rawBytes,
       metadata: metadata,
     );
+
+    // Clean up temporary unwatermarked raw camera scratch file
+    try {
+      final rawFile = File(pickedFile.path);
+      if (rawFile.existsSync()) {
+        rawFile.deleteSync();
+      }
+    } catch (_) {}
 
     // 6. Build evidence record
     final evidence = TaskEvidence(
