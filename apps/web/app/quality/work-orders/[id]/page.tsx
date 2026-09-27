@@ -8,6 +8,7 @@ import { ChecklistOutline } from '../checklist-outline';
 import { STATUS_TEXT, WORK_ORDERS_PATH, projectWorkOrdersPath, dueText, eligiblePeople, formatDateTime, formatDay, isOpen, isoDay, personLabel, typeInfo } from '../labels';
 import { FilledChecklist } from './filled-checklist';
 import { ManageWorkOrder } from './manage';
+import { ReviewConsole } from './review-console';
 
 /** The checklist as it stands now: projects always use the latest published version. */
 async function currentChecklist(templateId: string): Promise<ChecklistSection[] | null> {
@@ -55,6 +56,9 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
   const status = STATUS_TEXT[wo.status];
   const now = new Date();
   const due = dueText(wo, now);
+  const isUnderReview = submission?.status === 'SUBMITTED' || submission?.status === 'UNDER_REVIEW';
+  const canApprove = Boolean(isUnderReview && may('qc_review.approve'));
+  const canReject = Boolean(isUnderReview && (may('qc_review.reject') || may('qc_review.approve')));
 
   return (
     <main className="app-shell">
@@ -102,6 +106,16 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                       : <p className="subtle">{submitted && 'message' in submitted ? submitted.message : 'Nothing submitted yet.'}</p>}
                   </section>
                 : null}
+
+              {submission && (canApprove || canReject) ? (
+                <ReviewConsole
+                  submission={submission}
+                  projectId={wo.projectId}
+                  workOrderId={wo.id}
+                  canApprove={canApprove}
+                  canReject={canReject}
+                />
+              ) : null}
             </div>
 
             <div className="wo-col">

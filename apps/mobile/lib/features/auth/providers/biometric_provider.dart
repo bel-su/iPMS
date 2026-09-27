@@ -22,6 +22,8 @@ class BiometricAuthState {
   final bool isAuthenticating;
   final String? statusMessage;
 
+  bool get hasFaceId => availableBiometrics.contains(BiometricType.face);
+
   bool get hasFingerprint =>
       availableBiometrics.contains(BiometricType.fingerprint) ||
       availableBiometrics.contains(BiometricType.strong);
@@ -94,6 +96,10 @@ class BiometricAuthNotifier extends Notifier<BiometricAuthState> {
     state = state.copyWith(isAuthenticating: true, statusMessage: null);
 
     try {
+      final reason = state.hasFaceId
+          ? 'Authenticate with Face ID to access iPMS Field App as @$enrolledUser'
+          : 'Scan fingerprint to access iPMS Field App as @$enrolledUser';
+
       final success = await service.authenticate(
         localizedReason:
             'Use ${state.biometricLabel} to access iPMS Field App as @$enrolledUser',
@@ -126,6 +132,10 @@ class BiometricAuthNotifier extends Notifier<BiometricAuthState> {
     state = state.copyWith(isAuthenticating: true);
 
     try {
+      final reason = state.hasFaceId
+          ? 'Authenticate with Face ID to confirm biometric login enrollment'
+          : 'Scan fingerprint to confirm biometric login enrollment';
+
       final verified = await service.authenticate(
         localizedReason:
             'Use ${state.biometricLabel} to confirm biometric login enrollment',

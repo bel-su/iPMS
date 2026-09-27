@@ -1,5 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:mobile/core/security/token_storage.dart';
 import 'package:mobile/features/auth/providers/biometric_provider.dart';
 
@@ -30,6 +31,33 @@ void main() {
       expect(await storage.isBiometricEnabled(), isFalse);
       expect(await storage.getBiometricUsername(), isNull);
     });
+
+    test('preserves biometric refresh token across normal token clear and purges on demand', () async {
+      final storage = TokenStorage();
+
+      await storage.setBiometricEnabled(true);
+      await storage.saveTokens(
+        accessToken: 'access-123',
+        refreshToken: 'refresh-456',
+        userId: 'usr-1',
+      );
+
+      expect(await storage.getAccessToken(), 'access-123');
+      expect(await storage.getRefreshToken(), 'refresh-456');
+      expect(await storage.getBiometricRefreshToken(), 'refresh-456');
+
+      // Normal logout (purgeBiometrics = false): access token cleared, biometric refresh token preserved
+      await storage.clearTokens(purgeBiometrics: false);
+      expect(await storage.getAccessToken(), isNull);
+      expect(await storage.getRefreshToken(), isNull);
+      expect(await storage.getBiometricRefreshToken(), 'refresh-456');
+      expect(await storage.isBiometricEnabled(), isTrue);
+
+      // Purge all biometrics
+      await storage.clearTokens(purgeBiometrics: true);
+      expect(await storage.getBiometricRefreshToken(), isNull);
+      expect(await storage.isBiometricEnabled(), isFalse);
+    });
   });
 
   group('BiometricAuthState Model', () {
@@ -48,6 +76,30 @@ void main() {
       final updated = state.copyWith(isAuthenticating: true);
       expect(updated.isAuthenticating, isTrue);
       expect(updated.enrolledUsername, 'field_tech');
+    });
+
+    test('detects Face ID and adapts labels and icons for iOS', () {
+      const faceIdState = BiometricAuthState(
+        isHardwareSupported: true,
+        isConfigured: true,
+        availableBiometrics: [BiometricType.face],
+        enrolledUsername: 'ios_engineer',
+      );
+
+      expect(faceIdState.hasFaceId, isTrue);
+      expect(faceIdState.hasFingerprint, isFalse);
+      expect(faceIdState.biometricName, 'Face ID');
+
+      const fingerprintState = BiometricAuthState(
+        isHardwareSupported: true,
+        isConfigured: true,
+        availableBiometrics: [BiometricType.fingerprint],
+        enrolledUsername: 'android_engineer',
+      );
+
+      expect(fingerprintState.hasFaceId, isFalse);
+      expect(fingerprintState.hasFingerprint, isTrue);
+      expect(fingerprintState.biometricName, 'Fingerprint');
     });
   });
 }

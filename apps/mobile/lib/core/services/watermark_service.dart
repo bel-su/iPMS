@@ -212,10 +212,20 @@ class WatermarkService {
       throw Exception('Failed to generate watermarked image byte data.');
     }
 
-    // 12. Save to device file
-    final tempDir = await getTemporaryDirectory();
+    // 12. Save strictly to sandboxed private in-app storage (never public device gallery)
+    final appDir = await getApplicationDocumentsDirectory();
+    final evidenceDir = Directory('${appDir.path}/app_session_evidence');
+    if (!evidenceDir.existsSync()) {
+      evidenceDir.createSync(recursive: true);
+      // Create .nomedia so external Android gallery scanners explicitly ignore this folder
+      final noMediaFile = File('${evidenceDir.path}/.nomedia');
+      if (!noMediaFile.existsSync()) {
+        noMediaFile.createSync();
+      }
+    }
+
     final timestampId = DateTime.now().millisecondsSinceEpoch;
-    final outputFile = File('${tempDir.path}/evidence_${metadata.siteCode}_$timestampId.png');
+    final outputFile = File('${evidenceDir.path}/evidence_${metadata.siteCode}_$timestampId.png');
     await outputFile.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
 
     return outputFile;

@@ -499,7 +499,7 @@ class ProfileScreen extends ConsumerWidget {
                           subtitle: Text(
                             biometricState.isConfigured
                                 ? 'Active for @${biometricState.enrolledUsername ?? user?.username}'
-                                : 'Fast biometric access',
+                                : 'Fast ${biometricState.biometricName.toLowerCase()} access',
                             style: AppTypography.caption,
                           ),
                           value: biometricState.isConfigured,
