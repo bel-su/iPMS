@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Mobile</string>
+	<string>iPMS Field</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -66,6 +66,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>iPMS uses the camera to capture photo evidence for your field tasks.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>iPMS uses your location to show nearby sites and to stamp GPS coordinates on task evidence photos.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Authenticate with Face ID or fingerprint to quickly and securely access your iPMS field tasks.</string>
 </dict>

@@ -488,12 +488,12 @@ class ProfileScreen extends ConsumerWidget {
                       if (biometricState.isHardwareSupported) ...[
                         const Divider(height: 1, color: AppColors.subtleDivider),
                         SwitchListTile.adaptive(
-                          secondary: const Icon(
-                            Icons.fingerprint_rounded,
+                          secondary: Icon(
+                            biometricState.biometricIcon,
                             color: AppColors.darkSlate,
                           ),
                           title: Text(
-                            'Fingerprint login',
+                            '${biometricState.biometricLabel} login',
                             style: AppTypography.titleMedium,
                           ),
                           subtitle: Text(
@@ -511,9 +511,9 @@ class ProfileScreen extends ConsumerWidget {
                                   .enrollBiometric(user?.username ?? 'engineer');
                               if (context.mounted && !success) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text(
-                                        'Fingerprint enrollment was cancelled or failed.'),
+                                        '${biometricState.biometricLabel} enrollment was cancelled or failed.'),
                                   ),
                                 );
                               }

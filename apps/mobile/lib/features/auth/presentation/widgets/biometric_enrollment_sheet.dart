@@ -42,6 +42,7 @@ class _BiometricEnrollmentSheetState
     final success = await ref
         .read(biometricAuthStateProvider.notifier)
         .enrollBiometric(widget.username);
+    final label = ref.read(biometricAuthStateProvider).biometricLabel;
 
     if (mounted) {
       if (success) {
@@ -52,14 +53,14 @@ class _BiometricEnrollmentSheetState
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            content: const Row(
+            content: Row(
               children: [
-                Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-                SizedBox(width: 10),
+                const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Fingerprint login enabled for this device.',
-                    style: TextStyle(fontSize: 12, color: Colors.white),
+                    '$label login enabled for this device.',
+                    style: const TextStyle(fontSize: 12, color: Colors.white),
                   ),
                 ),
               ],
@@ -77,6 +78,9 @@ class _BiometricEnrollmentSheetState
 
   @override
   Widget build(BuildContext context) {
+    final biometricState = ref.watch(biometricAuthStateProvider);
+    final label = biometricState.biometricLabel;
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
@@ -95,7 +99,7 @@ class _BiometricEnrollmentSheetState
             ),
             const SizedBox(height: 24),
 
-            // Fingerprint Icon Container
+            // Biometric Icon Container
             Container(
               width: 72,
               height: 72,
@@ -107,8 +111,8 @@ class _BiometricEnrollmentSheetState
                   width: 2,
                 ),
               ),
-              child: const Icon(
-                Icons.fingerprint_rounded,
+              child: Icon(
+                biometricState.biometricIcon,
                 size: 40,
                 color: AppColors.darkSlate,
               ),
@@ -116,14 +120,14 @@ class _BiometricEnrollmentSheetState
             const SizedBox(height: 16),
 
             Text(
-              'Enable Fingerprint Sign In?',
+              'Enable $label Sign In?',
               style: AppTypography.headingMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
 
             Text(
-              'Sign in instantly next time with your fingerprint sensor. Your tokens remain securely stored inside your device hardware enclave.',
+              'Sign in instantly next time with $label. Your tokens remain securely stored inside your device hardware enclave.',
               style: AppTypography.bodySmall,
               textAlign: TextAlign.center,
             ),
@@ -190,9 +194,9 @@ class _BiometricEnrollmentSheetState
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.fingerprint_rounded, size: 20),
+                    : Icon(biometricState.biometricIcon, size: 20),
                 label: Text(
-                  _isProcessing ? 'Verifying Sensor...' : 'Enable Fingerprint',
+                  _isProcessing ? 'Verifying $label...' : 'Enable $label',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,

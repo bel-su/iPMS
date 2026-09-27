@@ -13,6 +13,10 @@ class AppConfig {
   /// Default API base URL.
   /// - Web / desktop: `http://localhost:3000`
   /// - Android (physical device with `adb reverse tcp:3000 tcp:3000` or emulator): `http://localhost:3000`
+  /// - iOS simulator: `http://localhost:3000` (shares the Mac's network)
+  /// - iOS physical device: `localhost` is the phone itself, so pass the Mac's
+  ///   LAN address, e.g. `--dart-define=API_BASE_URL=http://192.168.1.20:3000`.
+  ///   Plain HTTP only works in Debug builds; Release builds require HTTPS.
   /// - Overridable via `--dart-define=API_BASE_URL=...`
   static String get apiBaseUrl {
     if (_customApiUrl != null && _customApiUrl!.isNotEmpty) {

@@ -117,15 +117,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   width: 2,
                                 ),
                               ),
-                              child: const Icon(
-                                Icons.fingerprint_rounded,
+                              child: Icon(
+                                biometricState.biometricIcon,
                                 size: 36,
                                 color: AppColors.darkSlate,
                               ),
                             ),
                             const SizedBox(height: 14),
                             Text(
-                              'Fingerprint Unlock',
+                              '${biometricState.biometricLabel} Unlock',
                               style: AppTypography.titleLarge,
                             ),
                             const SizedBox(height: 4),
@@ -158,11 +158,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           color: Colors.white,
                                         ),
                                       )
-                                    : const Icon(Icons.fingerprint_rounded, size: 22),
+                                    : Icon(biometricState.biometricIcon, size: 22),
                                 label: Text(
                                   biometricState.isAuthenticating
-                                      ? 'Scanning Fingerprint...'
-                                      : 'Sign in with Fingerprint',
+                                      ? 'Verifying ${biometricState.biometricLabel}...'
+                                      : 'Sign in with ${biometricState.biometricLabel}',
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
@@ -307,12 +307,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                             ),
 
-                            // Back to Fingerprint Login (If Enrolled)
+                            // Back to Biometric Login (If Enrolled)
                             if (hasEnrolledBiometric) ...[
                               const SizedBox(height: 12),
                               TextButton.icon(
-                                icon: const Icon(Icons.fingerprint_rounded, size: 18),
-                                label: const Text('Unlock with Fingerprint'),
+                                icon: Icon(biometricState.biometricIcon, size: 18),
+                                label: Text('Unlock with ${biometricState.biometricLabel}'),
                                 onPressed: () =>
                                     setState(() => _showPasswordForm = false),
                               ),
