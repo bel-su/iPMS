@@ -945,51 +945,23 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                   ],
                 ),
               ),
-            ),
-
-            // Bottom Action Bar: OSM Map, Multi-Photo Shoot, and Submit to QC
+            ),            // Bottom Action Bar: Multi-Photo Shoot and Submit to QC
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
-                    offset: const Offset(0, -3),
+                    offset: const Offset(0, -4),
                   ),
                 ],
               ),
               child: Row(
                 children: [
-                  // Map Button
-                  IconButton.filledTonal(
-                    style: IconButton.styleFrom(
-                      padding: const EdgeInsets.all(12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(Icons.map_outlined, size: 22),
-                    tooltip: 'View on Map',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => SiteMapScreen(
-                            initialLatitude: task.latitude,
-                            initialLongitude: task.longitude,
-                            siteCode: task.siteCode,
-                            siteName: task.siteName,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 8),
-
                   // Continuous Multi-Photo Rapid Shoot Button
                   Expanded(
-                    flex: 5,
                     child: SizedBox(
                       height: 48,
                       child: OutlinedButton.icon(
@@ -1011,11 +983,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
 
                   // Submit Checklist & Evidence to QC
                   Expanded(
-                    flex: 5,
                     child: SizedBox(
                       height: 48,
                       child: ElevatedButton.icon(
@@ -1487,8 +1458,34 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Site Identification & GPS',
-                    style: AppTypography.titleLarge),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Site Identification & GPS',
+                        style: AppTypography.titleLarge),
+                    IconButton.filledTonal(
+                      style: IconButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.map_outlined, size: 20),
+                      tooltip: 'View Interactive Map',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => SiteMapScreen(
+                              initialLatitude: task.latitude,
+                              initialLongitude: task.longitude,
+                              siteCode: task.siteCode,
+                              siteName: task.siteName,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 14),
                 Row(
                   children: [
@@ -1525,6 +1522,38 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                       style: AppTypography.bodyMedium,
                     ),
                   ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryLavenderDark,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.map_outlined, size: 18),
+                    label: const Text(
+                      'Open Full Site & Route Map',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => SiteMapScreen(
+                            initialLatitude: task.latitude,
+                            initialLongitude: task.longitude,
+                            siteCode: task.siteCode,
+                            siteName: task.siteName,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
                 const SizedBox(height: 16),
                 const Divider(color: AppColors.subtleDivider),
