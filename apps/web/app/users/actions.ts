@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation';
 import {
   changePassword, createUser, deactivateUser, reactivateUser,
-  resetUserPassword, setUserRoles, updateUser,
+  resetUserPassword, setUserRoles, updateUser, updateMyProfile,
 } from '../lib/user-api';
 import { type FormState } from '../lib/form-state';
 import { clearable, optional, settle } from '../lib/settle';
@@ -101,6 +101,19 @@ export async function updateUserAction(_previous: FormState, form: FormData): Pr
   }), pages(userId));
   if (state.error) return state;
   redirect(`/users/${userId}`);
+}
+
+/** Updates the signed-in user's own profile and refreshes /profile. */
+export async function updateMyProfileAction(_previous: FormState, form: FormData): Promise<FormState> {
+  const fullName = optional(form, 'fullName');
+  const email = optional(form, 'email');
+  if (!fullName || !email) return { error: 'A full name and an email address are required.' };
+
+  const state = await settle(await updateMyProfile({
+    fullName, email, ...clearable(form, 'employeeCode'),
+  }), ['/profile']);
+  if (state.error) return state;
+  return { done: true };
 }
 
 export async function setUserRolesAction(_previous: FormState, form: FormData): Promise<FormState> {

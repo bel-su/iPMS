@@ -12,21 +12,23 @@ const reactivateUser = vi.fn().mockResolvedValue({ state: 'ready', data: { id: '
 const setUserRoles = vi.fn().mockResolvedValue({ state: 'ready', data: { id: 'u-1' } });
 const resetUserPassword = vi.fn().mockResolvedValue({ state: 'ready', data: { id: 'u-1' } });
 const changePassword = vi.fn().mockResolvedValue({ state: 'ready', data: { status: 'ok' } });
+const updateMyProfile = vi.fn().mockResolvedValue({ state: 'ready', data: { id: 'u-1' } });
 vi.mock('../lib/user-api', () => ({
   createUser, updateUser, deactivateUser, reactivateUser,
-  setUserRoles, resetUserPassword, changePassword,
-  listUsers: vi.fn(), getUser: vi.fn(), listRoles: vi.fn(),
+  setUserRoles, resetUserPassword, changePassword, updateMyProfile,
+  listUsers: vi.fn(), getUser: vi.fn(), listRoles: vi.fn(), getMyProfile: vi.fn(),
 }));
 
 const {
   changePasswordAction, createUserAction, deactivateUserAction,
   reactivateUserAction, resetUserPasswordAction, setUserRolesAction, updateUserAction,
+  updateMyProfileAction,
 } = await import('./actions');
 
 beforeEach(() => {
   revalidatePath.mockClear();
   redirect.mockClear();
-  for (const fn of [createUser, updateUser, deactivateUser, reactivateUser, setUserRoles, resetUserPassword, changePassword]) {
+  for (const fn of [createUser, updateUser, deactivateUser, reactivateUser, setUserRoles, resetUserPassword, changePassword, updateMyProfile]) {
     fn.mockClear();
   }
 });
@@ -123,6 +125,25 @@ describe('updateUserAction', () => {
       .rejects.toThrow('NEXT_REDIRECT');
     expect(revalidatePath).toHaveBeenCalledWith('/users/u-1');
     expect(revalidatePath).toHaveBeenCalledWith('/users');
+  });
+});
+
+describe('updateMyProfileAction', () => {
+  it('updates current profile and revalidates /profile', async () => {
+    const res = await updateMyProfileAction({}, form({
+      fullName: 'Updated Self', email: 'self@ipms.local', employeeCode: 'EMP-777',
+    }));
+    expect(res).toEqual({ done: true });
+    expect(updateMyProfile).toHaveBeenCalledWith({
+      fullName: 'Updated Self', email: 'self@ipms.local', employeeCode: 'EMP-777',
+    });
+    expect(revalidatePath).toHaveBeenCalledWith('/profile');
+  });
+
+  it('requires full name and email', async () => {
+    const res = await updateMyProfileAction({}, form({ fullName: 'Only Name' }));
+    expect(res).toEqual({ error: 'A full name and an email address are required.' });
+    expect(updateMyProfile).not.toHaveBeenCalled();
   });
 });
 

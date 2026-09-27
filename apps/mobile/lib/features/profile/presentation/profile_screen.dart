@@ -79,6 +79,116 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
+  void _showEditProfileSheet(BuildContext context, WidgetRef ref, dynamic user) {
+    final nameController = TextEditingController(text: user?.displayName ?? '');
+    final emailController = TextEditingController(text: user?.email ?? '');
+    final codeController = TextEditingController(text: user?.employeeCode ?? '');
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          left: 24,
+          right: 24,
+          top: 20,
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Edit Profile', style: AppTypography.headingSmall),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Full Name',
+                  hintText: 'e.g. Jane Doe',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email Address',
+                  hintText: 'user@company.com',
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: codeController,
+                decoration: const InputDecoration(
+                  labelText: 'Employee Badge Code',
+                  hintText: 'e.g. EMP-1042',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.darkSlate,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    try {
+                      await ref.read(authStateProvider.notifier).updateProfile(
+                            fullName: nameController.text.trim(),
+                            email: emailController.text.trim(),
+                            employeeCode: codeController.text.trim(),
+                          );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Profile updated successfully!'),
+                            backgroundColor: AppColors.statusCompletedText,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(e.toString()),
+                            backgroundColor: AppColors.statusBlockedText,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Save Profile Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showPrivacySecuritySheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -253,6 +363,13 @@ class ProfileScreen extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Column(
                     children: [
+                      _buildSettingsTile(
+                        icon: Icons.edit_outlined,
+                        title: 'Edit Profile',
+                        trailingText: 'Update',
+                        onTap: () => _showEditProfileSheet(context, ref, user),
+                      ),
+                      const Divider(height: 1, color: AppColors.subtleDivider),
                       _buildSettingsTile(
                         icon: Icons.person_outline_rounded,
                         title: 'Account setting',

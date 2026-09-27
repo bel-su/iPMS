@@ -74,6 +74,11 @@ export async function getMyProfile(): Promise<ApiResult<User>> {
   return authFetch<User>('/api/v1/users/me');
 }
 
+/** Updates the signed-in user's own profile without requiring administrative permissions. */
+export async function updateMyProfile(input: UpdateUserDto): Promise<ApiResult<User>> {
+  return authFetch<User>('/api/v1/users/me', { method: 'PATCH', json: input });
+}
+
 export async function getUser(id: string): Promise<ApiResult<User>> {
   return authFetch<User>(`/api/v1/users/${id}`);
 }

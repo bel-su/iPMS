@@ -30,10 +30,21 @@ void main() {
 
     expect(find.text('Mohammad Oalid Hasan'), findsOneWidget);
     expect(find.text('Field Engineer • Field Operations'), findsOneWidget);
+    expect(find.text('Edit Profile'), findsOneWidget);
     expect(find.text('Account setting'), findsOneWidget);
     expect(find.text('Privacy & Security'), findsOneWidget);
     expect(find.text('Notification'), findsOneWidget);
     expect(find.text('Dark mode'), findsOneWidget);
+
+    // Tap Edit Profile to verify bottom sheet opens
+    await tester.tap(find.text('Edit Profile'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Save Profile Changes'), findsOneWidget);
+
+    // Close bottom sheet
+    await tester.tap(find.byIcon(Icons.close_rounded));
+    await tester.pumpAndSettle();
 
     // Scroll until Log Out is visible in viewport, then tap
     final logoutFinder = find.text('Log Out');

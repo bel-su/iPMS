@@ -5,25 +5,122 @@
  */
 
 import { cookies } from 'next/headers';
-import { BrandLogo, BrandMark } from './components/brand';
+import { BrandMark } from './components/brand';
 import { SIDEBAR_COLLAPSED, SIDEBAR_COOKIE } from './components/sidebar-state';
 import { SidebarToggle } from './components/sidebar-toggle';
 import { getCurrentUser, hasPermission, mayReadDocs } from './lib/iam-api';
 import { getMyProfile } from './lib/user-api';
 
-function Icon({ children }: { children: React.ReactNode }) { return <span className="icon" aria-hidden="true">{children}</span>; }
+function OverviewIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  );
+}
+
+function ProjectsIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 7a2 2 0 0 1 2-2h4l2 2h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7z" />
+    </svg>
+  );
+}
+
+function QualityIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+function WorkOrdersIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="m10 8 4 4-4 4" />
+    </svg>
+  );
+}
+
+function ChecklistsIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  );
+}
+
+function UsersIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function DocsIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
+function ProfileIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
 
 type Section = 'overview' | 'projects' | 'checklists' | 'work-orders' | 'users' | 'docs' | 'profile';
 
 const QUALITY: readonly Section[] = ['checklists', 'work-orders'];
 
-function NavItem({ section, active, href, icon, children, nested = false }: {
-  section: Section; active: Section; href: string; icon: string; children: React.ReactNode; nested?: boolean;
+function NavItem({
+  section,
+  active,
+  href,
+  icon,
+  children,
+  nested = false,
+  isAction = false,
+}: {
+  section: Section;
+  active: Section;
+  href: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  nested?: boolean;
+  isAction?: boolean;
 }) {
   const current = section === active;
+  const tooltipText = typeof children === 'string' ? children : '';
   return (
-    <a className={`nav-item${nested ? ' nested' : ''}${current ? ' active' : ''}`} href={href} aria-current={current ? 'page' : undefined}>
-      <Icon>{icon}</Icon><span className="nav-label">{children}</span>
+    <a
+      className={`nav-item${nested ? ' nested' : ''}${current ? ' active' : ''}${isAction ? ' action-item' : ''}`}
+      href={href}
+      aria-current={current ? 'page' : undefined}
+      data-tooltip={tooltipText}
+    >
+      <span className="icon" aria-hidden="true">{icon}</span>
+      <span className="nav-label">{children}</span>
     </a>
   );
 }
@@ -48,28 +145,99 @@ export async function Sidebar({ active }: { active: Section }) {
 
   return (
     <aside className={collapsed ? 'sidebar collapsed' : 'sidebar'}>
-      <SidebarToggle initiallyCollapsed={collapsed} />
-      {/* Both rendered: the toggle flips the class client-side, so CSS picks which shows. */}
-      <a className="brand" href="/" aria-label="iPMS home"><BrandLogo width={184} /><BrandMark size={34} /></a>
-      <p className="workspace-label">WORKSPACE</p>
+      {/* Top Header: Brand Badge & Title + Collapse Toggle at Top */}
+      <div className="sidebar-header">
+        <a className="brand" href="/" aria-label="iPMS home">
+          <div className="brand-badge">
+            <BrandMark size={22} />
+          </div>
+          <div className="brand-text">
+            <span className="brand-title">iPMS</span>
+            <span className="brand-subtitle">Field Platform</span>
+          </div>
+        </a>
+        <SidebarToggle initiallyCollapsed={collapsed} />
+      </div>
+
       <nav aria-label="Primary navigation">
-        <NavItem section="overview" active={active} href="/" icon="▦">Overview</NavItem>
-        <NavItem section="projects" active={active} href="/projects" icon="◫">Projects</NavItem>
-        {mayViewTemplates || mayViewTasks
-          ? <div className="nav-group" role="group" aria-label="Quality & EHS">
-              {/* The heading is a link to whichever of its pages the viewer can open, work orders first. */}
-              <a className={QUALITY.includes(active) ? 'nav-item nav-parent open' : 'nav-item nav-parent'} href={mayViewTasks ? '/quality/work-orders' : '/quality/templates'}>
-                <Icon>✓</Icon><span className="nav-label">Quality &amp; EHS</span>
+        {/* Standalone Dashboard Item */}
+        <NavItem section="overview" active={active} href="/" icon={<OverviewIcon />}>
+          Overview
+        </NavItem>
+
+        {/* Inset Group Card Container (Matching Reference Image Grouping) */}
+        <div className="nav-group-card" role="group" aria-label="Projects & Quality Operations">
+          <NavItem section="projects" active={active} href="/projects" icon={<ProjectsIcon />}>
+            Projects
+          </NavItem>
+
+          {mayViewTemplates || mayViewTasks ? (
+            <div className="nav-group" role="group" aria-label="Quality & EHS">
+              <a
+                className={QUALITY.includes(active) ? 'nav-item nav-parent open' : 'nav-item nav-parent'}
+                href={mayViewTasks ? '/quality/work-orders' : '/quality/templates'}
+                data-tooltip="Quality & EHS"
+              >
+                <span className="icon" aria-hidden="true"><QualityIcon size={16} /></span>
+                <span className="nav-label">Quality &amp; EHS</span>
               </a>
-              {mayViewTemplates ? <NavItem section="checklists" active={active} href="/quality/templates" icon="▤" nested>Checklist library</NavItem> : null}
-              {mayViewTasks ? <NavItem section="work-orders" active={active} href="/quality/work-orders" icon="☰" nested>Work orders</NavItem> : null}
+              {mayViewTasks ? (
+                <NavItem
+                  section="work-orders"
+                  active={active}
+                  href="/quality/work-orders"
+                  icon={<WorkOrdersIcon />}
+                  nested
+                  isAction={active === 'work-orders'}
+                >
+                  Work orders
+                </NavItem>
+              ) : null}
+              {mayViewTemplates ? (
+                <NavItem
+                  section="checklists"
+                  active={active}
+                  href="/quality/templates"
+                  icon={<ChecklistsIcon />}
+                  nested
+                >
+                  Checklist library
+                </NavItem>
+              ) : null}
             </div>
-          : null}
-        {mayViewUsers ? <NavItem section="users" active={active} href="/users" icon="◉">Users</NavItem> : null}
+          ) : null}
+
+          {mayViewUsers ? (
+            <NavItem section="users" active={active} href="/users" icon={<UsersIcon />}>
+              Users
+            </NavItem>
+          ) : null}
+        </div>
       </nav>
-      {mayReadDocumentation
-        ? <div className="sidebar-bottom"><NavItem section="docs" active={active} href="/docs" icon="?">Documentation</NavItem></div>
-        : null}
+
+      {/* Footer Area with Documentation, Live Status & Profile Flyout */}
+      <div className="sidebar-bottom">
+        {mayReadDocumentation ? (
+          <NavItem section="docs" active={active} href="/docs" icon={<DocsIcon />}>
+            Documentation
+          </NavItem>
+        ) : null}
+        <div className="sidebar-footer-row">
+          <div className="status-dot-indicator" title="iPMS Core Gateway Online">
+            <span className="pulse-dot" aria-hidden="true" />
+            <span className="status-text">Online</span>
+          </div>
+          <a
+            href="/profile"
+            className="footer-icon-btn"
+            title="Account Profile"
+            aria-label="Account Profile"
+            data-tooltip="Profile"
+          >
+            <ProfileIcon size={15} />
+          </a>
+        </div>
+      </div>
     </aside>
   );
 }

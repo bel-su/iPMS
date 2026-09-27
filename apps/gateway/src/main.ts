@@ -67,8 +67,15 @@ async function bootstrap(): Promise<void> {
 
   await app.register(fastifyCookie, { secret: requireEnv('COOKIE_SECRET') });
   await app.register(fastifyHelmet, { contentSecurityPolicy: false });
+  const defaultMax = Number(process.env['RATE_LIMIT_MAX'] ?? 300);
   await app.register(fastifyRateLimit, {
-    max: Number(process.env['RATE_LIMIT_MAX'] ?? 300),
+    max: (req) => {
+      // Sensitive profile mutations carry a tighter bucket to prevent abuse.
+      if (req.url?.startsWith('/api/v1/users/me') && req.method === 'PATCH') {
+        return 20;
+      }
+      return defaultMax;
+    },
     timeWindow: '1 minute',
     keyGenerator: (req) => rateLimitKey(jwtSecret, req as never),
     // Health probes must never be rate limited, or a throttled gateway gets
