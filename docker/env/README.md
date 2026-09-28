@@ -37,6 +37,10 @@ so its values win:
     S3_FORCE_PATH_STYLE=false
     S3_AUTO_CREATE_BUCKET=false
 
+All eight `S3_*` values above are required in `media.secrets.env` on every
+server — media fails to start if any of them is missing (config.ts reads them
+once at bootstrap, on purpose, rather than failing on the first upload).
+
 ### Deployment checklist (per environment)
 
 1. R2 bucket exists with `r2.dev` public access disabled and no custom domain.
@@ -44,4 +48,4 @@ so its values win:
 3. Lifecycle rule: abort incomplete multipart uploads after 7 days. No object-expiry rules.
 4. `media.secrets.env` created on the server with the values above.
 5. When the environment has a web domain: CORS policy allowing `GET`, `PUT`, `HEAD` from that origin only, headers `content-type` and `x-amz-checksum-sha256`, exposing `ETag`.
-6. Smoke test: register, upload and complete one photo against the bucket, confirm it turns `READY`, open its view link, then delete it.
+6. Smoke test: register, upload and complete one photo against the bucket, confirm it turns `READY`, open its view link, then delete it. Also confirm the multipart (video) path against the same bucket: register an 11 MiB mp4, upload part 1, check `POST /media/uploads/status`, fetch fresh URLs for the remaining parts (`POST /media/uploads/:id/parts`), finish uploading, call `complete`, and confirm the object turns `READY`. This exercises R2's actual multipart behaviour and error names (`NoSuchUpload`, `InvalidPart`, …), which MinIO does not always reproduce exactly.
