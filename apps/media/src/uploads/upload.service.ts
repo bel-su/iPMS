@@ -20,6 +20,11 @@ import type { StorageClient } from '../storage/storage.client.js';
 export const UPLOAD_URL_TTL_SECONDS = 3600;
 export const PENDING_CAP = 500;
 
+/** PART_SIZE_BYTES for every part but the last; the remainder for the last. */
+function partLength(sizeBytes: number, partNumber: number, partCount: number): number {
+  return partNumber === partCount ? sizeBytes - PART_SIZE_BYTES * (partCount - 1) : PART_SIZE_BYTES;
+}
+
 /**
  * The phone's side of the upload protocol. Every method is safe to repeat: a
  * phone on a failing link will call each of them more than once, and the
@@ -108,7 +113,8 @@ export class UploadService {
     if (bad.length) throw new BadRequestException(`This upload has ${count} parts; ${bad.join(', ')} do not exist`);
     return {
       parts: await Promise.all(partNumbers.map(async (partNumber) => ({
-        partNumber, signedUrl: await this.storage.presignPart(row.storageKey, uploadId, partNumber, UPLOAD_URL_TTL_SECONDS),
+        partNumber,
+        signedUrl: await this.storage.presignPart(row.storageKey, uploadId, partNumber, partLength(row.sizeBytes, partNumber, count), UPLOAD_URL_TTL_SECONDS),
       }))),
       expiresAt: new Date(Date.now() + UPLOAD_URL_TTL_SECONDS * 1000).toISOString(),
     };
@@ -127,14 +133,23 @@ export class UploadService {
       if (outcome === 'invalid_parts') {
         throw new HttpException('Part list does not match the stored parts; check status and re-send missing parts', HttpStatus.PRECONDITION_FAILED);
       }
-      if (outcome === 'upload_gone') {
-        // A previous completion may have already landed in storage and this
-        // is a repeat call that lost the race with our own DB update (crash,
-        // overlapping retry, or the upload simply expired first).
-        const head = await this.storage.head(row.storageKey);
-        if (!head || head.sizeBytes !== row.sizeBytes) {
-          throw new HttpException('This upload expired; register again to get new part URLs', HttpStatus.PRECONDITION_FAILED);
-        }
+
+      // Whether this call just completed the multipart upload itself, or
+      // arrived after a previous attempt already did (outcome ===
+      // 'upload_gone' — a repeat call that lost the race with our own DB
+      // update: a crash, an overlapping retry, or the upload simply expired
+      // first), confirm the object landed in storage at exactly the size the
+      // phone registered before moving the row toward verification. A
+      // mismatch here means the parts summed to the wrong total (or the
+      // upload never completed at all) — never mark it VERIFYING, and
+      // remove the bad object so a re-register starts clean.
+      const head = await this.storage.head(row.storageKey);
+      if (outcome === 'upload_gone' && !head) {
+        throw new HttpException('This upload expired; register again to get new part URLs', HttpStatus.PRECONDITION_FAILED);
+      }
+      if (!head || head.sizeBytes !== row.sizeBytes) {
+        if (head) await this.storage.delete([row.storageKey]);
+        throw new HttpException('The uploaded object size does not match the registered size; register again and re-upload', HttpStatus.PRECONDITION_FAILED);
       }
     } else if (!(await this.storage.head(row.storageKey))) {
       // 412, not 409: the phone should send the bytes again, then retry.
@@ -241,7 +256,8 @@ export class UploadService {
       const { uploadId } = live;
       const partCount = partCountFor(row.sizeBytes);
       const parts = await Promise.all(Array.from({ length: partCount }, async (_, i) => ({
-        partNumber: i + 1, signedUrl: await this.storage.presignPart(row.storageKey, uploadId, i + 1, UPLOAD_URL_TTL_SECONDS),
+        partNumber: i + 1,
+        signedUrl: await this.storage.presignPart(row.storageKey, uploadId, i + 1, partLength(row.sizeBytes, i + 1, partCount), UPLOAD_URL_TTL_SECONDS),
       })));
       upload = { mode: 'multipart', uploadId, partSize: PART_SIZE_BYTES, partCount, parts, expiresAt };
     } else {

@@ -71,6 +71,43 @@ describe('VerifyWorker', () => {
     expect(await prisma.mediaObject.findUniqueOrThrow({ where: { id: present.id } })).toMatchObject({ status: 'READY' });
   });
 
+  it('rejects a row whose stored size disagrees with what was registered, before streaming a single byte', async () => {
+    const body = await jpeg();
+    const row = await queued(body, { sizeBytes: body.length + 1000 }); // the row claims a different size than storage holds
+    const getStreamSpy = vi.spyOn(minio.client, 'getStream');
+    try {
+      await worker.runOnce();
+    } finally {
+      getStreamSpy.mockRestore();
+    }
+    expect(await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: 'REJECTED', rejectReason: 'SIZE_EXCEEDED' });
+    expect(getStreamSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a row over the kind’s size limit, before streaming a single byte', async () => {
+    const body = await jpeg();
+    const row = await queued(body, { sizeBytes: 6 * 1024 * 1024 }); // over PHOTO's 5 MB limit
+    // Storage actually holds a matching (oversized) object so the head check
+    // alone is what trips this, not a size mismatch against the row.
+    await minio.client.delete([row.storageKey]);
+    await minio.client.put(row.storageKey, Buffer.alloc(6 * 1024 * 1024, 1), 'image/jpeg');
+    const getStreamSpy = vi.spyOn(minio.client, 'getStream');
+    try {
+      await worker.runOnce();
+    } finally {
+      getStreamSpy.mockRestore();
+    }
+    expect(await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: 'REJECTED', rejectReason: 'SIZE_EXCEEDED' });
+    expect(getStreamSpy).not.toHaveBeenCalled();
+  });
+
+  it('deletes a rejected row’s stored object after settling it', async () => {
+    const row = await queued(await jpeg(), { contentHash: 'c'.repeat(64) }); // hash mismatch → REJECTED
+    await worker.runOnce();
+    expect(await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: 'REJECTED', rejectReason: 'HASH_MISMATCH' });
+    expect(await minio.client.head(row.storageKey)).toBeNull();
+  });
+
   it('retries a transient failure with backoff, and parks it for an operator after 5 attempts', async () => {
     // Silences only this test's expected NoSuchKey warn/error lines — the
     // failure itself is the point of the test, not something to fix.

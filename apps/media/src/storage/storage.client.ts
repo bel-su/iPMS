@@ -86,8 +86,17 @@ export class StorageClient {
     return out.UploadId;
   }
 
-  presignPart(key: string, uploadId: string, partNumber: number, ttlSeconds: number): Promise<string> {
-    return getSignedUrl(this.signer, new UploadPartCommand({ Bucket: this.bucket, Key: key, UploadId: uploadId, PartNumber: partNumber }), { expiresIn: ttlSeconds });
+  /**
+   * Bound to the exact byte count this part must be (PART_SIZE_BYTES for
+   * every part but the last, the remainder for the last), so storage itself
+   * refuses a part whose body is a different length — the same defense
+   * `presignPut` gives a single-shot upload.
+   */
+  presignPart(key: string, uploadId: string, partNumber: number, contentLength: number, ttlSeconds: number): Promise<string> {
+    const command = new UploadPartCommand({
+      Bucket: this.bucket, Key: key, UploadId: uploadId, PartNumber: partNumber, ContentLength: contentLength,
+    });
+    return getSignedUrl(this.signer, command, { expiresIn: ttlSeconds, signableHeaders: new Set(['content-length']) });
   }
 
   async listParts(key: string, uploadId: string): Promise<{ partNumber: number; etag: string }[] | null> {

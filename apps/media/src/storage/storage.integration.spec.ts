@@ -38,13 +38,14 @@ describe('StorageClient against MinIO', () => {
     const body = randomBytes(PART_SIZE_BYTES * 2 + 1234);
     const uploadId = await storage.createMultipart('t/video.mp4', 'video/mp4');
     const partOf = (n: number) => body.subarray((n - 1) * PART_SIZE_BYTES, n * PART_SIZE_BYTES);
-    const first = await fetch(await storage.presignPart('t/video.mp4', uploadId, 1, 3600), { method: 'PUT', body: partOf(1) });
+    const first = await fetch(await storage.presignPart('t/video.mp4', uploadId, 1, PART_SIZE_BYTES, 3600), { method: 'PUT', body: partOf(1) });
     expect(first.status).toBe(200);
 
     // The phone reconnects and asks what arrived.
     expect((await storage.listParts('t/video.mp4', uploadId))?.map((p) => p.partNumber)).toEqual([1]);
     for (const n of [2, 3]) {
-      await fetch(await storage.presignPart('t/video.mp4', uploadId, n, 3600), { method: 'PUT', body: partOf(n) });
+      const length = n === 3 ? 1234 : PART_SIZE_BYTES;
+      await fetch(await storage.presignPart('t/video.mp4', uploadId, n, length, 3600), { method: 'PUT', body: partOf(n) });
     }
     const parts = (await storage.listParts('t/video.mp4', uploadId))!;
     expect(await storage.completeMultipart('t/video.mp4', uploadId, parts)).toBe('completed');
@@ -62,9 +63,18 @@ describe('StorageClient against MinIO', () => {
 
   it('reports a completion with a part list that does not match storage as invalid_parts, not an error', async () => {
     const uploadId = await storage.createMultipart('t/mismatch.mp4', 'video/mp4');
-    await fetch(await storage.presignPart('t/mismatch.mp4', uploadId, 1, 3600), { method: 'PUT', body: randomBytes(PART_SIZE_BYTES) });
+    await fetch(await storage.presignPart('t/mismatch.mp4', uploadId, 1, PART_SIZE_BYTES, 3600), { method: 'PUT', body: randomBytes(PART_SIZE_BYTES) });
     expect(await storage.completeMultipart('t/mismatch.mp4', uploadId, [{ partNumber: 1, etag: '"0000000000000000000000000000000"' }])).toBe('invalid_parts');
     await storage.abortMultipart('t/mismatch.mp4', uploadId);
+  });
+
+  it('refuses a part PUT whose body is a different length than the part was signed for', async () => {
+    const uploadId = await storage.createMultipart('t/wrong-length.mp4', 'video/mp4');
+    const signedUrl = await storage.presignPart('t/wrong-length.mp4', uploadId, 1, PART_SIZE_BYTES, 3600);
+    const response = await fetch(signedUrl, { method: 'PUT', body: randomBytes(PART_SIZE_BYTES - 1) });
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(await storage.listParts('t/wrong-length.mp4', uploadId)).toEqual([]);
+    await storage.abortMultipart('t/wrong-length.mp4', uploadId);
   });
 
   it('answers null for parts of an upload that no longer exists', async () => {

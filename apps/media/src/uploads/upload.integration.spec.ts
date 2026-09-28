@@ -212,6 +212,24 @@ describe('repeat-safety when storage and the row disagree', () => {
     expect(after.multipartUploadId).toBeNull();
   });
 
+  it('reports 412 and deletes the object when its stored size does not match what was registered', async () => {
+    const { dto, video, upload } = await registeredVideo();
+    for (const part of upload.parts) {
+      await fetch(part.signedUrl, { method: 'PUT', body: partBody(video, part.partNumber) });
+    }
+    // Simulate the row's declared size disagreeing with what storage actually
+    // ends up holding (a bug, or a race between two registrations) — the
+    // parts themselves are exactly what was signed, so completion succeeds,
+    // but the final object is not the size the row promises.
+    await prisma.mediaObject.update({ where: { id: dto.id }, data: { sizeBytes: video.length + 1000 } });
+    const row = await prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } });
+    const stored = (await minio.client.listParts(row.storageKey, upload.uploadId))!;
+
+    await expect(service.complete(dto.id, { parts: stored }, ENGINEER)).rejects.toMatchObject({ status: 412 });
+    expect(await minio.client.head(row.storageKey)).toBeNull();
+    expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } })).status).toBe('PENDING');
+  });
+
   it('reports 412 when the upload was aborted and no object ever landed in storage', async () => {
     const { dto, upload } = await registeredVideo();
     const row = await prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } });

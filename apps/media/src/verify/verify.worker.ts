@@ -101,21 +101,34 @@ export class VerifyWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   private async verify(row: MediaObject): Promise<Outcome> {
+    const limit = MEDIA_LIMITS[row.kind as MediaKind].maxBytes;
+
+    // Check the object's size before streaming a single byte of it. A
+    // missing object (storage briefly losing what it just held) is left to
+    // throw so the caller's retry/backoff path handles it, same as a
+    // GetObject failure would have; a *wrong* size, whether short or over
+    // the kind's limit, is rejected outright — no reason to pay for the
+    // download just to reject it after the fact.
+    const head = await this.storage.head(row.storageKey);
+    if (!head) throw new Error(`Object not found in storage: ${row.storageKey}`);
+    if (head.sizeBytes !== row.sizeBytes || head.sizeBytes > limit) {
+      return { status: 'REJECTED', reason: 'SIZE_EXCEEDED' };
+    }
+
     const hash = createHash('sha256');
     let size = 0;
-    let head = Buffer.alloc(0);
+    let sniffHead = Buffer.alloc(0);
     const keep: Buffer[] = [];
-    const limit = MEDIA_LIMITS[row.kind as MediaKind].maxBytes;
     for await (const chunk of await this.storage.getStream(row.storageKey)) {
       const buf = chunk as Buffer;
       hash.update(buf);
       size += buf.length;
-      if (head.length < 16) head = Buffer.concat([head, buf.subarray(0, 16 - head.length)]);
+      if (sniffHead.length < 16) sniffHead = Buffer.concat([sniffHead, buf.subarray(0, 16 - sniffHead.length)]);
       if (row.kind === 'PHOTO' && size <= limit) keep.push(buf);
     }
     if (hash.digest('hex') !== row.contentHash) return { status: 'REJECTED', reason: 'HASH_MISMATCH' };
     if (size > limit) return { status: 'REJECTED', reason: 'SIZE_EXCEEDED' };
-    if (!sniffMatches(row.contentType, head)) return { status: 'REJECTED', reason: 'TYPE_MISMATCH' };
+    if (!sniffMatches(row.contentType, sniffHead)) return { status: 'REJECTED', reason: 'TYPE_MISMATCH' };
 
     if (row.kind === 'PHOTO') {
       let thumbnail: Buffer;
@@ -176,7 +189,19 @@ export class VerifyWorker implements OnModuleInit, OnModuleDestroy {
       }
       return count;
     });
-    if (matched > 0) mediaRejected.inc({ reason: outcome.reason });
+    if (matched > 0) {
+      mediaRejected.inc({ reason: outcome.reason });
+      // Only once the row is confirmedly ours to have rejected (the guarded
+      // update above matched) — never delete storage for a row something
+      // else already moved on (e.g. a discard racing this same pass). Best
+      // effort: an orphaned object is a storage leak, not data corruption,
+      // so a failure here is logged, not retried.
+      try {
+        await this.storage.delete([row.storageKey, ...(row.thumbnailKey ? [row.thumbnailKey] : [])]);
+      } catch (err) {
+        log.error({ err, mediaId: row.id }, 'failed to remove storage objects for a rejected upload');
+      }
+    }
   }
 
   private async retry(row: MediaObject, err: unknown): Promise<void> {
