@@ -120,7 +120,8 @@ export interface MediaView {
   longitude: number | null;
   distanceFromSiteM: number | null;
   uploadedBy: string;
-  thumbnailUrl: string | null;
+  /** Named so the logger's redact-by-key-name rule catches it, like every other signed-URL field. */
+  thumbnail: { signedUrl: string } | null;
 }
 
 export interface AttachedMedia {

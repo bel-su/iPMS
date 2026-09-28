@@ -40,8 +40,8 @@ export class ViewService {
       workOrderId: row.workOrderId, checklistItemId: row.checklistItemId, contentHash: row.contentHash, sizeBytes: row.sizeBytes,
       capturedAt: row.capturedAt?.toISOString() ?? null, receivedAt: row.receivedAt?.toISOString() ?? null,
       latitude: num(row.latitude), longitude: num(row.longitude), distanceFromSiteM: row.distanceFromSiteM, uploadedBy: row.uploadedBy,
-      thumbnailUrl: VIEWABLE.includes(row.status as MediaStatus) && row.thumbnailKey
-        ? (await this.storage.presignGet(row.thumbnailKey, VIEW_URL_TTL_SECONDS, readableName({ siteCode: row.siteCode, capturedAt: row.capturedAt, id: row.id, variant: 'thumbnail', kind: row.kind as MediaKind }))).signedUrl
+      thumbnail: VIEWABLE.includes(row.status as MediaStatus) && row.thumbnailKey
+        ? { signedUrl: (await this.storage.presignGet(row.thumbnailKey, VIEW_URL_TTL_SECONDS, readableName({ siteCode: row.siteCode, capturedAt: row.capturedAt, id: row.id, variant: 'thumbnail', kind: row.kind as MediaKind }))).signedUrl }
         : null,
     })));
   }

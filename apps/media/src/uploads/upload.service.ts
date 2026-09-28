@@ -149,8 +149,13 @@ export class UploadService {
     const row = await this.own(id, userId);
     if (row.status === 'DISCARDED') return { id, status: 'DISCARDED' };
     if (LOCKED.includes(row.status as MediaStatus)) throw new ConflictException('This file is part of a submission and cannot be removed');
-    await this.discarder.discard(row, userId, 'media.discarded');
-    return { id, status: 'DISCARDED' };
+    if (await this.discarder.discard(row, userId, 'media.discarded')) return { id, status: 'DISCARDED' };
+    // Lost the race (most likely to an attach that landed first): report
+    // what actually happened rather than a stale success.
+    const fresh = await this.prisma.mediaObject.findUniqueOrThrow({ where: { id } });
+    if (fresh.status === 'DISCARDED') return { id, status: 'DISCARDED' };
+    if (LOCKED.includes(fresh.status as MediaStatus)) throw new ConflictException('This file is part of a submission and cannot be removed');
+    throw new ConflictException('This file changed; check its status');
   }
 
   private async own(id: string, userId: string): Promise<MediaObject> {

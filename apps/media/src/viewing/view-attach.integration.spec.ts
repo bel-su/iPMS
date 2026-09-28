@@ -68,8 +68,8 @@ describe('ViewService', () => {
     const list = await views.listForWorkOrder(WORK_ORDER, IN_SCOPE);
     expect(list.map((m) => m.id).sort()).toEqual([ready.id, pending.id].sort());
     expect(list.find((m) => m.id === ready.id)).toMatchObject({ distanceFromSiteM: 12, latitude: 26.4525, capturedAt: '2026-09-28T08:00:00.000Z' });
-    expect(list.find((m) => m.id === ready.id)!.thumbnailUrl).toContain('X-Amz-Signature');
-    expect(list.find((m) => m.id === pending.id)!.thumbnailUrl).toBeNull();
+    expect(list.find((m) => m.id === ready.id)!.thumbnail?.signedUrl).toContain('X-Amz-Signature');
+    expect(list.find((m) => m.id === pending.id)!.thumbnail).toBeNull();
     expect(await views.listForWorkOrder(WORK_ORDER, OUT_OF_SCOPE)).toEqual([]);
   });
 });
@@ -100,5 +100,52 @@ describe('AttachService', () => {
       await expect(attach.attach({ submissionId: SUBMISSION, siteId: SITE, mediaIds: [good.id, ...extra] })).rejects.toMatchObject({ status: 409 });
     }
     expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: good.id } })).status).toBe('READY');
+  });
+
+  it('lets exactly one of two concurrent attaches of the same file win', async () => {
+    const row = await media('READY');
+    const submissionA = uuidv7();
+    const submissionB = uuidv7();
+    const results = await Promise.allSettled([
+      attach.attach({ submissionId: submissionA, siteId: SITE, mediaIds: [row.id] }),
+      attach.attach({ submissionId: submissionB, siteId: SITE, mediaIds: [row.id] }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ status: 409 });
+    const final = await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } });
+    expect(final.status).toBe('ATTACHED');
+    expect([submissionA, submissionB]).toContain(final.attachedToSubmissionId);
+  });
+
+  it('never leaves a partial result for overlapping multi-file attaches', async () => {
+    const f = await media('READY');
+    const g = await media('READY');
+    const submissionFG = uuidv7();
+    const submissionF = uuidv7();
+    const results = await Promise.allSettled([
+      attach.attach({ submissionId: submissionFG, siteId: SITE, mediaIds: [f.id, g.id] }),
+      attach.attach({ submissionId: submissionF, siteId: SITE, mediaIds: [f.id] }),
+    ]);
+    const [rowF, rowG] = await Promise.all([
+      prisma.mediaObject.findUniqueOrThrow({ where: { id: f.id } }),
+      prisma.mediaObject.findUniqueOrThrow({ where: { id: g.id } }),
+    ]);
+    if (results[0]!.status === 'fulfilled') {
+      // The [F, G] request won: both files belong to it, and the [F]-only
+      // request must have been refused outright (no partial claim of F).
+      expect(rowF.attachedToSubmissionId).toBe(submissionFG);
+      expect(rowG.attachedToSubmissionId).toBe(submissionFG);
+      expect(results[1]!.status).toBe('rejected');
+    } else {
+      // The [F]-only request won F first: the [F, G] request must then have
+      // been refused in full, leaving G untouched (never attached alone).
+      expect(rowF.attachedToSubmissionId).toBe(submissionF);
+      expect(rowG.status).toBe('READY');
+      expect(rowG.attachedToSubmissionId).toBeNull();
+      expect(results[1]!.status).toBe('fulfilled');
+    }
   });
 });
