@@ -330,6 +330,12 @@ attaches them is.
   something is pending; "safe to switch devices" indicator; unsubmitted files are never
   deleted locally; local copies deleted 30 days after the submission is confirmed;
   video re-encoded to 720p H.264 ≈2.5 Mbps; tap-to-focus on capture.
+- **Phone protocol notes from Media core review (3):** upload a video's poster **before** calling
+  `complete` — a missing poster rejects the video and deletes its bytes. A `REJECTED` file's
+  bytes are deleted on the server; the phone keeps its local copy and must re-capture or
+  re-register under a **new id**. On a 409 from `parts`, re-check `status` (the upload may
+  already be complete). A 412 from `complete` means re-send (or re-register if the upload
+  expired); 503 means retry with backoff.
 - **QC (2):** `minVideos`/`maxVideos` beside the photo counts (default 0); submissions
   sync as server-side `DRAFT` for device switching; the submission is sent only after
   all its media are `READY`; a work order keeps the template version it was raised
