@@ -50,21 +50,38 @@ export class VerifyWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   async runOnce(): Promise<number> {
-    // ${LEASE_SECONDS}/${BATCH} are cast explicitly: Prisma's tagged-template
-    // parameterization can't infer that a numeric literal here means "int",
-    // and `* interval '1 second'` / `LIMIT $n` both need one.
+    // A row whose *previous* claim already used up its last attempt (its
+    // process died mid-verify — OOM, kill -9 — so it never reached retry())
+    // would otherwise be re-leased forever: nothing but retry() ever set
+    // nextAttemptAt to null, and a crash never runs retry(). Park those rows
+    // first, unconditionally, before claiming anything new.
+    const stuck = await this.prisma.$queryRaw<{ id: string }[]>`
+      UPDATE media_object SET "nextAttemptAt" = NULL
+      WHERE status = 'VERIFYING' AND "nextAttemptAt" <= now() AND "verifyAttempts" >= ${MAX_VERIFY_ATTEMPTS}::int
+      RETURNING id`;
+    for (const { id } of stuck) {
+      log.error({ mediaId: id, attempts: MAX_VERIFY_ATTEMPTS }, 'verification retries exhausted; needs an operator');
+      verifyStuck.inc();
+    }
+
+    // ${LEASE_SECONDS}/${BATCH}/${MAX_VERIFY_ATTEMPTS} are cast explicitly:
+    // Prisma's tagged-template parameterization can't infer that a numeric
+    // literal here means "int", and `* interval '1 second'` / `LIMIT $n` /
+    // a bare integer comparison all need one.
     //
     // verifyAttempts is bumped as part of the claim itself, not only on a
-    // caught failure: a process that dies mid-verify (OOM, kill -9) never
-    // reaches retry(), so counting the attempt here is what eventually parks
-    // a row that keeps crashing the worker instead of leasing it forever.
+    // caught failure: a process that dies mid-verify never reaches retry(),
+    // so counting the attempt here is what lets the park step above
+    // eventually catch a row that keeps crashing the worker. The subquery
+    // excludes rows already at the cap so this claim never hands out a 6th
+    // attempt on a row the park step above was meant to catch.
     const claimed = await this.prisma.$queryRaw<{ id: string }[]>`
       UPDATE media_object SET
         "nextAttemptAt" = now() + (${LEASE_SECONDS}::int * interval '1 second'),
         "verifyAttempts" = "verifyAttempts" + 1
       WHERE id IN (
         SELECT id FROM media_object
-        WHERE status = 'VERIFYING' AND "nextAttemptAt" <= now()
+        WHERE status = 'VERIFYING' AND "nextAttemptAt" <= now() AND "verifyAttempts" < ${MAX_VERIFY_ATTEMPTS}::int
         ORDER BY "nextAttemptAt" LIMIT ${BATCH}::int
         FOR UPDATE SKIP LOCKED)
       RETURNING id`;
@@ -130,14 +147,20 @@ export class VerifyWorker implements OnModuleInit, OnModuleDestroy {
         data: { status: 'READY', hashVerified: true, nextAttemptAt: null },
       });
       if (count === 0 && row.kind === 'PHOTO') {
-        // The row left VERIFYING (almost certainly discarded) after we had
-        // already written its thumbnail. Best effort: an orphaned thumbnail
-        // is a storage leak, not data corruption, so a failure here is logged
-        // and left for the next discard/sweep pass rather than retried.
-        try {
-          await this.storage.delete([row.thumbnailKey!]);
-        } catch (err) {
-          log.error({ err, mediaId: row.id }, 'failed to remove an orphaned thumbnail after the row left VERIFYING mid-verify');
+        // The row left VERIFYING after we had already written its thumbnail.
+        // That is not always a discard: another worker's lease may simply
+        // have expired and a second pass already settled it READY first, in
+        // which case the thumbnail is live and must not be touched. Re-read
+        // the row and only clean up when it actually ended up discarded —
+        // best effort, since an orphaned thumbnail is a storage leak, not
+        // data corruption, and a failure here is logged rather than retried.
+        const current = await this.prisma.mediaObject.findUnique({ where: { id: row.id }, select: { status: true } });
+        if (current && (current.status === 'DISCARDED' || current.status === 'PURGED')) {
+          try {
+            await this.storage.delete([row.thumbnailKey!]);
+          } catch (err) {
+            log.error({ err, mediaId: row.id }, 'failed to remove an orphaned thumbnail after the row left VERIFYING mid-verify');
+          }
         }
       }
       return;

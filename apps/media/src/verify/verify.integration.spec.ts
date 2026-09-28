@@ -5,7 +5,7 @@ import type { PrismaClient } from '@prisma-clients/media';
 import { uuidv7 } from '@ipms/contracts';
 import { startTestDb } from '../../prisma/test-db.js';
 import { startMinio } from '../testing/minio.js';
-import { VerifyWorker, backoffSeconds, log } from './verify.worker.js';
+import { MAX_VERIFY_ATTEMPTS, VerifyWorker, backoffSeconds, log } from './verify.worker.js';
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
 let minio: Awaited<ReturnType<typeof startMinio>>;
@@ -134,5 +134,46 @@ describe('VerifyWorker', () => {
     expect(await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: 'DISCARDED' });
     const audits = await prisma.outboxEvent.findMany({ where: { subject: 'audit.event.recorded' } });
     expect(audits.some((a) => (a.payload as { objectId?: string }).objectId === row.id)).toBe(false);
+  });
+
+  it('does not delete a live thumbnail when another worker already settled the row READY first', async () => {
+    const row = await queued(await jpeg());
+    const originalPut = minio.client.put.bind(minio.client);
+    const putSpy = vi.spyOn(minio.client, 'put').mockImplementationOnce(async (key, body, contentType) => {
+      // A second worker's pass raced ahead and settled the row READY (e.g.
+      // this worker's lease had expired) before this put/settle completed.
+      // The thumbnail that lands here is the one a live READY row now points
+      // to — it must survive.
+      await prisma.mediaObject.update({ where: { id: row.id }, data: { status: 'READY', hashVerified: true, nextAttemptAt: null } });
+      return originalPut(key, body, contentType);
+    });
+    try {
+      expect(await worker.runOnce()).toBe(1);
+    } finally {
+      putSpy.mockRestore();
+    }
+
+    expect(await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: 'READY' });
+    expect(await minio.client.head(row.thumbnailKey!)).not.toBeNull();
+  });
+
+  it('parks a row that kept crashing verification instead of leasing it forever', async () => {
+    // Silences the expected "retries exhausted" error line this test triggers
+    // on purpose — same reasoning as the retry/backoff test above.
+    const errorSpy = vi.spyOn(log, 'error').mockImplementation(() => log);
+    const row = await queued(await jpeg());
+    await prisma.mediaObject.update({ where: { id: row.id }, data: { verifyAttempts: MAX_VERIFY_ATTEMPTS, nextAttemptAt: new Date(Date.now() - 1000) } });
+    const getStreamSpy = vi.spyOn(minio.client, 'getStream');
+    try {
+      expect(await worker.runOnce()).toBe(0);
+    } finally {
+      getStreamSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+
+    expect(await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({
+      status: 'VERIFYING', verifyAttempts: MAX_VERIFY_ATTEMPTS, nextAttemptAt: null,
+    });
+    expect(getStreamSpy).not.toHaveBeenCalled();
   });
 });
