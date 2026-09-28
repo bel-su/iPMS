@@ -102,6 +102,13 @@ describe('AttachService', () => {
     expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: good.id } })).status).toBe('READY');
   });
 
+  it('tolerates the same id requested twice in one call', async () => {
+    const f = await media('READY');
+    const out = await attach.attach({ submissionId: SUBMISSION, siteId: SITE, mediaIds: [f.id, f.id] });
+    expect(out.map((m) => m.id)).toEqual([f.id, f.id]);
+    expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: f.id } })).status).toBe('ATTACHED');
+  });
+
   it('lets exactly one of two concurrent attaches of the same file win', async () => {
     const row = await media('READY');
     const submissionA = uuidv7();

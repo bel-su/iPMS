@@ -13,25 +13,32 @@ export class AttachService {
   constructor(private readonly prisma: PrismaClient) {}
 
   async attach(dto: AttachRequestDto): Promise<AttachedMedia[]> {
+    // A submission may reference the same file twice; dedupe for locking,
+    // reading and counting so `updateMany`'s distinct-row count (below) can
+    // be compared like-for-like. The response still has one entry per
+    // requested id, in the caller's order.
+    const ids = [...new Set(dto.mediaIds)];
     return this.prisma.$transaction(async (tx) => {
       // Lock the requested rows before validating: at READ COMMITTED (Postgres'
       // default), two concurrent attaches of the same READY file would both
       // read it as READY and both pass validation, so the loser's later
       // `updateMany` would silently match zero rows. FOR UPDATE makes the
       // second transaction block here until the first commits, so it then
-      // reads the post-commit state and correctly refuses.
-      await tx.$queryRaw`SELECT id FROM media_object WHERE id = ANY(${dto.mediaIds}::uuid[]) FOR UPDATE`;
-      const rows = await tx.mediaObject.findMany({ where: { id: { in: dto.mediaIds } } });
+      // reads the post-commit state and correctly refuses. Locked in a
+      // stable order (by id) so two overlapping multi-file attaches can
+      // never deadlock on each other.
+      await tx.$queryRaw`SELECT id FROM media_object WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+      const rows = await tx.mediaObject.findMany({ where: { id: { in: ids } } });
       const byId = new Map(rows.map((row) => [row.id, row]));
       const usable = (row: MediaObject | undefined): row is MediaObject =>
         !!row && row.siteId === dto.siteId &&
         (row.status === 'READY' || (row.status === 'ATTACHED' && row.attachedToSubmissionId === dto.submissionId));
-      const refused = dto.mediaIds.filter((id) => !usable(byId.get(id)));
+      const refused = ids.filter((id) => !usable(byId.get(id)));
       if (refused.length) throw new ConflictException(`These files cannot be attached: ${refused.join(', ')}`);
 
-      const readyCount = dto.mediaIds.filter((id) => byId.get(id)!.status === 'READY').length;
+      const readyCount = ids.filter((id) => byId.get(id)!.status === 'READY').length;
       const updated = await tx.mediaObject.updateMany({
-        where: { id: { in: dto.mediaIds }, status: 'READY' },
+        where: { id: { in: ids }, status: 'READY' },
         data: { status: 'ATTACHED', attachedToSubmissionId: dto.submissionId, attachedAt: new Date() },
       });
       // Defensive, not reachable under the lock above: the rows are held for
