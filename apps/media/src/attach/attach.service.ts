@@ -31,7 +31,7 @@ export class AttachService {
       const rows = await tx.mediaObject.findMany({ where: { id: { in: ids } } });
       const byId = new Map(rows.map((row) => [row.id, row]));
       const usable = (row: MediaObject | undefined): row is MediaObject =>
-        !!row && row.siteId === dto.siteId &&
+        !!row && row.siteId === dto.siteId && row.workOrderId === dto.workOrderId && row.category === 'EVIDENCE' &&
         (row.status === 'READY' || (row.status === 'ATTACHED' && row.attachedToSubmissionId === dto.submissionId));
       const refused = ids.filter((id) => !usable(byId.get(id)));
       if (refused.length) throw new ConflictException(`These files cannot be attached: ${refused.join(', ')}`);

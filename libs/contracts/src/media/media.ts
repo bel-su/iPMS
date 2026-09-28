@@ -72,6 +72,7 @@ export type CompleteUploadDto = z.infer<typeof CompleteUploadSchema>;
 
 export const AttachRequestSchema = z.object({
   submissionId: UuidSchema,
+  workOrderId: UuidSchema,
   siteId: UuidSchema,
   mediaIds: z.array(UuidSchema).min(1).max(500),
 }).strip();

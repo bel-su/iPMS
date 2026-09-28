@@ -77,34 +77,42 @@ describe('ViewService', () => {
 describe('AttachService', () => {
   const SUBMISSION = uuidv7();
 
-  it('attaches READY files on the submission’s site and returns their capture facts', async () => {
+  it('attaches READY files on the submission’s work order and returns their capture facts', async () => {
     const a = await media('READY');
     const b = await media('READY');
-    const out = await attach.attach({ submissionId: SUBMISSION, siteId: SITE, mediaIds: [b.id, a.id] });
+    const out = await attach.attach({ submissionId: SUBMISSION, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [b.id, a.id] });
     expect(out.map((m) => m.id)).toEqual([b.id, a.id]);
     expect(out[0]).toMatchObject({ contentHash: 'a'.repeat(64), distanceFromSiteM: 12, kind: 'PHOTO' });
     expect(await prisma.mediaObject.count({ where: { status: 'ATTACHED', attachedToSubmissionId: SUBMISSION } })).toBe(2);
     // Repeat for the same submission is harmless.
-    expect((await attach.attach({ submissionId: SUBMISSION, siteId: SITE, mediaIds: [a.id] })).map((m) => m.id)).toEqual([a.id]);
+    expect((await attach.attach({ submissionId: SUBMISSION, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [a.id] })).map((m) => m.id)).toEqual([a.id]);
   });
 
-  it('changes nothing when any file is missing, unverified, on another site or already in another submission', async () => {
+  it('changes nothing when any file is missing, unverified, on another site, another work order, or already in another submission', async () => {
     const good = await media('READY');
     const cases = [
       [uuidv7()],
       [(await media('VERIFYING')).id],
       [(await media('READY', { siteId: uuidv7() })).id],
+      [(await media('READY', { workOrderId: uuidv7() })).id],
       [(await media('ATTACHED', { attachedToSubmissionId: uuidv7() })).id],
     ];
     for (const extra of cases) {
-      await expect(attach.attach({ submissionId: SUBMISSION, siteId: SITE, mediaIds: [good.id, ...extra] })).rejects.toMatchObject({ status: 409 });
+      await expect(attach.attach({ submissionId: SUBMISSION, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [good.id, ...extra] })).rejects.toMatchObject({ status: 409 });
     }
     expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: good.id } })).status).toBe('READY');
   });
 
+  it('refuses evidence that belongs to another work order on the same site', async () => {
+    const otherWorkOrder = uuidv7();
+    const foreign = await media('READY', { workOrderId: otherWorkOrder });
+    await expect(attach.attach({ submissionId: SUBMISSION, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [foreign.id] })).rejects.toMatchObject({ status: 409 });
+    expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: foreign.id } })).status).toBe('READY');
+  });
+
   it('tolerates the same id requested twice in one call', async () => {
     const f = await media('READY');
-    const out = await attach.attach({ submissionId: SUBMISSION, siteId: SITE, mediaIds: [f.id, f.id] });
+    const out = await attach.attach({ submissionId: SUBMISSION, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [f.id, f.id] });
     expect(out.map((m) => m.id)).toEqual([f.id, f.id]);
     expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: f.id } })).status).toBe('ATTACHED');
   });
@@ -114,8 +122,8 @@ describe('AttachService', () => {
     const submissionA = uuidv7();
     const submissionB = uuidv7();
     const results = await Promise.allSettled([
-      attach.attach({ submissionId: submissionA, siteId: SITE, mediaIds: [row.id] }),
-      attach.attach({ submissionId: submissionB, siteId: SITE, mediaIds: [row.id] }),
+      attach.attach({ submissionId: submissionA, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [row.id] }),
+      attach.attach({ submissionId: submissionB, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [row.id] }),
     ]);
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
     const rejected = results.filter((r) => r.status === 'rejected');
@@ -133,8 +141,8 @@ describe('AttachService', () => {
     const submissionFG = uuidv7();
     const submissionF = uuidv7();
     const results = await Promise.allSettled([
-      attach.attach({ submissionId: submissionFG, siteId: SITE, mediaIds: [f.id, g.id] }),
-      attach.attach({ submissionId: submissionF, siteId: SITE, mediaIds: [f.id] }),
+      attach.attach({ submissionId: submissionFG, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [f.id, g.id] }),
+      attach.attach({ submissionId: submissionF, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [f.id] }),
     ]);
     const [rowF, rowG] = await Promise.all([
       prisma.mediaObject.findUniqueOrThrow({ where: { id: f.id } }),

@@ -54,6 +54,11 @@ describe('batch sizes', () => {
   });
 
   it('refuses an empty attach', () => {
-    expect(AttachRequestSchema.safeParse({ submissionId: id(1), siteId: id(2), mediaIds: [] }).success).toBe(false);
+    expect(AttachRequestSchema.safeParse({ submissionId: id(1), workOrderId: id(2), siteId: id(3), mediaIds: [] }).success).toBe(false);
+  });
+
+  it('requires a workOrderId on attach', () => {
+    expect(AttachRequestSchema.safeParse({ submissionId: id(1), siteId: id(2), mediaIds: [id(3)] }).success).toBe(false);
+    expect(AttachRequestSchema.safeParse({ submissionId: id(1), workOrderId: id(2), siteId: id(3), mediaIds: [id(4)] }).success).toBe(true);
   });
 });

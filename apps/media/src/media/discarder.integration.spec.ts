@@ -35,19 +35,20 @@ describe('MediaDiscarder', () => {
     const discarder = new MediaDiscarder(prisma, minio.client);
     const attach = new AttachService(prisma);
     const siteId = uuidv7();
+    const workOrderId = uuidv7();
 
     for (let i = 0; i < 5; i++) {
       const id = uuidv7();
       await minio.client.put(`r/${id}.jpg`, Buffer.from('x'), 'image/jpeg');
       const row = await prisma.mediaObject.create({ data: {
         id, kind: 'PHOTO', category: 'EVIDENCE', contentType: 'image/jpeg', sizeBytes: 1, contentHash: 'a'.repeat(64),
-        storageKey: `r/${id}.jpg`, uploadedBy: uuidv7(), status: 'READY', siteId,
+        storageKey: `r/${id}.jpg`, uploadedBy: uuidv7(), status: 'READY', siteId, workOrderId,
       } });
       const submissionId = uuidv7();
 
       const [discardResult, attachResult] = await Promise.allSettled([
         discarder.discard(row, row.uploadedBy, 'media.discarded'),
-        attach.attach({ submissionId, siteId, mediaIds: [id] }),
+        attach.attach({ submissionId, workOrderId, siteId, mediaIds: [id] }),
       ]);
 
       const final = await prisma.mediaObject.findUniqueOrThrow({ where: { id } });
