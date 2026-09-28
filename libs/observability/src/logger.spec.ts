@@ -157,4 +157,11 @@ describe('createLogger', () => {
     expect(out.meta.nested.flag).toBe(true);
     expect(out.meta.nested.deeper.label).toBe('ok');
   });
+
+  it('redacts presigned URLs, which are bearer credentials while valid', () => {
+    const { sink, lines } = capture();
+    createLogger('media', sink).info({ upload: { signedUrl: 'https://r2.example/obj?X-Amz-Signature=abc' } }, 'presigned');
+    expect(lines[0]).not.toContain('X-Amz-Signature');
+    expect(JSON.parse(lines[0]!).upload.signedUrl).toBe('[Redacted]');
+  });
 });

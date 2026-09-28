@@ -13,6 +13,8 @@ const SECRET_KEYS = [
   'access_token',
   'passwordHash',
   'cookie',
+  // Presigned object-storage URLs grant access until they expire.
+  'signedUrl',
 ];
 
 const SECRET_KEY_SET = new Set(SECRET_KEYS.map((key) => key.toLowerCase()));

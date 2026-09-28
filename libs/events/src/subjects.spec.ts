@@ -45,11 +45,16 @@ describe('durable naming', () => {
     const names = Object.values(STREAMS).flatMap((s) => s.durableConsumers);
     expect(new Set(names).size).toBe(names.length);
   });
+
+  it('gives media its own durable for cancelled work orders', () => {
+    expect(SUBJECTS.QC_WORK_ORDER_CANCELLED).toBe('qc.work_order.cancelled');
+    expect(STREAMS.QC.durableConsumers).toEqual(['media-work-order-cancelled']);
+  });
 });
 
 describe('QC stream', () => {
   it('carries the submission subjects to one durable each for project', () => {
     expect(STREAMS.QC.subjects).toEqual(['qc.>']);
-    expect(STREAMS.QC.durableConsumers).toEqual([]);
+    expect(STREAMS.QC.durableConsumers).toEqual(['media-work-order-cancelled']);
   });
 });

@@ -1,6 +1,9 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma, PrismaClient } from '@prisma-clients/qc';
 import { scopeWhere, type AuthzScope } from '@ipms/authz';
+import { SUBJECTS, type QcWorkOrderCancelled } from '@ipms/events';
+import { getCorrelationId } from '@ipms/observability';
+import { buildOutboxRecord } from '@ipms/persistence';
 import {
   TaskStatusSchema, WORK_ORDER_TEMPLATE_CATEGORY, WORK_ORDER_TYPE_LABEL, uuidv7, workOrderTitle,
   type AssignableUser, type CancelWorkOrderDto, type CreateWorkOrdersDto, type ListWorkOrdersQueryDto,
@@ -195,6 +198,12 @@ export class WorkOrderService {
         previousState: { status: current.status }, newState: { status: 'CANCELLED', reason: dto.reason },
       });
       await event(tx, id, 'CANCELLED', now, actorId, { reason: dto.reason });
+      const cancelled: QcWorkOrderCancelled = {
+        workOrderId: id, projectId: current.projectId, siteId: current.siteId, cancelledAt: now.toISOString(),
+      };
+      await tx.outboxEvent.create({
+        data: buildOutboxRecord(SUBJECTS.QC_WORK_ORDER_CANCELLED, { ...cancelled }, getCorrelationId() ?? 'unknown', actorId),
+      });
     });
     return this.get(scope, id);
   }
