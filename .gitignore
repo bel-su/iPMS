@@ -32,3 +32,6 @@ agentdb.rvf.lock
 # `next build` and `next typegen` at .next/types. Tracking it meant every switch
 # between the two produced a diff. `typecheck` regenerates it before tsc.
 apps/web/next-env.d.ts
+
+# Real object-storage credentials live only on servers.
+docker/env/*.secrets.env

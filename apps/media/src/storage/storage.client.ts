@@ -1,0 +1,145 @@
+import type { Readable } from 'node:stream';
+import {
+  AbortMultipartUploadCommand, CompleteMultipartUploadCommand, CreateBucketCommand, CreateMultipartUploadCommand,
+  DeleteObjectsCommand, GetObjectCommand, HeadBucketCommand, HeadObjectCommand, ListPartsCommand, PutObjectCommand,
+  S3Client, S3ServiceException, UploadPartCommand,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { SignedGet, SignedPut } from '@ipms/contracts';
+import type { StorageConfig } from '../config.js';
+
+const isMissing = (err: unknown): boolean =>
+  err instanceof S3ServiceException && (err.name === 'NotFound' || err.name === 'NoSuchKey' || err.name === 'NoSuchUpload' || err.$metadata.httpStatusCode === 404);
+
+const hexToBase64 = (hex: string): string => Buffer.from(hex, 'hex').toString('base64');
+const expiresAt = (ttlSeconds: number): string => new Date(Date.now() + ttlSeconds * 1000).toISOString();
+
+/**
+ * Every call media makes to object storage. R2 and MinIO both speak S3.
+ *
+ * Two SDK clients: one for media's own calls (the Docker-internal endpoint)
+ * and one whose only job is signing URLs with the host a phone can reach.
+ * Checksum defaults are pinned to WHEN_REQUIRED: newer SDKs otherwise add
+ * CRC32 checksums to every request, which R2 and presigned URLs mishandle.
+ */
+export class StorageClient {
+  private readonly internal: S3Client;
+  private readonly signer: S3Client;
+
+  constructor(private readonly config: StorageConfig) {
+    const base = {
+      region: config.region,
+      credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+      forcePathStyle: config.forcePathStyle,
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
+    } as const;
+    this.internal = new S3Client({ ...base, endpoint: config.endpoint });
+    this.signer = new S3Client({ ...base, endpoint: config.publicEndpoint });
+  }
+
+  private get bucket(): string { return this.config.bucket; }
+
+  async isHealthy(): Promise<boolean> {
+    try {
+      await this.internal.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async ensureBucket(): Promise<void> {
+    if (await this.isHealthy()) return;
+    await this.internal.send(new CreateBucketCommand({ Bucket: this.bucket }));
+  }
+
+  /**
+   * A PUT URL bound to the declared size, type and SHA-256 when given, so
+   * storage itself refuses any other bytes. The phone must send `headers`
+   * exactly as returned.
+   */
+  async presignPut(key: string, o: { contentType: string; sizeBytes?: number; sha256Hex?: string }, ttlSeconds: number): Promise<SignedPut> {
+    const command = new PutObjectCommand({
+      Bucket: this.bucket, Key: key, ContentType: o.contentType,
+      ...(o.sizeBytes === undefined ? {} : { ContentLength: o.sizeBytes }),
+      ...(o.sha256Hex === undefined ? {} : { ChecksumSHA256: hexToBase64(o.sha256Hex) }),
+    });
+    const signable = new Set(['content-type']);
+    if (o.sizeBytes !== undefined) signable.add('content-length');
+    if (o.sha256Hex !== undefined) signable.add('x-amz-checksum-sha256');
+    const signedUrl = await getSignedUrl(this.signer, command, {
+      expiresIn: ttlSeconds, signableHeaders: signable, unhoistableHeaders: new Set(['x-amz-checksum-sha256']),
+    });
+    const headers: Record<string, string> = { 'content-type': o.contentType };
+    if (o.sha256Hex !== undefined) headers['x-amz-checksum-sha256'] = hexToBase64(o.sha256Hex);
+    return { signedUrl, headers, expiresAt: expiresAt(ttlSeconds) };
+  }
+
+  async createMultipart(key: string, contentType: string): Promise<string> {
+    const out = await this.internal.send(new CreateMultipartUploadCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }));
+    if (!out.UploadId) throw new Error('Storage returned no multipart upload id');
+    return out.UploadId;
+  }
+
+  presignPart(key: string, uploadId: string, partNumber: number, ttlSeconds: number): Promise<string> {
+    return getSignedUrl(this.signer, new UploadPartCommand({ Bucket: this.bucket, Key: key, UploadId: uploadId, PartNumber: partNumber }), { expiresIn: ttlSeconds });
+  }
+
+  async listParts(key: string, uploadId: string): Promise<{ partNumber: number; etag: string }[] | null> {
+    try {
+      const out = await this.internal.send(new ListPartsCommand({ Bucket: this.bucket, Key: key, UploadId: uploadId, MaxParts: 1000 }));
+      return (out.Parts ?? []).map((p) => ({ partNumber: p.PartNumber!, etag: p.ETag! }));
+    } catch (err) {
+      if (isMissing(err)) return null;
+      throw err;
+    }
+  }
+
+  async completeMultipart(key: string, uploadId: string, parts: { partNumber: number; etag: string }[]): Promise<void> {
+    await this.internal.send(new CompleteMultipartUploadCommand({
+      Bucket: this.bucket, Key: key, UploadId: uploadId,
+      MultipartUpload: { Parts: [...parts].sort((a, b) => a.partNumber - b.partNumber).map((p) => ({ PartNumber: p.partNumber, ETag: p.etag })) },
+    }));
+  }
+
+  async abortMultipart(key: string, uploadId: string): Promise<void> {
+    try {
+      await this.internal.send(new AbortMultipartUploadCommand({ Bucket: this.bucket, Key: key, UploadId: uploadId }));
+    } catch (err) {
+      if (!isMissing(err)) throw err;
+    }
+  }
+
+  async head(key: string): Promise<{ sizeBytes: number } | null> {
+    try {
+      const out = await this.internal.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return { sizeBytes: out.ContentLength ?? 0 };
+    } catch (err) {
+      if (isMissing(err)) return null;
+      throw err;
+    }
+  }
+
+  async getStream(key: string): Promise<Readable> {
+    const out = await this.internal.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    return out.Body as Readable;
+  }
+
+  async put(key: string, body: Buffer, contentType: string): Promise<void> {
+    await this.internal.send(new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: body, ContentType: contentType }));
+  }
+
+  async delete(keys: string[]): Promise<void> {
+    if (keys.length === 0) return;
+    await this.internal.send(new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } }));
+  }
+
+  async presignGet(key: string, ttlSeconds: number, downloadName: string): Promise<SignedGet> {
+    const safe = downloadName.replace(/[^A-Za-z0-9._-]/g, '_');
+    const signedUrl = await getSignedUrl(this.signer, new GetObjectCommand({
+      Bucket: this.bucket, Key: key, ResponseContentDisposition: `inline; filename="${safe}"`,
+    }), { expiresIn: ttlSeconds });
+    return { signedUrl, expiresAt: expiresAt(ttlSeconds) };
+  }
+}
