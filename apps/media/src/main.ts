@@ -2,12 +2,16 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createLogger, GlobalExceptionFilter } from '@ipms/observability';
 import { AppModule } from './app.module.js';
+import { ServiceUnavailableInterceptor } from './http/service-unavailable.interceptor.js';
 
 const log = createLogger('media');
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { bufferLogs: true });
   app.enableShutdownHooks();
+  // Media-local: turns a raw storage/database outage into the 503 §5.3
+  // promises, before it ever reaches the shared filter below.
+  app.useGlobalInterceptors(new ServiceUnavailableInterceptor());
   app.useGlobalFilters(new GlobalExceptionFilter('media'));
 
   /**

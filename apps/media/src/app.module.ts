@@ -6,7 +6,7 @@ import {
   type AuthzScope, type ScopeProvider,
 } from '@ipms/authz';
 import { EventBus } from '@ipms/events';
-import { HealthController, MetricsController, registerReadinessCheck } from '@ipms/observability';
+import { createLogger, HealthController, MetricsController, registerReadinessCheck } from '@ipms/observability';
 import { AttachController } from './attach/attach.controller.js';
 import { AttachService } from './attach/attach.service.js';
 import { DiscardSweeper } from './cleanup/discard.sweeper.js';
@@ -38,6 +38,7 @@ const mediaScopeProvider: ScopeProvider = {
 };
 
 const CONFIG = 'MEDIA_CONFIG';
+const log = createLogger('media');
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
@@ -64,6 +65,8 @@ const CONFIG = 'MEDIA_CONFIG';
         if (config.storage.autoCreateBucket) await storage.ensureBucket();
         // A media that cannot reach its bucket must not hand out upload URLs.
         registerReadinessCheck('storage', () => storage.isHealthy());
+        // Host and bucket only — never credentials or a signed URL.
+        log.info({ host: new URL(config.storage.endpoint).host, bucket: config.storage.bucket }, 'storage configured');
         return storage;
       },
       inject: [CONFIG],
