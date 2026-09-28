@@ -1,23 +1,25 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { PrismaClient } from '@prisma-clients/media';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MediaObject, PrismaClient } from '@prisma-clients/media';
 import type { EventBus } from '@ipms/events';
 import { uuidv7 } from '@ipms/contracts';
 import { startTestDb } from '../../prisma/test-db.js';
 import { startMinio } from '../testing/minio.js';
 import { MediaDiscarder } from '../media/discarder.js';
-import { DiscardSweeper } from './discard.sweeper.js';
+import { DiscardSweeper, log } from './discard.sweeper.js';
 import { WorkOrderCancelledConsumer } from './work-order-cancelled.consumer.js';
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
 let minio: Awaited<ReturnType<typeof startMinio>>;
 let prisma: PrismaClient;
 let consumer: WorkOrderCancelledConsumer;
+let discarder: MediaDiscarder;
 let sweeper: DiscardSweeper;
 beforeAll(async () => {
   [db, minio] = await Promise.all([startTestDb(), startMinio()]);
   prisma = db.prisma;
   consumer = new WorkOrderCancelledConsumer(prisma, {} as EventBus); // handle() is exercised directly
-  sweeper = new DiscardSweeper(prisma, new MediaDiscarder(prisma, minio.client));
+  discarder = new MediaDiscarder(prisma, minio.client);
+  sweeper = new DiscardSweeper(prisma, discarder);
 });
 afterAll(async () => { await db?.stop(); await minio?.stop(); });
 beforeEach(async () => { await prisma.mediaObject.deleteMany({}); });
@@ -66,5 +68,63 @@ describe('cancelled work orders', () => {
     expect(await minio.client.head(due.storageKey)).toBeNull();
     expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: early.id } })).status).toBe('READY');
     expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: attachedSince.id } })).status).toBe('ATTACHED');
+  });
+
+  it('does not count a row whose claim was lost to a concurrent attach', async () => {
+    const lost = await media('READY');
+    const now = new Date();
+    await prisma.mediaObject.update({ where: { id: lost.id }, data: { discardAfter: new Date(now.getTime() - DAY) } });
+
+    // The row passes the sweeper's own query (still READY when selected), but
+    // is attached — by some other request — in the moment before the
+    // discarder's claim runs. Simulate that race by mutating the row inside
+    // a wrapped discard() call, then delegating to the real implementation,
+    // whose conditional claim then matches zero rows.
+    const real = discarder.discard.bind(discarder);
+    const discardSpy = vi.spyOn(discarder, 'discard').mockImplementationOnce(async (row: MediaObject, actorId, action) => {
+      await prisma.mediaObject.update({ where: { id: row.id }, data: { status: 'ATTACHED' } });
+      return real(row, actorId, action);
+    });
+
+    try {
+      expect(await sweeper.sweep(now)).toBe(0);
+    } finally {
+      discardSpy.mockRestore();
+    }
+    expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: lost.id } })).status).toBe('ATTACHED');
+    expect(await minio.client.head(lost.storageKey)).not.toBeNull();
+  });
+
+  it('keeps sweeping the rest of the batch when one row fails to discard', async () => {
+    const failing = await media('READY');
+    const due = await media('READY');
+    const now = new Date();
+    await prisma.mediaObject.updateMany({
+      where: { id: { in: [failing.id, due.id] } },
+      data: { discardAfter: new Date(now.getTime() - DAY) },
+    });
+
+    // Silences the expected "discard failed" error line this test triggers on
+    // purpose — same reasoning as verify.worker.spec's crash-handling tests.
+    const errorSpy = vi.spyOn(log, 'error').mockImplementation(() => log);
+    // Target `failing` by id rather than call order — sweep()'s findMany has
+    // no orderBy, so which of the two due rows is visited first is not
+    // guaranteed.
+    const real = discarder.discard.bind(discarder);
+    const discardSpy = vi.spyOn(discarder, 'discard').mockImplementation(async (row: MediaObject, actorId, action) => {
+      if (row.id === failing.id) throw new Error('storage unavailable');
+      return real(row, actorId, action);
+    });
+
+    let count: number;
+    try {
+      count = await sweeper.sweep(now);
+      expect(count).toBe(1);
+      expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: due.id } })).status).toBe('DISCARDED');
+      expect(errorSpy).toHaveBeenCalledWith(expect.objectContaining({ mediaId: failing.id }), expect.any(String));
+    } finally {
+      discardSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
   });
 });

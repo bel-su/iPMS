@@ -5,7 +5,9 @@ import { createLogger } from '@ipms/observability';
 import type { MediaDiscarder } from '../media/discarder.js';
 import { PRE_ATTACH } from '../media/status.js';
 
-const log = createLogger('media');
+// Exported (only) so tests can silence its expected error line for per-row
+// discard failures without changing what production logs.
+export const log = createLogger('media');
 const HOUR_MS = 3_600_000;
 const BATCH = 100;
 
