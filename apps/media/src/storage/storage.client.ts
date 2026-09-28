@@ -8,8 +8,12 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { SignedGet, SignedPut } from '@ipms/contracts';
 import type { StorageConfig } from '../config.js';
 
+// NoSuchBucket is deliberately excluded: a missing bucket is a configuration
+// error, not "the object/upload isn't there", and callers must see it as a
+// thrown error rather than the same null a caller would get for their own
+// stale key or upload id.
 const isMissing = (err: unknown): boolean =>
-  err instanceof S3ServiceException && (err.name === 'NotFound' || err.name === 'NoSuchKey' || err.name === 'NoSuchUpload' || err.$metadata.httpStatusCode === 404);
+  err instanceof S3ServiceException && (err.name === 'NotFound' || err.name === 'NoSuchKey' || err.name === 'NoSuchUpload');
 
 const hexToBase64 = (hex: string): string => Buffer.from(hex, 'hex').toString('base64');
 const expiresAt = (ttlSeconds: number): string => new Date(Date.now() + ttlSeconds * 1000).toISOString();
@@ -116,8 +120,14 @@ export class StorageClient {
       const out = await this.internal.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
       return { sizeBytes: out.ContentLength ?? 0 };
     } catch (err) {
-      if (isMissing(err)) return null;
-      throw err;
+      if (!isMissing(err)) throw err;
+      // HeadObject reports a bare 404 named 'NotFound' for both a missing
+      // key and a missing bucket. Confirm the bucket itself is reachable
+      // before treating this as "the object isn't there".
+      if (!(await this.isHealthy())) {
+        throw new Error(`Bucket "${this.bucket}" does not exist or is unreachable`, { cause: err });
+      }
+      return null;
     }
   }
 
@@ -130,9 +140,24 @@ export class StorageClient {
     await this.internal.send(new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: body, ContentType: contentType }));
   }
 
+  /** S3's DeleteObjects accepts at most 1000 keys per request. */
+  private static readonly DELETE_BATCH_SIZE = 1000;
+
   async delete(keys: string[]): Promise<void> {
     if (keys.length === 0) return;
-    await this.internal.send(new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } }));
+    const failures: { key: string; code: string }[] = [];
+    for (let i = 0; i < keys.length; i += StorageClient.DELETE_BATCH_SIZE) {
+      const batch = keys.slice(i, i + StorageClient.DELETE_BATCH_SIZE);
+      const out = await this.internal.send(new DeleteObjectsCommand({
+        Bucket: this.bucket, Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
+      }));
+      for (const error of out.Errors ?? []) {
+        failures.push({ key: error.Key ?? '(unknown key)', code: error.Code ?? 'Unknown' });
+      }
+    }
+    if (failures.length > 0) {
+      throw new Error(`Failed to delete ${failures.length} object(s): ${failures.map((f) => `${f.key} (${f.code})`).join(', ')}`);
+    }
   }
 
   async presignGet(key: string, ttlSeconds: number, downloadName: string): Promise<SignedGet> {

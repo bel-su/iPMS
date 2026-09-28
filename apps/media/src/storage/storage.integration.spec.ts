@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PART_SIZE_BYTES } from '@ipms/contracts';
 import { startMinio } from '../testing/minio.js';
-import type { StorageClient } from './storage.client.js';
+import { StorageClient } from './storage.client.js';
 
 let minio: Awaited<ReturnType<typeof startMinio>>;
 let storage: StorageClient;
@@ -68,5 +68,19 @@ describe('StorageClient against MinIO', () => {
     expect(response.headers.get('content-disposition')).toContain('KOS121_20260928-080000_abc123.jpg');
     await storage.delete(['t/dl.jpg']);
     expect(await storage.head('t/dl.jpg')).toBeNull();
+  });
+
+  it('deletes more than 1000 keys in one call, batching under S3\'s per-request limit', async () => {
+    // None of these exist. S3 does not treat deleting a missing key as an
+    // error, so this must not throw even though nothing was ever put.
+    const keys = Array.from({ length: 1001 }, (_, i) => `t/batch/${i}.jpg`);
+    await expect(storage.delete(keys)).resolves.toBeUndefined();
+  });
+
+  it('rejects object-level calls against a bucket that does not exist, rather than reporting them as missing', async () => {
+    const missingBucket = new StorageClient({ ...minio.storage, bucket: 'ipms-media-test-does-not-exist' });
+    await expect(missingBucket.head('whatever')).rejects.toThrow();
+    await expect(missingBucket.listParts('whatever', 'fake-upload-id')).rejects.toThrow();
+    await expect(missingBucket.abortMultipart('whatever', 'fake-upload-id')).rejects.toThrow();
   });
 });
