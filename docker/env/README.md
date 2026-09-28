@@ -23,8 +23,8 @@ This directory contains individual environment files for each microservice and i
 
 ## Media object storage
 
-`media.env` points at the local MinIO container. On staging and production,
-create **`media.secrets.env`** next to it (gitignored — never commit it) with
+`media.env` points at the local MinIO container. On staging and production (or locally, to test against R2 directly),
+create **`media.secrets.env`** next to it by copying `media.secrets.env.example` (gitignored — never commit it) with
 that environment's Cloudflare R2 values; Compose loads it after `media.env`,
 so its values win:
 
