@@ -345,3 +345,23 @@ attaches them is.
   never purged with a project.
 - **Separate `qc` item:** "Duplicate as new template" for creating a different
   checklist from an existing one; versioning stays.
+
+---
+
+## 11. Amendments (from implementation planning, 2026-09-28)
+
+Planning against the code surfaced facts the design did not account for. These
+override the sections they name.
+
+| # | Changes | Amendment | Why |
+|---|---|---|---|
+| A1 | §4.2, §5.1 #2, #7 | Evidence belongs to a **work order** (`workOrderId`); there is no separate `taskId`. The client sends only `workOrderId`; project, site and site code are read from `qc`'s `GET /work-orders/:id` with the caller's token, which also enforces scope. A `siteCode` copy is stored for download names. The list endpoint is `GET /media?workOrderId=`. | Tasks moved into `qc` as work orders (`Submission.taskId` is the work order id). Deriving project/site server-side means a client cannot misfile evidence |
+| A2 | §6.1 step 4 | Distance from site is computed **at registration**, not by the worker | Service-to-service calls forward the user's token; a background worker has none |
+| A3 | §6.2 | Cleanup is **event-driven**: `qc` publishes `qc.work_order.cancelled` (outbox, `QC` stream); `media` consumes it (durable `media-work-order-cancelled`) and sets a new `discardAfter` column to `cancelledAt + 30 days`; an hourly sweeper discards rows past it. No polling of `project`/`qc` | Same reason as A2; also cheaper and exact |
+| A4 | §5.1 #6, #7 | View endpoints require **`qc_submission.view`**, not `qc_evidence.upload`. Internal attach requires `qc_submission.submit` | Project and QC managers view evidence but do not upload it |
+| A5 | §3.2 | Adds `S3_PUBLIC_ENDPOINT` (host baked into presigned URLs) and `S3_AUTO_CREATE_BUCKET` (local MinIO only). Service URLs are `QC_INTERNAL_URL` / `PROJECT_INTERNAL_URL`, matching `qc` | Inside Docker, `minio:9000` is not reachable by a phone or browser |
+| A6 | §5.1 #6 | Download names are `{siteCode}_{capturedAt UTC}_{last 6 of id}.{ext}` | Media does not know checklist item numbers |
+| A7 | §5.1 #1 | The status check reports only the **caller's own** uploads; others read as `UNKNOWN` | A phone only ever asks about its own queue; device switching is the same account |
+| A8 | §5.3 | Adds **412**: `complete` before the bytes arrived (or with the wrong part count) — the phone re-sends, then retries. Request-shape errors surface as **422** (the shared exception filter's mapping for validation failures) | Distinguishes "send again" from "never retry" |
+| A9 | §4.1, §5.1 #6 | A video's poster is stored in `thumbnailKey`; view variants are `original` and `thumbnail`. A poster over 1 MiB counts as `POSTER_MISSING` | One column, one variant name for both kinds |
+| A10 | §3.3 | No `minio-init` container: with `S3_AUTO_CREATE_BUCKET=true` media creates its local bucket at start | Fewer moving parts; R2 tokens cannot create buckets, so the flag is inert in production |
