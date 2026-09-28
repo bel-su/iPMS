@@ -5,15 +5,31 @@ import {
   AuthzGuard, JwtUserGuard, OVERRIDE_PROVIDER, SCOPE_PROVIDER, emptyOverrideProvider,
   type AuthzScope, type ScopeProvider,
 } from '@ipms/authz';
+import { EventBus } from '@ipms/events';
 import { HealthController, MetricsController, registerReadinessCheck } from '@ipms/observability';
+import { AttachController } from './attach/attach.controller.js';
+import { AttachService } from './attach/attach.service.js';
+import { DiscardSweeper } from './cleanup/discard.sweeper.js';
+import { WorkOrderCancelledConsumer } from './cleanup/work-order-cancelled.consumer.js';
+import { loadConfig, type MediaConfig } from './config.js';
+import { ProjectClient } from './directory/project.client.js';
+import { QcClient } from './directory/qc.client.js';
+import { MediaDiscarder } from './media/discarder.js';
+import { OutboxDrainer } from './outbox/outbox.drainer.js';
 import { PrismaService } from './prisma.service.js';
+import { StorageClient } from './storage/storage.client.js';
+import { UploadController } from './uploads/upload.controller.js';
+import { UploadService } from './uploads/upload.service.js';
+import { VerifyWorker } from './verify/verify.worker.js';
+import { ViewController } from './viewing/view.controller.js';
+import { ViewService } from './viewing/view.service.js';
 
 /**
- * `media` has no resource-bearing endpoints yet, so `check()` never consults a
- * scope. An empty, non-global scope is therefore the *least* permissive value
- * available to it, not a stub. Do NOT "fix" this into `global: true` — that
- * would silently grant scope-based access to every project and site the moment
- * a future change starts passing a resource into `check()`.
+ * No media route passes a resource to check(), so this scope is never
+ * consulted. Scope that matters is resolved per request from project (view
+ * endpoints) or enforced by qc when it answers for a work order (uploads).
+ * An empty, non-global scope is the least permissive value — do not "fix" it
+ * into `global: true`.
  */
 const mediaScopeProvider: ScopeProvider = {
   async for(): Promise<AuthzScope> {
@@ -21,61 +37,62 @@ const mediaScopeProvider: ScopeProvider = {
   },
 };
 
+const CONFIG = 'MEDIA_CONFIG';
+
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [HealthController, MetricsController],
+  controllers: [UploadController, ViewController, AttachController, HealthController, MetricsController],
   providers: [
-    // Registration order matters: APP_GUARD providers run in the order they are
-    // listed. JwtUserGuard must populate request.user before AuthzGuard reads it.
+    // Registration order matters: JwtUserGuard must populate request.user before AuthzGuard reads it.
     { provide: APP_GUARD, useClass: JwtUserGuard },
     { provide: APP_GUARD, useClass: AuthzGuard },
     { provide: SCOPE_PROVIDER, useValue: mediaScopeProvider },
-    /**
-     * `AuthzGuard` passes overrides to `check()`, so every service must provide
-     * this token or fail at bootstrap. media returns none, which is the *least*
-     * permissive option available rather than a gap: global overrides are already
-     * resolved into the JWT `permissions` claim at issuance by `resolvePermissions`,
-     * and media has no routes passing a `resource` for a scoped override to apply to.
-     */
     { provide: OVERRIDE_PROVIDER, useValue: emptyOverrideProvider },
+    { provide: CONFIG, useFactory: (): MediaConfig => loadConfig() },
     {
       provide: PrismaService,
       useFactory: (): PrismaService => {
         const prisma = new PrismaService();
         registerReadinessCheck('postgres', () => prisma.isHealthy());
-
-        /**
-         * DEFERRED — object storage (spec 2026-09-20 §6.1).
-         *
-         * Evidence photos belong in Cloudflare R2 (architecture spec §12,
-         * assumption 2). No S3 client, no `S3_*` configuration and no storage
-         * readiness check exist yet, deliberately: configuration that nothing
-         * reads is configuration that lies, and an operator who set `S3_BUCKET`
-         * against this scaffold would reasonably conclude uploads were wired.
-         *
-         * Add all three in the same change as the first presigned-upload
-         * endpoint. The readiness check is not optional once the client exists —
-         * a `media` that reports ready while its bucket is unreachable will
-         * accept presign requests it cannot honour.
-         *
-         * DEFERRED — media events and their stream (spec 2026-09-20 §6.3).
-         *
-         * `media.photo.processed` and `media.photo.rejected` (architecture spec
-         * §8) are in neither `SUBJECTS` nor `STREAMS`, and the outbox table in
-         * schema.prisma has no drainer. Both halves must land together:
-         * `libs/events/src/subjects.spec.ts` asserts every subject is covered by
-         * exactly one stream, which is the mechanical form of "a subject with no
-         * stream is a message that vanishes". Adding the constants alone fails
-         * that test; adding the stream alone creates durable consumers nothing
-         * reads.
-         *
-         * Whichever comes first — the first producer here, or the first consumer
-         * in `notification` — adds the subjects, the `MEDIA` stream and its
-         * consumers in one change, widening the `STREAMS` key union as it goes.
-         */
         return prisma;
       },
     },
+    {
+      provide: StorageClient,
+      useFactory: async (config: MediaConfig): Promise<StorageClient> => {
+        const storage = new StorageClient(config.storage);
+        if (config.storage.autoCreateBucket) await storage.ensureBucket();
+        // A media that cannot reach its bucket must not hand out upload URLs.
+        registerReadinessCheck('storage', () => storage.isHealthy());
+        return storage;
+      },
+      inject: [CONFIG],
+    },
+    {
+      provide: EventBus,
+      useFactory: async (config: MediaConfig): Promise<EventBus> => {
+        const bus = new EventBus();
+        await bus.connect(config.natsUrl);
+        await bus.ensureStreams();
+        registerReadinessCheck('nats', () => bus.isHealthy());
+        return bus;
+      },
+      inject: [CONFIG],
+    },
+    { provide: QcClient, useFactory: (config: MediaConfig) => new QcClient(config.qcUrl), inject: [CONFIG] },
+    { provide: ProjectClient, useFactory: (config: MediaConfig) => new ProjectClient(config.projectUrl), inject: [CONFIG] },
+    { provide: MediaDiscarder, useFactory: (p: PrismaService, s: StorageClient) => new MediaDiscarder(p.db, s), inject: [PrismaService, StorageClient] },
+    {
+      provide: UploadService,
+      useFactory: (p: PrismaService, s: StorageClient, qc: QcClient, project: ProjectClient, d: MediaDiscarder) => new UploadService(p.db, s, qc, project, d),
+      inject: [PrismaService, StorageClient, QcClient, ProjectClient, MediaDiscarder],
+    },
+    { provide: ViewService, useFactory: (p: PrismaService, s: StorageClient) => new ViewService(p.db, s), inject: [PrismaService, StorageClient] },
+    { provide: AttachService, useFactory: (p: PrismaService) => new AttachService(p.db), inject: [PrismaService] },
+    { provide: VerifyWorker, useFactory: (p: PrismaService, s: StorageClient) => new VerifyWorker(p.db, s), inject: [PrismaService, StorageClient] },
+    { provide: OutboxDrainer, useFactory: (p: PrismaService, bus: EventBus) => new OutboxDrainer(p.db, bus), inject: [PrismaService, EventBus] },
+    { provide: WorkOrderCancelledConsumer, useFactory: (p: PrismaService, bus: EventBus) => new WorkOrderCancelledConsumer(p.db, bus), inject: [PrismaService, EventBus] },
+    { provide: DiscardSweeper, useFactory: (p: PrismaService, d: MediaDiscarder) => new DiscardSweeper(p.db, d), inject: [PrismaService, MediaDiscarder] },
   ],
 })
 export class AppModule {}

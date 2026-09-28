@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
-import { createLogger } from '@ipms/observability';
+import { createLogger, GlobalExceptionFilter } from '@ipms/observability';
 import { AppModule } from './app.module.js';
 
 const log = createLogger('media');
@@ -8,6 +8,7 @@ const log = createLogger('media');
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { bufferLogs: true });
   app.enableShutdownHooks();
+  app.useGlobalFilters(new GlobalExceptionFilter('media'));
 
   /**
    * Business routes live under the same `/api/v1` prefix the gateway forwards,
