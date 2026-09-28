@@ -9,7 +9,9 @@ import { mediaRejected, verifyDuration, verifyQueueDepth, verifyStuck } from '..
 import type { StorageClient } from '../storage/storage.client.js';
 import { sniffMatches } from './sniff.js';
 
-const log = createLogger('media');
+// Exported (only) so the retry test can silence its expected NoSuchKey
+// warn/error lines without changing what production logs.
+export const log = createLogger('media');
 export const MAX_VERIFY_ATTEMPTS = 5;
 export const LEASE_SECONDS = 300;
 export const POSTER_MAX_BYTES = 1 * MIB;
@@ -51,8 +53,15 @@ export class VerifyWorker implements OnModuleInit, OnModuleDestroy {
     // ${LEASE_SECONDS}/${BATCH} are cast explicitly: Prisma's tagged-template
     // parameterization can't infer that a numeric literal here means "int",
     // and `* interval '1 second'` / `LIMIT $n` both need one.
+    //
+    // verifyAttempts is bumped as part of the claim itself, not only on a
+    // caught failure: a process that dies mid-verify (OOM, kill -9) never
+    // reaches retry(), so counting the attempt here is what eventually parks
+    // a row that keeps crashing the worker instead of leasing it forever.
     const claimed = await this.prisma.$queryRaw<{ id: string }[]>`
-      UPDATE media_object SET "nextAttemptAt" = now() + (${LEASE_SECONDS}::int * interval '1 second')
+      UPDATE media_object SET
+        "nextAttemptAt" = now() + (${LEASE_SECONDS}::int * interval '1 second'),
+        "verifyAttempts" = "verifyAttempts" + 1
       WHERE id IN (
         SELECT id FROM media_object
         WHERE status = 'VERIFYING' AND "nextAttemptAt" <= now()
@@ -107,30 +116,60 @@ export class VerifyWorker implements OnModuleInit, OnModuleDestroy {
     return { status: 'READY' };
   }
 
+  /**
+   * The row's uploader can discard it (MediaDiscarder) at any moment while a
+   * verify pass is in flight, so every write here is conditioned on the row
+   * still being VERIFYING — an unconditional update would resurrect a
+   * discarded row as READY/REJECTED, and a REJECTED write would file a
+   * `media.rejected` audit entry for a row nobody rejected via this pass.
+   */
   private async settle(row: MediaObject, outcome: Outcome): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      if (outcome.status === 'READY') {
-        await tx.mediaObject.update({ where: { id: row.id }, data: { status: 'READY', hashVerified: true, nextAttemptAt: null } });
-        return;
+    if (outcome.status === 'READY') {
+      const { count } = await this.prisma.mediaObject.updateMany({
+        where: { id: row.id, status: 'VERIFYING' },
+        data: { status: 'READY', hashVerified: true, nextAttemptAt: null },
+      });
+      if (count === 0 && row.kind === 'PHOTO') {
+        // The row left VERIFYING (almost certainly discarded) after we had
+        // already written its thumbnail. Best effort: an orphaned thumbnail
+        // is a storage leak, not data corruption, so a failure here is logged
+        // and left for the next discard/sweep pass rather than retried.
+        try {
+          await this.storage.delete([row.thumbnailKey!]);
+        } catch (err) {
+          log.error({ err, mediaId: row.id }, 'failed to remove an orphaned thumbnail after the row left VERIFYING mid-verify');
+        }
       }
-      await tx.mediaObject.update({ where: { id: row.id }, data: { status: 'REJECTED', rejectReason: outcome.reason, nextAttemptAt: null } });
-      await recordAudit(tx, { actorId: null, action: 'media.rejected', objectId: row.id, previousState: { status: row.status }, newState: { status: 'REJECTED', reason: outcome.reason } });
+      return;
+    }
+
+    const matched = await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.mediaObject.updateMany({
+        where: { id: row.id, status: 'VERIFYING' },
+        data: { status: 'REJECTED', rejectReason: outcome.reason, nextAttemptAt: null },
+      });
+      if (count > 0) {
+        await recordAudit(tx, { actorId: null, action: 'media.rejected', objectId: row.id, previousState: { status: row.status }, newState: { status: 'REJECTED', reason: outcome.reason } });
+      }
+      return count;
     });
-    if (outcome.status === 'REJECTED') mediaRejected.inc({ reason: outcome.reason });
+    if (matched > 0) mediaRejected.inc({ reason: outcome.reason });
   }
 
   private async retry(row: MediaObject, err: unknown): Promise<void> {
-    const attempts = row.verifyAttempts + 1;
+    // The claim UPDATE already incremented verifyAttempts, so row.verifyAttempts
+    // is this attempt's count — do not increment it again here.
+    const attempts = row.verifyAttempts;
     if (attempts >= MAX_VERIFY_ATTEMPTS) {
       log.error({ err, mediaId: row.id, attempts }, 'verification retries exhausted; needs an operator');
       verifyStuck.inc();
-      await this.prisma.mediaObject.update({ where: { id: row.id }, data: { verifyAttempts: attempts, nextAttemptAt: null } });
+      await this.prisma.mediaObject.updateMany({ where: { id: row.id, status: 'VERIFYING' }, data: { nextAttemptAt: null } });
       return;
     }
     log.warn({ err, mediaId: row.id, attempts }, 'verification failed, will retry');
-    await this.prisma.mediaObject.update({
-      where: { id: row.id },
-      data: { verifyAttempts: attempts, nextAttemptAt: new Date(Date.now() + backoffSeconds(attempts) * 1000) },
+    await this.prisma.mediaObject.updateMany({
+      where: { id: row.id, status: 'VERIFYING' },
+      data: { nextAttemptAt: new Date(Date.now() + backoffSeconds(attempts) * 1000) },
     });
   }
 }

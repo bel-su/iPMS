@@ -1,11 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
 import sharp from 'sharp';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma-clients/media';
 import { uuidv7 } from '@ipms/contracts';
 import { startTestDb } from '../../prisma/test-db.js';
 import { startMinio } from '../testing/minio.js';
-import { VerifyWorker, backoffSeconds } from './verify.worker.js';
+import { VerifyWorker, backoffSeconds, log } from './verify.worker.js';
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
 let minio: Awaited<ReturnType<typeof startMinio>>;
@@ -72,19 +72,67 @@ describe('VerifyWorker', () => {
   });
 
   it('retries a transient failure with backoff, and parks it for an operator after 5 attempts', async () => {
-    const row = await queued(await jpeg());
-    await minio.client.delete([row.storageKey]); // storage "loses" it: GetObject fails
-    await worker.runOnce();
-    const retried = await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } });
-    expect(retried).toMatchObject({ status: 'VERIFYING', verifyAttempts: 1 });
-    expect(retried.nextAttemptAt!.getTime()).toBeGreaterThan(Date.now() + 25_000);
+    // Silences only this test's expected NoSuchKey warn/error lines — the
+    // failure itself is the point of the test, not something to fix.
+    const warnSpy = vi.spyOn(log, 'warn').mockImplementation(() => log);
+    const errorSpy = vi.spyOn(log, 'error').mockImplementation(() => log);
+    try {
+      const row = await queued(await jpeg());
+      await minio.client.delete([row.storageKey]); // storage "loses" it: GetObject fails
+      await worker.runOnce();
+      const retried = await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } });
+      expect(retried).toMatchObject({ status: 'VERIFYING', verifyAttempts: 1 });
+      expect(retried.nextAttemptAt!.getTime()).toBeGreaterThan(Date.now() + 25_000);
 
-    await prisma.mediaObject.update({ where: { id: row.id }, data: { verifyAttempts: 4, nextAttemptAt: new Date(Date.now() - 1000) } });
-    await worker.runOnce();
-    expect(await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: 'VERIFYING', verifyAttempts: 5, nextAttemptAt: null });
+      await prisma.mediaObject.update({ where: { id: row.id }, data: { verifyAttempts: 4, nextAttemptAt: new Date(Date.now() - 1000) } });
+      await worker.runOnce();
+      expect(await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: 'VERIFYING', verifyAttempts: 5, nextAttemptAt: null });
+    } finally {
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
   });
 
   it('backs off 30 s, 60 s, 120 s … capped at an hour', () => {
     expect([1, 2, 3, 8, 20].map(backoffSeconds)).toEqual([30, 60, 120, 3600, 3600]);
+  });
+
+  it('does not resurrect a photo discarded mid-verify, and removes the orphaned thumbnail', async () => {
+    const row = await queued(await jpeg());
+    const originalPut = minio.client.put.bind(minio.client);
+    const putSpy = vi.spyOn(minio.client, 'put').mockImplementationOnce(async (key, body, contentType) => {
+      // The uploader discards the row (MediaDiscarder) after the worker has
+      // already decided to write the thumbnail, but before settle() commits.
+      await prisma.mediaObject.update({ where: { id: row.id }, data: { status: 'DISCARDED', discardedAt: new Date() } });
+      return originalPut(key, body, contentType);
+    });
+    try {
+      expect(await worker.runOnce()).toBe(1);
+    } finally {
+      putSpy.mockRestore();
+    }
+
+    expect(await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: 'DISCARDED' });
+    const audits = await prisma.outboxEvent.findMany({ where: { subject: 'audit.event.recorded' } });
+    expect(audits.some((a) => (a.payload as { objectId?: string }).objectId === row.id)).toBe(false);
+    expect(await minio.client.head(row.thumbnailKey!)).toBeNull();
+  });
+
+  it('does not resurrect a row rejected-then-discarded mid-verify, and writes no audit', async () => {
+    const row = await queued(await jpeg(), { contentHash: 'c'.repeat(64) });
+    const originalGetStream = minio.client.getStream.bind(minio.client);
+    const getStreamSpy = vi.spyOn(minio.client, 'getStream').mockImplementationOnce(async (key) => {
+      await prisma.mediaObject.update({ where: { id: row.id }, data: { status: 'DISCARDED', discardedAt: new Date() } });
+      return originalGetStream(key);
+    });
+    try {
+      expect(await worker.runOnce()).toBe(1);
+    } finally {
+      getStreamSpy.mockRestore();
+    }
+
+    expect(await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: 'DISCARDED' });
+    const audits = await prisma.outboxEvent.findMany({ where: { subject: 'audit.event.recorded' } });
+    expect(audits.some((a) => (a.payload as { objectId?: string }).objectId === row.id)).toBe(false);
   });
 });
