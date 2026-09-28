@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma-clients/media';
 import { MIB, PART_SIZE_BYTES, uuidv7, type RegisterUploadDto, type UploadInstructions } from '@ipms/contracts';
 import { startTestDb } from '../../prisma/test-db.js';
@@ -167,5 +167,98 @@ describe('status and discard', () => {
     await service.register(kept, ENGINEER, 'Bearer t');
     await prisma.mediaObject.update({ where: { id: kept.id }, data: { status: 'ATTACHED' } });
     await expect(service.discard(kept.id, ENGINEER)).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe('repeat-safety when storage and the row disagree', () => {
+  async function registeredVideo() {
+    const video = randomBytes(11 * MIB);
+    const dto = photo(video, { kind: 'VIDEO', contentType: 'video/mp4' });
+    const out = await service.register(dto, ENGINEER, 'Bearer t');
+    if (out.upload?.mode !== 'multipart') throw new Error('expected multipart');
+    return { dto, video, out, upload: out.upload };
+  }
+  const partBody = (video: Buffer, n: number) => video.subarray((n - 1) * PART_SIZE_BYTES, n * PART_SIZE_BYTES);
+
+  it('treats a completion storage already finished, but the row never recorded, as success — repeatably', async () => {
+    const { dto, video, upload } = await registeredVideo();
+    for (const part of upload.parts) {
+      await fetch(part.signedUrl, { method: 'PUT', body: partBody(video, part.partNumber) });
+    }
+    const row = await prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } });
+    const stored = (await minio.client.listParts(row.storageKey, upload.uploadId))!;
+    // Storage finishes the upload directly, as if the server had crashed right after telling it to.
+    expect(await minio.client.completeMultipart(row.storageKey, upload.uploadId, stored)).toBe('completed');
+    expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } })).status).toBe('PENDING');
+
+    expect(await service.complete(dto.id, { parts: stored }, ENGINEER)).toEqual({ id: dto.id, status: 'VERIFYING' });
+    expect(await service.complete(dto.id, { parts: stored }, ENGINEER)).toEqual({ id: dto.id, status: 'VERIFYING' });
+    expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } })).multipartUploadId).toBeNull();
+  });
+
+  it('resolves the same mismatch when discovered through register’s resume path, without opening a new upload', async () => {
+    const { dto, video, upload } = await registeredVideo();
+    for (const part of upload.parts) {
+      await fetch(part.signedUrl, { method: 'PUT', body: partBody(video, part.partNumber) });
+    }
+    const row = await prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } });
+    const stored = (await minio.client.listParts(row.storageKey, upload.uploadId))!;
+    await minio.client.completeMultipart(row.storageKey, upload.uploadId, stored);
+
+    const again = await service.register(dto, ENGINEER, 'Bearer t');
+    expect(again).toMatchObject({ id: dto.id, status: 'VERIFYING', upload: null, posterUpload: null });
+    const after = await prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } });
+    expect(after.status).toBe('VERIFYING');
+    expect(after.multipartUploadId).toBeNull();
+  });
+
+  it('reports 412 when the upload was aborted and no object ever landed in storage', async () => {
+    const { dto, upload } = await registeredVideo();
+    const row = await prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } });
+    await minio.client.abortMultipart(row.storageKey, upload.uploadId);
+    const parts = [1, 2, 3].map((partNumber) => ({ partNumber, etag: '"x"' }));
+    await expect(service.complete(dto.id, { parts }, ENGINEER)).rejects.toMatchObject({ status: 412 });
+  });
+
+  it('reports 412 for a part list that does not match what storage actually holds', async () => {
+    const { dto, video, upload } = await registeredVideo();
+    for (const part of upload.parts) {
+      await fetch(part.signedUrl, { method: 'PUT', body: partBody(video, part.partNumber) });
+    }
+    const wrong = [1, 2, 3].map((partNumber) => ({ partNumber, etag: '"00000000000000000000000000000000"' }));
+    await expect(service.complete(dto.id, { parts: wrong }, ENGINEER)).rejects.toMatchObject({ status: 412 });
+  });
+
+  it('resolves two concurrent part requests after expiry onto a single winning upload, aborting the loser', async () => {
+    const { dto, upload } = await registeredVideo();
+    const row = await prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } });
+    await minio.client.abortMultipart(row.storageKey, upload.uploadId);
+
+    const created: string[] = [];
+    const original = minio.client.createMultipart.bind(minio.client);
+    const spy = vi.spyOn(minio.client, 'createMultipart').mockImplementation(async (key: string, contentType: string) => {
+      const id = await original(key, contentType);
+      created.push(id);
+      return id;
+    });
+    try {
+      const [a, b] = await Promise.all([
+        service.parts(dto.id, [1], ENGINEER),
+        service.parts(dto.id, [1], ENGINEER),
+      ]);
+      const uploadIdOf = (signedUrl: string) => new URL(signedUrl).searchParams.get('uploadId');
+      const winner = (await prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } })).multipartUploadId!;
+      expect(winner).not.toBe(upload.uploadId);
+      expect(uploadIdOf(a.parts[0]!.signedUrl)).toBe(winner);
+      expect(uploadIdOf(b.parts[0]!.signedUrl)).toBe(winner);
+
+      expect(created).toHaveLength(2);
+      const loser = created.find((id) => id !== winner)!;
+      expect(loser).toBeDefined();
+      expect(await minio.client.listParts(row.storageKey, loser)).toBeNull();
+      expect(await minio.client.listParts(row.storageKey, winner)).not.toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

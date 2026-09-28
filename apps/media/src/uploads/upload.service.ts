@@ -69,9 +69,12 @@ export class UploadService {
       uploadsRegistered.inc({ kind: dto.kind });
       return this.instructions(row);
     } catch (err) {
+      // Whatever went wrong after storage already opened an upload, don't
+      // leave it dangling: either the row exists under someone else (below)
+      // or it doesn't exist at all, and either way this attempt owns nothing.
+      if (uploadId) await this.storage.abortMultipart(keys.storageKey, uploadId);
       // Two retries raced: the loser answers with the winner's row.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        if (uploadId) await this.storage.abortMultipart(keys.storageKey, uploadId);
         return this.resume(await this.prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } }), dto, userId);
       }
       throw err;
@@ -97,7 +100,9 @@ export class UploadService {
   async parts(id: string, partNumbers: number[], userId: string): Promise<PartUrls> {
     const row = await this.own(id, userId);
     if (row.status !== 'PENDING' || !row.multipartUploadId) throw new ConflictException('This upload is not waiting for parts');
-    const uploadId = await this.liveUploadId(row);
+    const live = await this.liveUpload(row);
+    if (live === 'no_upload_needed') throw new ConflictException('This upload is not waiting for parts');
+    const uploadId = live.uploadId;
     const count = partCountFor(row.sizeBytes);
     const bad = partNumbers.filter((n) => n > count);
     if (bad.length) throw new BadRequestException(`This upload has ${count} parts; ${bad.join(', ')} do not exist`);
@@ -118,21 +123,25 @@ export class UploadService {
       if (dto.parts.length !== partCountFor(row.sizeBytes)) {
         throw new HttpException(`Expected ${partCountFor(row.sizeBytes)} parts, got ${dto.parts.length}`, HttpStatus.PRECONDITION_FAILED);
       }
-      await this.storage.completeMultipart(row.storageKey, row.multipartUploadId, dto.parts);
+      const outcome = await this.storage.completeMultipart(row.storageKey, row.multipartUploadId, dto.parts);
+      if (outcome === 'invalid_parts') {
+        throw new HttpException('Part list does not match the stored parts; check status and re-send missing parts', HttpStatus.PRECONDITION_FAILED);
+      }
+      if (outcome === 'upload_gone') {
+        // A previous completion may have already landed in storage and this
+        // is a repeat call that lost the race with our own DB update (crash,
+        // overlapping retry, or the upload simply expired first).
+        const head = await this.storage.head(row.storageKey);
+        if (!head || head.sizeBytes !== row.sizeBytes) {
+          throw new HttpException('This upload expired; register again to get new part URLs', HttpStatus.PRECONDITION_FAILED);
+        }
+      }
     } else if (!(await this.storage.head(row.storageKey))) {
       // 412, not 409: the phone should send the bytes again, then retry.
       throw new HttpException('The file has not arrived in storage yet', HttpStatus.PRECONDITION_FAILED);
     }
 
-    const now = new Date();
-    const updated = await this.prisma.mediaObject.updateMany({
-      where: { id, status: 'PENDING' },
-      data: { status: 'VERIFYING', multipartUploadId: null, receivedAt: now, nextAttemptAt: now },
-    });
-    if (updated.count === 1) {
-      uploadsCompleted.inc({ kind: row.kind });
-      if (row.capturedAt) captureToReceipt.observe((now.getTime() - row.capturedAt.getTime()) / 1000);
-    }
+    await this.markVerifying(row);
     return { id, status: 'VERIFYING' };
   }
 
@@ -157,12 +166,60 @@ export class UploadService {
     return this.instructions(row);
   }
 
-  /** R2's lifecycle rule aborts multipart uploads left for 7 days; a returning phone gets a new one. */
-  private async liveUploadId(row: MediaObject): Promise<string> {
-    if (row.multipartUploadId && (await this.storage.listParts(row.storageKey, row.multipartUploadId)) !== null) return row.multipartUploadId;
+  /**
+   * The single place a PENDING row is moved to VERIFYING, whether reached
+   * through a normal `complete()` call or discovered indirectly (the object
+   * is already in storage, but the row never got updated). Guarded so a
+   * losing racer's call is a no-op, and the metrics/receipt fire exactly once.
+   */
+  private async markVerifying(row: MediaObject): Promise<void> {
+    const now = new Date();
+    const updated = await this.prisma.mediaObject.updateMany({
+      where: { id: row.id, status: 'PENDING' },
+      data: { status: 'VERIFYING', multipartUploadId: null, receivedAt: now, nextAttemptAt: now },
+    });
+    if (updated.count === 1) {
+      uploadsCompleted.inc({ kind: row.kind });
+      if (row.capturedAt) captureToReceipt.observe((now.getTime() - row.capturedAt.getTime()) / 1000);
+    }
+  }
+
+  /**
+   * R2's lifecycle rule aborts multipart uploads left for 7 days, so a
+   * returning phone may find its upload gone. Before opening a fresh one,
+   * check whether the object is already fully in storage — a completion
+   * that succeeded in storage but crashed (or lost a race) before the row
+   * updated needs no new upload at all, just the row moved forward. And the
+   * "create a new one" step itself is guarded against two overlapping
+   * retries both winning: only the one whose `updateMany` actually lands
+   * keeps the upload it created; the other aborts its own and defers to it.
+   */
+  private async liveUpload(row: MediaObject): Promise<{ uploadId: string } | 'no_upload_needed'> {
+    if (row.multipartUploadId) {
+      const existing = await this.storage.listParts(row.storageKey, row.multipartUploadId);
+      if (existing !== null) return { uploadId: row.multipartUploadId };
+    }
+
+    const head = await this.storage.head(row.storageKey);
+    if (head && head.sizeBytes === row.sizeBytes) {
+      await this.markVerifying(row);
+      return 'no_upload_needed';
+    }
+
     const uploadId = await this.storage.createMultipart(row.storageKey, row.contentType);
-    await this.prisma.mediaObject.update({ where: { id: row.id }, data: { multipartUploadId: uploadId } });
-    return uploadId;
+    const claimed = await this.prisma.mediaObject.updateMany({
+      where: { id: row.id, status: 'PENDING', multipartUploadId: row.multipartUploadId },
+      data: { multipartUploadId: uploadId },
+    });
+    if (claimed.count === 0) {
+      // Another caller's retry raced this one and already moved the row on:
+      // ours is surplus, so drop it and report whatever they left behind.
+      await this.storage.abortMultipart(row.storageKey, uploadId);
+      const fresh = await this.prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } });
+      if (fresh.status === 'PENDING' && fresh.multipartUploadId) return { uploadId: fresh.multipartUploadId };
+      return 'no_upload_needed';
+    }
+    return { uploadId };
   }
 
   private async instructions(row: MediaObject): Promise<RegisterUploadResponse> {
@@ -171,7 +228,12 @@ export class UploadService {
 
     let upload: UploadInstructions;
     if (row.multipartUploadId) {
-      const uploadId = await this.liveUploadId(row);
+      const live = await this.liveUpload(row);
+      if (live === 'no_upload_needed') {
+        const fresh = await this.prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } });
+        return { id: fresh.id, status: fresh.status as MediaStatus, upload: null, posterUpload: null };
+      }
+      const { uploadId } = live;
       const partCount = partCountFor(row.sizeBytes);
       const parts = await Promise.all(Array.from({ length: partCount }, async (_, i) => ({
         partNumber: i + 1, signedUrl: await this.storage.presignPart(row.storageKey, uploadId, i + 1, UPLOAD_URL_TTL_SECONDS),

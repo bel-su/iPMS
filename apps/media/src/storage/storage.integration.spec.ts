@@ -47,11 +47,24 @@ describe('StorageClient against MinIO', () => {
       await fetch(await storage.presignPart('t/video.mp4', uploadId, n, 3600), { method: 'PUT', body: partOf(n) });
     }
     const parts = (await storage.listParts('t/video.mp4', uploadId))!;
-    await storage.completeMultipart('t/video.mp4', uploadId, parts);
+    expect(await storage.completeMultipart('t/video.mp4', uploadId, parts)).toBe('completed');
 
     const chunks: Buffer[] = [];
     for await (const chunk of await storage.getStream('t/video.mp4')) chunks.push(chunk as Buffer);
     expect(sha(Buffer.concat(chunks))).toBe(sha(body));
+  });
+
+  it('reports a completion whose upload is already gone or aborted as upload_gone, not an error', async () => {
+    const uploadId = await storage.createMultipart('t/vanished.mp4', 'video/mp4');
+    await storage.abortMultipart('t/vanished.mp4', uploadId);
+    expect(await storage.completeMultipart('t/vanished.mp4', uploadId, [{ partNumber: 1, etag: '"whatever"' }])).toBe('upload_gone');
+  });
+
+  it('reports a completion with a part list that does not match storage as invalid_parts, not an error', async () => {
+    const uploadId = await storage.createMultipart('t/mismatch.mp4', 'video/mp4');
+    await fetch(await storage.presignPart('t/mismatch.mp4', uploadId, 1, 3600), { method: 'PUT', body: randomBytes(PART_SIZE_BYTES) });
+    expect(await storage.completeMultipart('t/mismatch.mp4', uploadId, [{ partNumber: 1, etag: '"0000000000000000000000000000000"' }])).toBe('invalid_parts');
+    await storage.abortMultipart('t/mismatch.mp4', uploadId);
   });
 
   it('answers null for parts of an upload that no longer exists', async () => {

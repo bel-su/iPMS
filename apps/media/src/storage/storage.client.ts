@@ -100,11 +100,24 @@ export class StorageClient {
     }
   }
 
-  async completeMultipart(key: string, uploadId: string, parts: { partNumber: number; etag: string }[]): Promise<void> {
-    await this.internal.send(new CompleteMultipartUploadCommand({
-      Bucket: this.bucket, Key: key, UploadId: uploadId,
-      MultipartUpload: { Parts: [...parts].sort((a, b) => a.partNumber - b.partNumber).map((p) => ({ PartNumber: p.partNumber, ETag: p.etag })) },
-    }));
+  /**
+   * 'upload_gone' and 'invalid_parts' are not errors: a repeat completion
+   * after a crash (the object already exists) or a stale part list are both
+   * routine for a phone retrying over a bad connection. The caller decides
+   * what each one means; only an unrecognized failure is rethrown.
+   */
+  async completeMultipart(key: string, uploadId: string, parts: { partNumber: number; etag: string }[]): Promise<'completed' | 'upload_gone' | 'invalid_parts'> {
+    try {
+      await this.internal.send(new CompleteMultipartUploadCommand({
+        Bucket: this.bucket, Key: key, UploadId: uploadId,
+        MultipartUpload: { Parts: [...parts].sort((a, b) => a.partNumber - b.partNumber).map((p) => ({ PartNumber: p.partNumber, ETag: p.etag })) },
+      }));
+      return 'completed';
+    } catch (err) {
+      if (err instanceof S3ServiceException && err.name === 'NoSuchUpload') return 'upload_gone';
+      if (err instanceof S3ServiceException && ['InvalidPart', 'InvalidPartOrder', 'EntityTooSmall'].includes(err.name)) return 'invalid_parts';
+      throw err;
+    }
   }
 
   async abortMultipart(key: string, uploadId: string): Promise<void> {
