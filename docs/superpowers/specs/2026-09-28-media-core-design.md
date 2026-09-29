@@ -340,6 +340,8 @@ attaches them is.
   sync as server-side `DRAFT` for device switching; the submission is sent only after
   all its media are `READY`; a work order keeps the template version it was raised
   with until completed.
+  *Superseded in part by `2026-09-29-qc-evidence-design.md` §11: drafts are a
+  separate `WorkOrderDraft` table, and attach allows reuse within a work order.*
 - **Gallery and documents (4):** documents uploaded from the web only, attached to a
   **template version** and copied forward by "new version"; an engineer can download a
   document if a work order on one of their in-scope sites uses that template; new
