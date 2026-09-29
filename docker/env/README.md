@@ -23,10 +23,18 @@ This directory contains individual environment files for each microservice and i
 
 ## Media object storage
 
-`media.env` points at the local MinIO container. On staging and production (or locally, to test against R2 directly),
-create **`media.secrets.env`** next to it by copying `media.secrets.env.example` (gitignored — never commit it) with
-that environment's Cloudflare R2 values; Compose loads it after `media.env`,
-so its values win:
+All of media's object-storage settings live in **`media.secrets.env`** next to
+`media.env`. It is gitignored: never commit it. `media.env` deliberately has no
+`S3_*` values, so if the file is missing media refuses to start (`S3_ENDPOINT is
+not set`) rather than silently using some other storage. Create it from one of
+two templates:
+
+| Where | Copy this template | Storage |
+|---|---|---|
+| Production, staging, or local testing against R2 | `media.secrets.env.example` | Cloudflare R2 (`ipms-media-prod` in production, `ipms-media-staging` everywhere else) |
+| Local, without R2 keys | `media.secrets.env.local-minio.example` | The opt-in MinIO container |
+
+The R2 values look like this:
 
     S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
     S3_PUBLIC_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
@@ -37,15 +45,23 @@ so its values win:
     S3_FORCE_PATH_STYLE=false
     S3_AUTO_CREATE_BUCKET=false
 
-All eight `S3_*` values above are required in `media.secrets.env` on every
-server — media fails to start if any of them is missing (config.ts reads them
-once at bootstrap, on purpose, rather than failing on the first upload).
+All eight `S3_*` values are required. Media reads them once at startup and fails
+immediately if any is missing, instead of failing on the first upload.
+
+The MinIO container is off by default and never runs on a server. To use it
+locally, copy the local-minio template, then start the stack with its profile:
+
+    docker compose -f docker/docker-compose.yml --profile local-storage up -d
+
+Automated tests don't depend on any of this: they start their own throwaway
+MinIO container.
 
 ### Deployment checklist (per environment)
 
 1. R2 bucket exists with `r2.dev` public access disabled and no custom domain.
 2. An Account API token scoped to **that bucket only**, *Object Read & Write*, **no client IP filter**.
 3. Lifecycle rule: abort incomplete multipart uploads after 7 days. No object-expiry rules.
-4. `media.secrets.env` created on the server with the values above.
+4. `media.secrets.env` created on the server from `media.secrets.env.example`, with that environment's bucket and token (`chmod 600`). Do **not** pass `--profile local-storage` on a server.
 5. When the environment has a web domain: CORS policy allowing `GET`, `PUT`, `HEAD` from that origin only, headers `content-type` and `x-amz-checksum-sha256`, exposing `ETag`.
-6. Smoke test: register, upload and complete one photo against the bucket, confirm it turns `READY`, open its view link, then delete it. Also confirm the multipart (video) path against the same bucket: register an 11 MiB mp4, upload part 1, check `POST /media/uploads/status`, fetch fresh URLs for the remaining parts (`POST /media/uploads/:id/parts`), finish uploading, call `complete`, and confirm the object turns `READY`. This exercises R2's actual multipart behaviour and error names (`NoSuchUpload`, `InvalidPart`, …), which MinIO does not always reproduce exactly.
+6. Check the media startup log shows `storage configured` with the R2 host and the expected bucket.
+7. Smoke test: register, upload and complete one photo against the bucket, confirm it turns `READY`, open its view link, then delete it. Also confirm the multipart (video) path against the same bucket: register an 11 MiB mp4, upload part 1, check `POST /media/uploads/status`, fetch fresh URLs for the remaining parts (`POST /media/uploads/:id/parts`), finish uploading, call `complete`, and confirm the object turns `READY`. This exercises R2's actual multipart behaviour and error names (`NoSuchUpload`, `InvalidPart`, …), which MinIO does not always reproduce exactly.
