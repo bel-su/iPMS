@@ -125,6 +125,9 @@ describe('work orders against a real database', () => {
     const { created } = await create(ANTENNA, ANTENNA_SITE);
     const order = created[0]!;
     await service.cancel(GLOBAL, order.id, { reason: 'Site handed back' }, ACTOR);
+    const published = await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'qc.work_order.cancelled' } });
+    expect(published.payload).toMatchObject({ workOrderId: order.id, projectId: ANTENNA, siteId: ANTENNA_SITE });
+    expect(typeof (published.payload as { cancelledAt: unknown }).cancelledAt).toBe('string');
     await expect(submit(order)).rejects.toThrow('cancelled');
     expect(await prisma.workOrder.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ status: 'CANCELLED', cancelReason: 'Site handed back' });
     await expect(service.update(GLOBAL, order.id, { assigneeId: ENGINEER }, ACTOR, 'Bearer t')).rejects.toThrow('cancelled');

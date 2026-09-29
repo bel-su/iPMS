@@ -55,6 +55,7 @@ graph TD
 | **QC Database** | `localhost:5436` | `5432` | Dedicated DB for Quality Control (`ipms_qc`) |
 | **NATS JetStream** | `localhost:4222` | `4222` | Message broker and event streams |
 | **Redis** | `localhost:6379` | `6379` | Cache, token versions & rate limits |
+| **MinIO (local R2 stand-in)** | `localhost:9000` | `9000` | S3-compatible storage for media in development only |
 
 ---
 

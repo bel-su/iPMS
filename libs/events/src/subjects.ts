@@ -8,6 +8,7 @@ export const SUBJECTS = {
   AUDIT_EVENT: 'audit.event.recorded',
   QC_SUBMISSION_SUBMITTED: 'qc.submission.submitted',
   QC_SUBMISSION_REVIEWED: 'qc.submission.reviewed',
+  QC_WORK_ORDER_CANCELLED: 'qc.work_order.cancelled',
 } as const;
 
 export type Subject = (typeof SUBJECTS)[keyof typeof SUBJECTS];
@@ -50,9 +51,8 @@ export const STREAMS: Record<'IAM' | 'AUDIT' | 'QC', StreamDefinition> = {
     name: 'QC',
     subjects: ['qc.>'],
     maxAgeMs: 7 * 24 * 60 * 60 * 1000,
-    // Facts about submissions, for whoever needs them next (notifications).
-    // Nobody consumes them yet: qc moves its own work orders in the same
-    // transaction, so project no longer needs to hear of them.
-    durableConsumers: [],
+    // Submission facts have no consumer yet (notifications will). media hears of
+    // cancelled work orders so it can release their unsubmitted evidence.
+    durableConsumers: ['media-work-order-cancelled'],
   },
 };

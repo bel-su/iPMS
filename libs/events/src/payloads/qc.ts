@@ -23,3 +23,11 @@ export interface QcSubmissionReviewed {
   reviewedAt: string;
   comment: string | null;
 }
+
+/** A work order left the open states without completing. `cancelledAt` is ISO-8601. */
+export interface QcWorkOrderCancelled {
+  workOrderId: string;
+  projectId: string;
+  siteId: string;
+  cancelledAt: string;
+}

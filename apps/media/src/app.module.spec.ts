@@ -50,4 +50,9 @@ describe('AppModule guard registration', () => {
   it('provides OVERRIDE_PROVIDER, without which the module fails at bootstrap', () => {
     expect(providers.filter(isClassProvider).some((p) => p.provide === OVERRIDE_PROVIDER)).toBe(true);
   });
+
+  it('registers the upload, view and attach controllers', () => {
+    const controllers = reflectMetadata.getMetadata('controllers', AppModule) as { name: string }[];
+    expect(controllers.map((c) => c.name)).toEqual(expect.arrayContaining(['UploadController', 'ViewController', 'AttachController']));
+  });
 });
