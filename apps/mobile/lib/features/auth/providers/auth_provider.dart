@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exceptions.dart';
 import '../../../core/security/token_storage.dart';
 import '../data/auth_repository.dart';
 import '../domain/models/auth_user.dart';
@@ -30,6 +31,10 @@ class AuthNotifier extends AsyncNotifier<AuthUser?> {
     }
     try {
       return await repo.getCurrentUser();
+    } on NetworkException {
+      // Offline at launch says nothing about the session: keep the tokens so
+      // signing in again (or biometrics) can restore it once back online.
+      return null;
     } catch (_) {
       await repo.logout();
       return null;

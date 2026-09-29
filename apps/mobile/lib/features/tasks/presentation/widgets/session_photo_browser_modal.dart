@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../media/providers/evidence_upload_provider.dart';
 import '../../domain/models/checklist_item.dart';
 import '../../domain/models/task_evidence.dart';
 import '../../domain/models/task_item.dart';
@@ -502,7 +503,7 @@ class _SessionPhotoBrowserModalState
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              ref.read(taskEvidenceProvider.notifier).removeEvidence(
+              ref.read(evidenceUploaderProvider).discard(
                     widget.task.id,
                     ev.id,
                   );

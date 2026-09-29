@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
+import '../../../core/config/env.dart';
+import '../../../core/network/api_exceptions.dart';
 import '../../../core/services/background_watermark_service.dart';
 import '../../../core/services/camera_service.dart';
 import '../../../core/services/watermark_service.dart';
@@ -12,6 +15,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../map/presentation/site_map_screen.dart';
+import '../../media/providers/evidence_upload_provider.dart';
+import '../data/demo_checklists.dart';
+import '../data/task_repository.dart';
 import '../domain/models/checklist_item.dart';
 import '../domain/models/task_evidence.dart';
 import '../domain/models/task_item.dart';
@@ -36,14 +42,28 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isCapturing = false;
-  late List<ChecklistItem> _checklist;
+  bool _isSubmitting = false;
+  List<ChecklistItem> _checklist = [];
+
+  /// The published checklist from qc; null in demo mode or until loaded.
+  TaskChecklist? _serverChecklist;
+  bool _loadingChecklist = false;
+  String? _checklistError;
+
+  /// Kept across retries of one submission so a resend after a dropped
+  /// response cannot create a second attempt; cleared once it succeeds.
+  String? _submissionKey;
   StreamSubscription<TaskEvidence>? _watermarkSub;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _checklist = _generateChecklistForTask(widget.task);
+    if (AppConfig.demoMode) {
+      _checklist = DemoChecklists.forTask(widget.task);
+    } else {
+      _loadChecklist();
+    }
 
     // Reactively receive completed background watermark jobs
     _watermarkSub =
@@ -73,199 +93,51 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     super.dispose();
   }
 
-  List<ChecklistItem> _generateChecklistForTask(TaskItem task) {
-    final cat = task.category.toLowerCase();
-    final title = task.title.toLowerCase();
-    String prefix;
-    List<({String title, String guidance})> items;
-
-    if (cat.contains('civil') ||
-        title.contains('civil') ||
-        title.contains('foundation') ||
-        title.contains('mount') ||
-        title.contains('fencing')) {
-      prefix = 'CIV';
-      items = const [
-        (
-          title: 'Pre-work structural survey & boundary clearance',
-          guidance: 'Verify 360-degree boundary clearance and ground stability before works.',
-        ),
-        (
-          title: 'Excavation depth & rebar tie wire tensile check',
-          guidance: 'Inspect trench depth against structural drawings and verify rebar tying.',
-        ),
-        (
-          title: 'Foundation level & mounting torque verification',
-          guidance: 'Verify base plate horizontal leveling and torque anchor bolts to spec.',
-        ),
-        (
-          title: 'Perimeter fencing & site safety clearance',
-          guidance: 'Inspect perimeter grounding, safety hazard signage, and gate locking.',
-        ),
-        (
-          title: 'Structural finish & foundation integrity inspection',
-          guidance: 'Photograph cured concrete finish, slope drainage, and cable entry sleeves.',
-        ),
-      ];
-    } else if (cat.contains('rf') ||
-        cat.contains('telecom') ||
-        title.contains('antenna') ||
-        title.contains('mimo')) {
-      prefix = 'RF';
-      items = const [
-        (
-          title: 'Tower climb harness & PPE safety inspection',
-          guidance: 'Verify 100% tie-off harness, helmet, double lanyard, and fall arrestor.',
-        ),
-        (
-          title: 'Massive MIMO / Sector bracket torque alignment',
-          guidance: 'Tighten mechanical brackets to manufacturer torque specs using torque wrench.',
-        ),
-        (
-          title: 'Azimuth & electrical down-tilt angle calibration',
-          guidance: 'Measure compass azimuth and RET down-tilt angle against cell planning sheet.',
-        ),
-        (
-          title: 'VSWR swept frequency test (< 1.30:1)',
-          guidance: 'Capture Site Master sweep trace verifying feeder return loss > 18 dB.',
-        ),
-        (
-          title: 'Feeder jumper weatherproofing cold-shrink wrap',
-          guidance: 'Verify 3-layer weatherproofing on DIN / 4.3-10 connector junctions.',
-        ),
-      ];
-    } else if (cat.contains('optical') ||
-        cat.contains('fiber') ||
-        title.contains('splicing') ||
-        title.contains('trenching')) {
-      prefix = 'FBR';
-      items = const [
-        (
-          title: 'Duct continuity & microduct pull-wire check',
-          guidance: 'Verify unobstructed duct path and install pull wire with seal caps.',
-        ),
-        (
-          title: 'Precision optical fiber cleave & fusion splice (< 0.05 dB)',
-          guidance: 'Photograph fusion splicer display showing estimated core loss.',
-        ),
-        (
-          title: 'OTDR bi-directional insertion loss & reflection test',
-          guidance: 'Capture 1310/1550nm OTDR trace on optical span confirming event losses.',
-        ),
-        (
-          title: 'Splice tray cassette sealing & buffer tube slack routing',
-          guidance: 'Inspect bend radius in splice enclosure and seal moisture rubber grommets.',
-        ),
-      ];
-    } else if (cat.contains('power') ||
-        cat.contains('electrical') ||
-        title.contains('battery') ||
-        title.contains('dg') ||
-        title.contains('earthing') ||
-        title.contains('ats')) {
-      prefix = 'PWR';
-      items = const [
-        (
-          title: 'Lockout-Tagout (LOTO) isolation & safety clearance',
-          guidance: 'Ensure breakers locked, hazard tags attached, and verify zero voltage.',
-        ),
-        (
-          title: 'Battery bank string voltage & internal resistance test',
-          guidance: 'Record individual 2V/12V cell float voltages and internal resistance.',
-        ),
-        (
-          title: 'Automatic Transfer Switch (ATS) emergency failover drill',
-          guidance: 'Test mains failure simulation and record DG start and transfer delay.',
-        ),
-        (
-          title: 'Earthing pit electrode resistance measurement (< 5 Ohms)',
-          guidance: 'Measure earth pit resistance with 3-point earth tester and log reading.',
-        ),
-      ];
-    } else if (cat.contains('solar') ||
-        cat.contains('green') ||
-        cat.contains('energy') ||
-        cat.contains('renewable')) {
-      prefix = 'SOL';
-      items = const [
-        (
-          title: 'Solar PV panel open-circuit voltage (Voc) verification',
-          guidance: 'Measure string Voc with multimeter under sunlight; match design curve.',
-        ),
-        (
-          title: 'MPPT charge controller firmware & output calibration',
-          guidance: 'Verify charging stages (Bulk, Absorption, Float) and display readouts.',
-        ),
-        (
-          title: 'Battery thermal chamber environmental insulation check',
-          guidance: 'Inspect enclosure seals, ventilation fan filters, and temperature sensors.',
-        ),
-        (
-          title: 'High-altitude structural mount wind-load torque inspection',
-          guidance: 'Check PV panel clamp torque and foundation mounting structure security.',
-        ),
-      ];
-    } else if (cat.contains('transmission') ||
-        title.contains('microwave') ||
-        title.contains('los') ||
-        title.contains('vsat')) {
-      prefix = 'TX';
-      items = const [
-        (
-          title: 'Microwave dish antenna alignment & peak RSL search',
-          guidance: 'Fine-tune dish pan and tilt to peak received signal level (RSL).',
-        ),
-        (
-          title: 'Bit Error Rate (BER) & Carrier-to-Noise (C/N) verification',
-          guidance: 'Log modem performance stats showing zero frame errors over 15 min.',
-        ),
-        (
-          title: 'Waveguide flange weatherproofing & grounding kit installation',
-          guidance: 'Bond waveguide grounding kit to tower bus bar and seal flange joints.',
-        ),
-      ];
-    } else {
-      prefix = 'CHK';
-      items = const [
-        (
-          title: 'Pre-installation survey & safety clearance',
-          guidance: 'Perform site risk assessment, hazard clearance, and tool calibration check.',
-        ),
-        (
-          title: 'Equipment mounting alignment & torque verification',
-          guidance: 'Verify structural rack mounting and bolt tightness to specifications.',
-        ),
-        (
-          title: 'Feeder cable grounding and weatherproofing',
-          guidance: 'Install grounding kits at top, bottom, and entry point with weather seals.',
-        ),
-        (
-          title: 'Overall site cleanup & handover inspection',
-          guidance: 'Ensure all scrap removed, cabinet locked, and site ready for commissioning.',
-        ),
-      ];
-    }
-
-    final completedCount = task.completedChecklistCount.clamp(0, items.length);
-
-    return List.generate(items.length, (i) {
-      final isDone = i < completedCount;
-      return ChecklistItem(
-        id: 'item_${task.id}_${i + 1}',
-        itemNumber: '$prefix.${(i + 1).toString().padLeft(2, '0')}',
-        title: items[i].title,
-        guidanceText: items[i].guidance,
-        isRequired: true,
-        evidenceRequired: true,
-        minPhotos: 1,
-        isCompleted: isDone,
-        verdict: isDone ? 'PASS' : 'PENDING',
-      );
+  Future<void> _loadChecklist() async {
+    setState(() {
+      _loadingChecklist = true;
+      _checklistError = null;
     });
+    try {
+      final checklist =
+          await ref.read(taskRepositoryProvider).getChecklist(widget.task.id);
+      if (!mounted) return;
+      final evidence = ref.read(taskEvidenceListProvider(widget.task.id));
+      setState(() {
+        _serverChecklist = checklist;
+        _checklist = checklist.items.map((item) {
+          final hasPhotos = evidence.any((e) => e.checklistItemId == item.id);
+          return hasPhotos ? item.copyWith(isCompleted: true, verdict: 'PASS') : item;
+        }).toList();
+        _loadingChecklist = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _checklistError = e.toString();
+        _loadingChecklist = false;
+      });
+    }
+  }
+
+  void _showMessage(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: isError ? AppColors.statusBlockedText : AppColors.darkSlate,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        content: Text(message, style: const TextStyle(fontSize: 12, color: Colors.white)),
+      ),
+    );
   }
 
   Future<void> _capturePhotoForItem(TaskItem task, ChecklistItem item) async {
     if (_isCapturing) return;
+    if (!item.acceptsPhotos) {
+      _showMessage('${item.itemNumber} does not take photos.');
+      return;
+    }
 
     setState(() => _isCapturing = true);
 
@@ -278,7 +150,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
         taskId: task.id,
         siteCode: task.siteCode ?? 'KOS121',
         siteName: task.siteName ?? 'Site Location',
-        projectCode: task.category.isNotEmpty ? task.category : 'PRJ-5G-METRO',
+        projectCode: task.projectCode ?? task.category,
         username: username,
         fullName: fullName,
         taskTitle: task.title,
@@ -288,6 +160,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
 
       if (result != null && mounted) {
         ref.read(taskEvidenceProvider.notifier).addEvidence(result.evidence);
+        // Evidence leaves the phone as soon as it is taken, not at submit.
+        unawaited(ref.read(evidenceUploaderProvider).upload(task.id, result.evidence.id));
 
         setState(() {
           final idx = _checklist.indexWhere((c) => c.id == item.id);
@@ -339,6 +213,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
 
   void _toggleItemNA(int index) {
     final item = _checklist[index];
+    if (!item.allowsNa && item.verdict != 'NA') {
+      _showMessage('${item.itemNumber} cannot be marked N/A.');
+      return;
+    }
     setState(() {
       if (item.verdict == 'NA') {
         final itemEvidence = ref
@@ -367,6 +245,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
         task: task,
         item: item,
         onPhotosAttached: (attached) {
+          unawaited(ref.read(evidenceUploaderProvider).uploadPending(task.id));
           setState(() {
             final idx = _checklist.indexWhere((c) => c.id == item.id);
             if (idx != -1) {
@@ -390,9 +269,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     final username = authUser?.username ?? 'engineer';
     final fullName = authUser?.displayName;
 
-    double latitude = 27.7172;
-    double longitude = 85.3240;
-    double accuracy = 5.0;
+    double latitude = 0;
+    double longitude = 0;
+    double accuracy = -1; // no fix yet; see WatermarkMetadata.accuracy
 
     try {
       final pos = await Geolocator.getCurrentPosition(
@@ -428,7 +307,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       final metadata = WatermarkMetadata(
         siteCode: task.siteCode ?? 'KOS121',
         siteName: task.siteName ?? 'Site Location',
-        projectCode: task.category.isNotEmpty ? task.category : 'PRJ-5G-METRO',
+        projectCode: task.projectCode ?? task.category,
         latitude: latitude,
         longitude: longitude,
         accuracy: accuracy,
@@ -513,7 +392,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     }
   }
 
-  void _submitChecklistToQC(TaskItem task, List<TaskEvidence> evidenceList) {
+  Future<void> _submitChecklistToQC(TaskItem task, List<TaskEvidence> evidenceList) async {
+    if (_isSubmitting) return;
     final missingItems = _checklist.where((item) {
       if (item.verdict == 'NA') return false;
       final photos =
@@ -526,8 +406,101 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       return;
     }
 
-    ref.read(taskEvidenceProvider.notifier).submitEvidence(task.id);
+    if (AppConfig.demoMode) {
+      ref.read(taskEvidenceProvider.notifier).submitEvidence(task.id);
+      _showSubmittedMessage();
+      return;
+    }
 
+    final checklist = _serverChecklist;
+    if (checklist == null) {
+      _showMessage('The checklist has not loaded yet.', isError: true);
+      return;
+    }
+    if (!task.isSubmittable) {
+      _showMessage('This work order is ${task.status.replaceAll('_', ' ').toLowerCase()} and cannot be submitted now.',
+          isError: true);
+      return;
+    }
+
+    final overLimit = _checklist.where((item) {
+      if (item.verdict == 'NA' || item.maxPhotos == null) return false;
+      return evidenceList.where((e) => e.checklistItemId == item.id).length > item.maxPhotos!;
+    }).toList();
+    if (overLimit.isNotEmpty) {
+      _showMessage(
+        'Too many photos on ${overLimit.map((i) => '${i.itemNumber} (max ${i.maxPhotos})').join(', ')}. Detach the extras first.',
+        isError: true,
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      // Only photos on items being answered go with the submission; an N/A
+      // item carries none.
+      final answeredIds = _checklist.where((i) => i.verdict != 'NA').map((i) => i.id).toSet();
+      final toSend = evidenceList
+          .where((e) => e.checklistItemId != null && answeredIds.contains(e.checklistItemId))
+          .map((e) => e.id)
+          .toSet();
+
+      final notReady =
+          await ref.read(evidenceUploaderProvider).uploadAndWait(task.id, toSend);
+      if (notReady.isNotEmpty) {
+        final firstError = notReady.map((e) => e.uploadError).whereType<String>().firstOrNull;
+        _showMessage(
+          '${notReady.length} photo(s) are not uploaded yet. ${firstError ?? 'They are still being checked; try again shortly.'}',
+          isError: true,
+        );
+        return;
+      }
+
+      final uploaded = ref.read(taskEvidenceListProvider(task.id));
+      final responses = <ItemResponse>[];
+      for (final item in _checklist) {
+        final photos = uploaded
+            .where((e) => e.checklistItemId == item.id && toSend.contains(e.id))
+            .map((e) => e.mediaId)
+            .toList();
+        if (item.verdict == 'NA') {
+          responses.add(ItemResponse(itemId: item.id, result: 'NA'));
+        } else if (item.isRequired || photos.isNotEmpty || item.verdict == 'PASS') {
+          responses.add(ItemResponse(itemId: item.id, result: 'PASS', photoMediaIds: photos));
+        }
+      }
+
+      Position? position;
+      try {
+        position = await Geolocator.getLastKnownPosition();
+      } catch (_) {}
+
+      _submissionKey ??= const Uuid().v4();
+      await ref.read(taskRepositoryProvider).submitChecklist(
+            checklist: checklist,
+            responses: responses,
+            idempotencyKey: _submissionKey!,
+            deviceId: await ref.read(tokenStorageProvider).getOrCreateDeviceId(),
+            latitude: position?.latitude,
+            longitude: position?.longitude,
+          );
+      _submissionKey = null;
+
+      ref.read(taskEvidenceProvider.notifier).submitEvidence(task.id);
+      ref.invalidate(taskDetailProvider(task.id));
+      ref.invalidate(assignedTasksProvider);
+      _showSubmittedMessage();
+    } on ApiException catch (e) {
+      _showMessage(e.message, isError: true);
+    } catch (e) {
+      _showMessage('Submission failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  void _showSubmittedMessage() {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: const Color(0xFF1B5E20),
@@ -1025,14 +998,23 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
-                        icon: const Icon(Icons.send_rounded, size: 18),
-                        label: const Text(
-                          'Submit to QC',
-                          style: TextStyle(
+                        icon: _isSubmitting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.send_rounded, size: 18),
+                        label: Text(
+                          _isSubmitting ? 'Uploading…' : 'Submit to QC',
+                          style: const TextStyle(
                               fontSize: 12, fontWeight: FontWeight.bold),
                         ),
-                        onPressed: () =>
-                            _submitChecklistToQC(task, evidenceList),
+                        onPressed: _isSubmitting ||
+                                (!AppConfig.demoMode && !task.isSubmittable)
+                            ? null
+                            : () => _submitChecklistToQC(task, evidenceList),
                       ),
                     ),
                   ),
@@ -1046,6 +1028,33 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
   }
 
   Widget _buildChecklistTab(TaskItem task, List<TaskEvidence> evidenceList) {
+    if (_loadingChecklist) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_checklistError != null || (_checklist.isEmpty && !AppConfig.demoMode)) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.checklist_rtl_outlined, size: 44, color: AppColors.textSecondary),
+              const SizedBox(height: 10),
+              Text(
+                _checklistError != null ? 'Could not load the checklist' : 'This checklist has no items',
+                style: AppTypography.titleMedium,
+              ),
+              if (_checklistError != null) ...[
+                const SizedBox(height: 4),
+                Text(_checklistError!, style: AppTypography.bodySmall, textAlign: TextAlign.center),
+                const SizedBox(height: 10),
+                TextButton(onPressed: _loadChecklist, child: const Text('Retry')),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
     final unassignedPhotos =
         ref.watch(unassignedSessionPhotosProvider(task.id));
     final itemsWithEvidence = _checklist
@@ -1116,7 +1125,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '${(itemsWithEvidence / _checklist.length * 100).toInt()}%',
+                  '${_checklist.isEmpty ? 0 : (itemsWithEvidence / _checklist.length * 100).toInt()}%',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -1321,6 +1330,16 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                                   ),
                                 ),
                               ),
+                              Positioned(
+                                left: 3,
+                                bottom: 3,
+                                child: _UploadStatusBadge(
+                                  evidence: ev,
+                                  onRetry: () => ref
+                                      .read(evidenceUploaderProvider)
+                                      .upload(task.id, ev.id),
+                                ),
+                              ),
                               // Detach [X] Button
                               Positioned(
                                 top: 3,
@@ -1457,7 +1476,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                               style: TextStyle(
                                   fontSize: 11, fontWeight: FontWeight.bold),
                             ),
-                            onPressed: () => _capturePhotoForItem(task, item),
+                            onPressed: item.acceptsPhotos
+                                ? () => _capturePhotoForItem(task, item)
+                                : null,
                           ),
                         ),
                       ),
@@ -1549,6 +1570,48 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Where a photo is on its way to the server: uploading, verified, or failed
+/// (tap to retry).
+class _UploadStatusBadge extends StatelessWidget {
+  const _UploadStatusBadge({required this.evidence, required this.onRetry});
+
+  final TaskEvidence evidence;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (AppConfig.demoMode) return const SizedBox.shrink();
+    final (IconData icon, Color color, String tip) = switch (evidence.uploadStatus) {
+      EvidenceUploadStatus.ready || EvidenceUploadStatus.attached =>
+        (Icons.cloud_done, const Color(0xFF2E7D32), 'Uploaded'),
+      EvidenceUploadStatus.uploading || EvidenceUploadStatus.verifying =>
+        (Icons.cloud_upload_outlined, AppColors.primaryLavenderDark, 'Uploading'),
+      EvidenceUploadStatus.failed || EvidenceUploadStatus.rejected =>
+        (Icons.cloud_off, AppColors.statusBlockedText, evidence.uploadError ?? 'Upload failed. Tap to retry.'),
+      _ => (Icons.cloud_queue, AppColors.textSecondary, 'Waiting to upload'),
+    };
+    final failed = evidence.uploadStatus == EvidenceUploadStatus.failed ||
+        evidence.uploadStatus == EvidenceUploadStatus.rejected;
+    return Tooltip(
+      message: tip,
+      child: InkWell(
+        onTap: failed ? onRetry : null,
+        child: Container(
+          padding: const EdgeInsets.all(2),
+          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          child: evidence.isUploading
+              ? SizedBox(
+                  width: 13,
+                  height: 13,
+                  child: CircularProgressIndicator(strokeWidth: 1.6, color: color),
+                )
+              : Icon(icon, size: 13, color: color),
+        ),
+      ),
     );
   }
 }

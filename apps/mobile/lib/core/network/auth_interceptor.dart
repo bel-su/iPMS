@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
+import '../config/api_endpoints.dart';
 import '../config/env.dart';
 import '../security/token_storage.dart';
 
@@ -27,10 +28,7 @@ class AuthInterceptor extends QueuedInterceptor {
     RequestInterceptorHandler handler,
   ) async {
     // Avoid attaching expired token to login or refresh endpoints
-    final isAuthEndpoint = options.path.contains('/auth/login') ||
-        options.path.contains('/auth/refresh');
-
-    if (!isAuthEndpoint) {
+    if (!ApiEndpoints.isAuthEndpoint(options.path)) {
       final token = await tokenStorage.getAccessToken();
       if (token != null && token.isNotEmpty) {
         options.headers['Authorization'] = 'Bearer $token';
@@ -46,16 +44,13 @@ class AuthInterceptor extends QueuedInterceptor {
     ErrorInterceptorHandler handler,
   ) async {
     if (err.response?.statusCode == 401) {
-      final isAuthEndpoint = err.requestOptions.path.contains('/auth/login') ||
-          err.requestOptions.path.contains('/auth/refresh');
-
-      if (!isAuthEndpoint) {
+      if (!ApiEndpoints.isAuthEndpoint(err.requestOptions.path)) {
         final refreshToken = await tokenStorage.getRefreshToken();
         if (refreshToken != null && refreshToken.isNotEmpty) {
           try {
             // Attempt token refresh
             final response = await _refreshDio.post<Map<String, dynamic>>(
-              '/api/v1/auth/refresh',
+              ApiEndpoints.refresh,
               data: {'refreshToken': refreshToken},
             );
 

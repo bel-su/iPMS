@@ -14,7 +14,32 @@ class ChecklistItem {
     this.verdict = 'PENDING',
     this.evidenceList = const [],
     this.remarks,
+    this.maxPhotos,
+    this.allowsNa = true,
+    this.responseType = 'RESULT_ONLY',
+    this.severity,
+    this.sectionTitle,
   });
+
+  /// One item of a published template version, as `/qc/tasks/:id/checklist`
+  /// returns it. A template's `minPhotos` of 0 means photos are optional.
+  factory ChecklistItem.fromTemplate(Map<String, dynamic> json, {String? sectionTitle}) {
+    final minPhotos = (json['minPhotos'] as num?)?.toInt() ?? 0;
+    return ChecklistItem(
+      id: json['id'] as String? ?? '',
+      itemNumber: json['number'] as String? ?? '',
+      title: json['requirementText'] as String? ?? '',
+      guidanceText: json['guidanceText'] as String?,
+      isRequired: json['isRequired'] as bool? ?? true,
+      evidenceRequired: minPhotos > 0,
+      minPhotos: minPhotos,
+      maxPhotos: (json['maxPhotos'] as num?)?.toInt() ?? 0,
+      allowsNa: json['allowsNa'] as bool? ?? false,
+      responseType: json['responseType'] as String? ?? 'RESULT_ONLY',
+      severity: json['severity'] as String?,
+      sectionTitle: sectionTitle,
+    );
+  }
 
   final String id;
   final String itemNumber;
@@ -27,6 +52,16 @@ class ChecklistItem {
   final String verdict; // 'PENDING', 'PASS', 'FAIL', 'NA'
   final List<TaskEvidence> evidenceList;
   final String? remarks;
+
+  /// Most photos the server accepts for this item; null means no limit known
+  /// (demo checklists). Zero means the item takes no photos.
+  final int? maxPhotos;
+  final bool allowsNa;
+  final String responseType;
+  final String? severity;
+  final String? sectionTitle;
+
+  bool get acceptsPhotos => maxPhotos == null || maxPhotos! > 0;
 
   bool get hasEvidence => evidenceList.isNotEmpty;
 
@@ -58,6 +93,11 @@ class ChecklistItem {
       verdict: verdict ?? this.verdict,
       evidenceList: evidenceList ?? this.evidenceList,
       remarks: remarks ?? this.remarks,
+      maxPhotos: maxPhotos,
+      allowsNa: allowsNa,
+      responseType: responseType,
+      severity: severity,
+      sectionTitle: sectionTitle,
     );
   }
 
@@ -91,6 +131,57 @@ class ChecklistItem {
           .map((e) => TaskEvidence.fromJson(e as Map<String, dynamic>))
           .toList(),
       remarks: json['remarks'] as String?,
+    );
+  }
+}
+
+/// The checklist a work order is filled in against: the current published
+/// version of its template. [versionId] is what a submission must quote.
+class TaskChecklist {
+  const TaskChecklist({
+    required this.workOrderId,
+    required this.projectId,
+    required this.siteId,
+    required this.templateName,
+    required this.versionId,
+    required this.versionNumber,
+    required this.items,
+  });
+
+  final String workOrderId;
+  final String projectId;
+  final String siteId;
+  final String templateName;
+  final String versionId;
+  final int versionNumber;
+  final List<ChecklistItem> items;
+
+  factory TaskChecklist.fromJson(Map<String, dynamic> json) {
+    final task = json['task'] as Map<String, dynamic>? ?? const {};
+    final template = json['template'] as Map<String, dynamic>? ?? const {};
+    final version = json['version'] as Map<String, dynamic>? ?? const {};
+    int byOrder(dynamic a, dynamic b) =>
+        ((a as Map)['order'] as num? ?? 0).compareTo((b as Map)['order'] as num? ?? 0);
+    final sections = List<dynamic>.from(version['sections'] as List<dynamic>? ?? const [])
+      ..sort(byOrder);
+    final items = <ChecklistItem>[];
+    for (final raw in sections) {
+      final section = raw as Map<String, dynamic>;
+      final sectionItems = List<dynamic>.from(section['items'] as List<dynamic>? ?? const [])
+        ..sort(byOrder);
+      final sectionTitle = '${section['number'] ?? ''} ${section['title'] ?? ''}'.trim();
+      for (final item in sectionItems) {
+        items.add(ChecklistItem.fromTemplate(item as Map<String, dynamic>, sectionTitle: sectionTitle));
+      }
+    }
+    return TaskChecklist(
+      workOrderId: task['id'] as String? ?? '',
+      projectId: task['projectId'] as String? ?? '',
+      siteId: task['siteId'] as String? ?? '',
+      templateName: template['name'] as String? ?? '',
+      versionId: version['id'] as String? ?? '',
+      versionNumber: (version['version'] as num?)?.toInt() ?? 0,
+      items: items,
     );
   }
 }

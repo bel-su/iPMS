@@ -39,6 +39,10 @@ class BiometricAuthState {
     return 'Fingerprint';
   }
 
+  /// Platform-neutral name of the biometric method, for prose such as
+  /// "Fast face id access".
+  String get biometricName => hasFace ? 'Face ID' : 'Fingerprint';
+
   IconData get biometricIcon =>
       hasFace ? Icons.face_rounded : Icons.fingerprint_rounded;
 

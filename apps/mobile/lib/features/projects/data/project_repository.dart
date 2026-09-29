@@ -1,4 +1,8 @@
+import 'package:dio/dio.dart';
+import '../../../core/config/api_endpoints.dart';
+import '../../../core/config/env.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exceptions.dart';
 import '../domain/models/project_item.dart';
 
 class ProjectRepository {
@@ -6,60 +10,39 @@ class ProjectRepository {
 
   final ApiClient apiClient;
 
+  /// Projects the caller can see. The list endpoint returns counts but not
+  /// sites; [getProjectById] loads a project's (scoped) sites.
   Future<List<ProjectItem>> getProjects() async {
     try {
-      final response = await apiClient.dio.get<dynamic>('/api/v1/projects');
-      final data = response.data;
-      if (data is List && data.isNotEmpty) {
-        final apiProjects = data
-            .map((item) => ProjectItem.fromJson(item as Map<String, dynamic>))
-            .toList();
-
-        // If projects loaded from API lack embedded sites, enrich with realistic demo sites
-        return apiProjects.map((p) {
-          if (p.sites.isEmpty) {
-            final fallbackSites = getDemoSitesForProjectCode(p.code);
-            return p.copyWith(
-              sites: fallbackSites,
-              siteCount: fallbackSites.length,
-            );
-          }
-          return p;
-        }).toList();
-      }
-      return _getDemoProjects();
-    } catch (_) {
-      // In offline mode or when gateway has no seeded projects yet,
-      // return full domain-accurate dummy projects
-      return _getDemoProjects();
+      final response = await apiClient.dio.get<List<dynamic>>(ApiEndpoints.projects);
+      return (response.data ?? const [])
+          .map((item) => ProjectItem.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      if (AppConfig.demoMode) return _getDemoProjects();
+      throw ApiException.fromDio(e, fallbackMessage: 'Failed to load projects.');
     }
   }
 
   Future<ProjectItem> getProjectById(String id) async {
     try {
-      final response = await apiClient.dio.get<Map<String, dynamic>>('/api/v1/projects/$id');
+      final response =
+          await apiClient.dio.get<Map<String, dynamic>>(ApiEndpoints.project(id));
       final data = response.data;
-      if (data != null) {
-        final project = ProjectItem.fromJson(data);
-        if (project.sites.isEmpty) {
-          final fallbackSites = getDemoSitesForProjectCode(project.code);
-          return project.copyWith(
-            sites: fallbackSites,
-            siteCount: fallbackSites.length,
-          );
-        }
-        return project;
+      if (data == null) {
+        throw const ApiException(message: 'Project not found.');
       }
-    } catch (_) {}
-
-    final demoList = _getDemoProjects();
-    return demoList.firstWhere(
-      (p) => p.id == id,
-      orElse: () => demoList.first,
-    );
+      return ProjectItem.fromJson(data);
+    } on DioException catch (e) {
+      if (AppConfig.demoMode) {
+        final demoList = _getDemoProjects();
+        return demoList.firstWhere((p) => p.id == id, orElse: () => demoList.first);
+      }
+      throw ApiException.fromDio(e, fallbackMessage: 'Failed to load project.');
+    }
   }
 
-  /// Provides rich demo sites tailored to the project code or type
+  /// Demo mode only: sample sites tailored to the project code or type
   static List<ProjectSite> getDemoSitesForProjectCode(String projectCode) {
     final code = projectCode.toUpperCase();
     if (code.contains('FIBER') || code.contains('BACKBONE')) {

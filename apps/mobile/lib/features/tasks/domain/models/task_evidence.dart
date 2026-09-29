@@ -1,3 +1,23 @@
+/// Where a photo is in its trip to the media bucket.
+class EvidenceUploadStatus {
+  EvidenceUploadStatus._();
+
+  /// Only on the phone; not yet sent.
+  static const String local = 'LOCAL';
+  static const String uploading = 'UPLOADING';
+
+  /// Bytes are in the bucket; the server is checking the hash and type.
+  static const String verifying = 'VERIFYING';
+  static const String ready = 'READY';
+  static const String attached = 'ATTACHED';
+
+  /// The server refused the bytes; they must be sent again under a new id.
+  static const String rejected = 'REJECTED';
+
+  /// The last attempt did not finish (offline, server down); safe to retry.
+  static const String failed = 'FAILED';
+}
+
 /// Model representing tamper-evident photo evidence captured on-site.
 class TaskEvidence {
   const TaskEvidence({
@@ -16,7 +36,11 @@ class TaskEvidence {
     this.checklistItemTitle,
     this.isSubmitted = false,
     this.notes,
-  });
+    String? mediaId,
+    this.contentHash,
+    this.uploadStatus = EvidenceUploadStatus.local,
+    this.uploadError,
+  }) : mediaId = mediaId ?? id;
 
   final String id;
   final String taskId;
@@ -34,12 +58,38 @@ class TaskEvidence {
   final bool isSubmitted;
   final String? notes;
 
+  /// The id the media service knows this file by. Fixed at capture so every
+  /// retry names the same object; replaced only when the server rejected the
+  /// bytes and they must be registered again.
+  final String mediaId;
+
+  /// SHA-256 (hex) of the file, taken when it was first registered.
+  final String? contentHash;
+  final String uploadStatus;
+  final String? uploadError;
+
+  /// False when the phone had no GPS fix at capture ([accuracy] < 0); the
+  /// coordinates are then placeholders and are not sent to the server.
+  bool get hasLocationFix => accuracy >= 0;
+
+  bool get isUploaded =>
+      uploadStatus == EvidenceUploadStatus.ready || uploadStatus == EvidenceUploadStatus.attached;
+
+  bool get isUploading =>
+      uploadStatus == EvidenceUploadStatus.uploading || uploadStatus == EvidenceUploadStatus.verifying;
+
   TaskEvidence copyWith({
     String? filePath,
     String? checklistItemId,
     String? checklistItemTitle,
     bool? isSubmitted,
     String? notes,
+    String? mediaId,
+    String? contentHash,
+    String? uploadStatus,
+    String? uploadError,
+    bool clearUploadError = false,
+    bool clearContentHash = false,
   }) {
     return TaskEvidence(
       id: id,
@@ -57,6 +107,10 @@ class TaskEvidence {
       checklistItemTitle: checklistItemTitle ?? this.checklistItemTitle,
       isSubmitted: isSubmitted ?? this.isSubmitted,
       notes: notes ?? this.notes,
+      mediaId: mediaId ?? this.mediaId,
+      contentHash: clearContentHash ? null : (contentHash ?? this.contentHash),
+      uploadStatus: uploadStatus ?? this.uploadStatus,
+      uploadError: clearUploadError ? null : (uploadError ?? this.uploadError),
     );
   }
 
@@ -76,6 +130,10 @@ class TaskEvidence {
         'checklistItemTitle': checklistItemTitle,
         'isSubmitted': isSubmitted,
         'notes': notes,
+        'mediaId': mediaId,
+        'contentHash': contentHash,
+        'uploadStatus': uploadStatus,
+        'uploadError': uploadError,
       };
 
   factory TaskEvidence.fromJson(Map<String, dynamic> json) {
@@ -97,6 +155,10 @@ class TaskEvidence {
       checklistItemTitle: json['checklistItemTitle'] as String?,
       isSubmitted: json['isSubmitted'] as bool? ?? false,
       notes: json['notes'] as String?,
+      mediaId: json['mediaId'] as String?,
+      contentHash: json['contentHash'] as String?,
+      uploadStatus: json['uploadStatus'] as String? ?? EvidenceUploadStatus.local,
+      uploadError: json['uploadError'] as String?,
     );
   }
 }

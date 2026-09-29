@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
 
 /// Secure enclave storage service strictly holding authentication tokens.
 /// No entity or server-side domain data is ever stored here.
@@ -19,6 +20,7 @@ class TokenStorage {
   static const String _biometricUsernameKey = 'ipms_biometric_username';
   static const String _biometricRefreshTokenKey = 'ipms_biometric_refresh_token';
   static const String _biometricUserIdKey = 'ipms_biometric_user_id';
+  static const String _deviceIdKey = 'ipms_device_id';
 
   Future<void> saveTokens({
     required String accessToken,
@@ -44,6 +46,19 @@ class TokenStorage {
   Future<String?> getRefreshToken() => _storage.read(key: _refreshTokenKey);
 
   Future<String?> getUserId() => _storage.read(key: _userIdKey);
+
+  Future<void> saveUserId(String userId) =>
+      _storage.write(key: _userIdKey, value: userId);
+
+  /// A stable id for this installation, sent with every evidence upload so
+  /// the server can tell which phone a file came from. Survives sign-out.
+  Future<String> getOrCreateDeviceId() async {
+    final existing = await _storage.read(key: _deviceIdKey);
+    if (existing != null && existing.isNotEmpty) return existing;
+    final created = const Uuid().v4();
+    await _storage.write(key: _deviceIdKey, value: created);
+    return created;
+  }
 
   Future<String?> getBiometricRefreshToken() =>
       _storage.read(key: _biometricRefreshTokenKey);

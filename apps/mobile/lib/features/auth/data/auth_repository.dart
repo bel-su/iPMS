@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import '../../../core/config/api_endpoints.dart';
+import '../../../core/config/env.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exceptions.dart';
 import '../../../core/security/token_storage.dart';
@@ -19,7 +21,7 @@ class AuthRepository {
   }) async {
     try {
       final response = await apiClient.dio.post<Map<String, dynamic>>(
-        '/api/v1/auth/login',
+        ApiEndpoints.login,
         data: {
           'email': email.trim().toLowerCase(),
           'password': password,
@@ -31,142 +33,117 @@ class AuthRepository {
         throw const ApiException(message: 'Invalid response from authentication service.');
       }
 
-      final accessToken = data['accessToken'] as String;
-      final refreshToken = data['refreshToken'] as String? ?? '';
-      final userId = data['userId'] as String? ?? data['user']?['id'] as String?;
-
       await tokenStorage.saveTokens(
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-        userId: userId,
+        accessToken: data['accessToken'] as String,
+        refreshToken: data['refreshToken'] as String? ?? '',
       );
 
-      // Fetch user profile
       return await getCurrentUser(username: email.trim());
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
         throw const ApiException(message: 'Incorrect email or password.');
       }
-      final isConnectionIssue = e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.receiveTimeout ||
-          e.response == null;
-
-      if (isConnectionIssue) {
+      if (AppConfig.demoMode && ApiException.isConnectionIssue(e)) {
         return _fallbackLogin(email.trim());
       }
-
-      throw ApiException(
-        message: e.response?.data?['message']?.toString() ??
-            'Failed to connect to authentication service.',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, fallbackMessage: 'Failed to connect to authentication service.');
     }
   }
 
+  /// The signed-in user: identity and permissions from `/auth/me`, merged
+  /// with the profile (name, email, employee code) from `/users/me`.
   Future<AuthUser> getCurrentUser({String? username}) async {
     try {
-      final response = await apiClient.dio.get<Map<String, dynamic>>(
-        '/api/v1/auth/me',
-      );
-
-      final data = response.data;
-      if (data == null) {
+      final meResponse = await apiClient.dio.get<Map<String, dynamic>>(ApiEndpoints.authMe);
+      final me = meResponse.data;
+      if (me == null) {
         throw const ApiException(message: 'User profile not found.');
       }
-
-      final user = AuthUser.fromJson(data);
-      if (user.username.isEmpty && username != null) {
-        return AuthUser(
-          id: user.id,
-          username: username,
-          email: user.email.isNotEmpty
-              ? user.email
-              : (username.contains('@') ? username : '$username@ipms.local'),
-          displayName: user.displayName?.isNotEmpty == true ? user.displayName : username,
-          role: user.role,
-        );
+      final identity = AuthUser.fromJson(me);
+      if (identity.id.isNotEmpty) {
+        await tokenStorage.saveUserId(identity.id);
       }
-      return user;
-    } on DioException catch (e) {
-      final isConnectionIssue = e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.receiveTimeout ||
-          e.response == null;
 
-      if (isConnectionIssue) {
+      AuthUser? profile;
+      try {
+        final profileResponse =
+            await apiClient.dio.get<Map<String, dynamic>>(ApiEndpoints.usersMe);
+        if (profileResponse.data != null) {
+          profile = AuthUser.fromJson(profileResponse.data!);
+        }
+      } on DioException catch (e) {
+        // The profile only adds display details; identity and permissions are
+        // what the app needs to work, so a failure here is not fatal.
+        if (e.response?.statusCode == 401) rethrow;
+      }
+
+      final email = profile?.email.isNotEmpty == true
+          ? profile!.email
+          : (username != null && username.contains('@') ? username : '');
+      return AuthUser(
+        id: identity.id,
+        email: email,
+        displayName: profile?.displayName ?? username,
+        role: identity.role ?? profile?.role,
+        employeeCode: profile?.employeeCode,
+        permissions: identity.permissions,
+        username: email.isEmpty ? username : null,
+      );
+    } on DioException catch (e) {
+      if (AppConfig.demoMode && ApiException.isConnectionIssue(e)) {
         return _fallbackLogin(username ?? 'engineer');
       }
-
-      throw ApiException(
-        message: e.response?.data?['message']?.toString() ?? 'Failed to load user profile.',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, fallbackMessage: 'Failed to load user profile.');
     }
   }
 
   /// Authenticates using device hardware biometrics (Face ID / Touch ID / Fingerprint).
-  /// Restores access via existing token, refreshed session, or verified offline credentials.
+  /// Restores access via the existing access token or the refresh token that
+  /// was kept for biometric sign-in. The biometric check itself only unlocks
+  /// that stored session; it never stands in for the server.
   Future<AuthUser> loginWithBiometrics({required String username}) async {
     final cleanUsername = username.trim().isEmpty ? 'engineer' : username.trim();
 
-    try {
-      // 1. Try to restore using active access token if available
-      final accessToken = await tokenStorage.getAccessToken();
-      if (accessToken != null && accessToken.isNotEmpty) {
-        try {
-          final response = await apiClient.dio.get<Map<String, dynamic>>(
-            '/api/v1/auth/me',
-          );
-          final data = response.data;
-          if (data != null) {
-            final user = AuthUser.fromJson(data);
-            return user.username.isNotEmpty
-                ? user
-                : user.copyWith(username: cleanUsername);
-          }
-        } catch (_) {
-          // Access token expired, proceed to refresh
-        }
+    // 1. Try to restore using active access token if available
+    final accessToken = await tokenStorage.getAccessToken();
+    if (accessToken != null && accessToken.isNotEmpty) {
+      try {
+        return await getCurrentUser(username: cleanUsername);
+      } catch (_) {
+        // Access token expired, proceed to refresh
       }
-
-      // 2. Try refresh token (either active or biometric-persisted)
-      final refreshToken = await tokenStorage.getRefreshToken() ??
-          await tokenStorage.getBiometricRefreshToken();
-
-      if (refreshToken != null && refreshToken.isNotEmpty) {
-        try {
-          final response = await apiClient.dio.post<Map<String, dynamic>>(
-            '/api/v1/auth/refresh',
-            data: {'refreshToken': refreshToken},
-          );
-          final data = response.data;
-          if (data != null && data['accessToken'] != null) {
-            final newAccess = data['accessToken'] as String;
-            final newRefresh =
-                (data['refreshToken'] as String?) ?? refreshToken;
-            final userId =
-                data['userId'] as String? ?? data['user']?['id'] as String?;
-
-            await tokenStorage.saveTokens(
-              accessToken: newAccess,
-              refreshToken: newRefresh,
-              userId: userId,
-            );
-
-            return await getCurrentUser(username: cleanUsername);
-          }
-        } catch (_) {
-          // Refresh token failed on server
-        }
-      }
-
-      // 3. User authenticated via native Apple Face ID / Secure Enclave hardware:
-      // Guarantee seamless sign-in via fallback login so the user is never stuck
-      return await _fallbackLogin(cleanUsername);
-    } catch (_) {
-      return await _fallbackLogin(cleanUsername);
     }
+
+    // 2. Try refresh token (either active or biometric-persisted)
+    final refreshToken = await tokenStorage.getRefreshToken() ??
+        await tokenStorage.getBiometricRefreshToken();
+
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      try {
+        final response = await apiClient.dio.post<Map<String, dynamic>>(
+          ApiEndpoints.refresh,
+          data: {'refreshToken': refreshToken},
+        );
+        final data = response.data;
+        if (data != null && data['accessToken'] != null) {
+          await tokenStorage.saveTokens(
+            accessToken: data['accessToken'] as String,
+            refreshToken: (data['refreshToken'] as String?) ?? refreshToken,
+          );
+          return await getCurrentUser(username: cleanUsername);
+        }
+      } on DioException catch (e) {
+        if (AppConfig.demoMode && ApiException.isConnectionIssue(e)) {
+          return _fallbackLogin(cleanUsername);
+        }
+        if (ApiException.isConnectionIssue(e)) throw const NetworkException();
+      }
+    }
+
+    if (AppConfig.demoMode) return _fallbackLogin(cleanUsername);
+    throw const ApiException(
+      message: 'Your saved session has expired. Please sign in with your password.',
+    );
   }
 
   Future<AuthUser> updateProfile({
@@ -190,25 +167,20 @@ class AuthRepository {
         payload['phone'] = phone.trim().isEmpty ? null : phone.trim();
       }
 
-      final response = await apiClient.dio.patch<Map<String, dynamic>>(
-        '/api/v1/users/me',
+      await apiClient.dio.patch<Map<String, dynamic>>(
+        ApiEndpoints.usersMe,
         data: payload,
       );
 
-      final data = response.data;
-      if (data == null) {
-        throw const ApiException(message: 'Failed to update user profile.');
-      }
-
-      return AuthUser.fromJson(data);
+      // Re-read rather than use the PATCH body: it carries the profile but
+      // not the permissions the rest of the app depends on.
+      return await getCurrentUser();
     } on DioException catch (e) {
-      throw ApiException(
-        message: e.response?.data?['message']?.toString() ?? 'Failed to update user profile.',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, fallbackMessage: 'Failed to update user profile.');
     }
   }
 
+  /// Offline demo sign-in, only reachable with `DEMO_MODE=true`.
   Future<AuthUser> _fallbackLogin(String input) async {
     final clean = input.trim();
     final lower = clean.toLowerCase();
@@ -254,7 +226,7 @@ class AuthRepository {
 
   Future<void> logout() async {
     try {
-      await apiClient.dio.post<void>('/api/v1/auth/logout');
+      await apiClient.dio.post<void>(ApiEndpoints.logout);
     } catch (_) {
       // Best-effort server notification
     } finally {
