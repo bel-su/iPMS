@@ -4,8 +4,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../map/presentation/site_map_screen.dart';
 import '../../tasks/presentation/site_tasks_screen.dart';
-import '../data/project_repository.dart';
 import '../domain/models/project_item.dart';
+import '../providers/project_providers.dart';
 
 class ProjectSitesScreen extends ConsumerWidget {
   const ProjectSitesScreen({
@@ -17,9 +17,8 @@ class ProjectSitesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sites = project.sites.isNotEmpty
-        ? project.sites
-        : ProjectRepository.getDemoSitesForProjectCode(project.code);
+    final detailAsync = ref.watch(projectDetailProvider(project.id));
+    final sites = detailAsync.value?.sites ?? project.sites;
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
@@ -126,7 +125,7 @@ class ProjectSitesScreen extends ConsumerWidget {
                             style: AppTypography.caption.copyWith(fontWeight: FontWeight.bold),
                           ),
                           Text(
-                            '${project.taskCount > 0 ? project.taskCount : sites.length * 3} Total Tasks',
+                            '${project.taskCount} Total Tasks',
                             style: AppTypography.caption,
                           ),
                         ],
@@ -149,7 +148,33 @@ class ProjectSitesScreen extends ConsumerWidget {
             ),
 
             // Sites List
-            if (sites.isEmpty)
+            if (sites.isEmpty && detailAsync.isLoading)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (sites.isEmpty && detailAsync.hasError)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textSecondary),
+                      const SizedBox(height: 12),
+                      Text('Could not load sites', style: AppTypography.titleMedium),
+                      const SizedBox(height: 4),
+                      Text('${detailAsync.error}', style: AppTypography.bodySmall, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () => ref.invalidate(projectDetailProvider(project.id)),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (sites.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(

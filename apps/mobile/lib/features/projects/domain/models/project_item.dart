@@ -74,9 +74,21 @@ class ProjectItem {
       targetDate: json['targetDate'] != null ? DateTime.tryParse(json['targetDate'].toString()) : null,
       siteCount: (count?['sites'] as num?)?.toInt() ?? rawSites.length,
       taskCount: (count?['tasks'] as num?)?.toInt() ?? 0,
-      sites: rawSites.map((s) => ProjectSite.fromJson(s as Map<String, dynamic>)).toList(),
+      sites: rawSites
+          .map((s) => ProjectSite.fromJson(
+                s as Map<String, dynamic>,
+                defaultGeofenceRadiusM: (json['defaultGeofenceRadiusM'] as num?)?.toInt(),
+              ))
+          .toList(),
     );
   }
+}
+
+/// Coordinates are Postgres decimals, which the API serialises as strings.
+double? _toDouble(dynamic value) {
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value.toString());
 }
 
 /// Site belonging to a project.
@@ -103,14 +115,16 @@ class ProjectSite {
   final String? city;
   final String status;
 
-  factory ProjectSite.fromJson(Map<String, dynamic> json) {
+  /// A site whose geofence mode is INHERIT has no radius of its own and uses
+  /// the project's [defaultGeofenceRadiusM].
+  factory ProjectSite.fromJson(Map<String, dynamic> json, {int? defaultGeofenceRadiusM}) {
     return ProjectSite(
       id: json['id'] as String? ?? '',
       siteCode: json['siteCode'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
-      longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
-      geofenceRadiusM: (json['geofenceRadiusM'] as num?)?.toInt(),
+      latitude: _toDouble(json['latitude']),
+      longitude: _toDouble(json['longitude']),
+      geofenceRadiusM: (json['geofenceRadiusM'] as num?)?.toInt() ?? defaultGeofenceRadiusM,
       address: json['address'] as String?,
       city: json['city'] as String?,
       status: json['status'] as String? ?? 'ACTIVE',

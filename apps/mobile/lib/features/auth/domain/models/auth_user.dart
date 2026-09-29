@@ -7,6 +7,7 @@ class AuthUser {
     this.displayName,
     this.role,
     this.employeeCode,
+    this.permissions = const [],
     String? username,
   }) : _username = username;
 
@@ -15,7 +16,12 @@ class AuthUser {
   final String? displayName;
   final String? role;
   final String? employeeCode;
+
+  /// Effective permission codes from `/auth/me`, e.g. `qc_evidence.upload`.
+  final List<String> permissions;
   final String? _username;
+
+  bool can(String permission) => permissions.contains(permission);
 
   String get username {
     if (_username != null && _username.isNotEmpty) {
@@ -33,11 +39,22 @@ class AuthUser {
       id: json['id'] as String? ?? json['sub'] as String? ?? '',
       email: email,
       displayName: json['displayName'] as String? ?? json['fullName'] as String? ?? json['username'] as String?,
-      role: json['role'] as String? ??
-          ((json['roles'] as List<dynamic>?)?.firstOrNull?.toString()),
+      role: json['role'] as String? ?? _firstRoleCode(json['roles']),
       employeeCode: json['employeeCode'] as String?,
+      permissions: (json['permissions'] as List<dynamic>?)
+              ?.map((p) => p.toString())
+              .toList() ??
+          const [],
       username: json['username'] as String?,
     );
+  }
+
+  /// `/auth/me` lists role codes as strings; `/users/me` lists `{code, name}`.
+  static String? _firstRoleCode(dynamic roles) {
+    if (roles is! List || roles.isEmpty) return null;
+    final first = roles.first;
+    if (first is Map) return first['code']?.toString();
+    return first?.toString();
   }
 
   AuthUser copyWith({
@@ -46,6 +63,7 @@ class AuthUser {
     String? displayName,
     String? role,
     String? employeeCode,
+    List<String>? permissions,
     String? username,
   }) {
     return AuthUser(
@@ -54,6 +72,7 @@ class AuthUser {
       displayName: displayName ?? this.displayName,
       role: role ?? this.role,
       employeeCode: employeeCode ?? this.employeeCode,
+      permissions: permissions ?? this.permissions,
       username: username ?? _username,
     );
   }
@@ -64,6 +83,7 @@ class AuthUser {
         'displayName': displayName,
         'role': role,
         'employeeCode': employeeCode,
+        'permissions': permissions,
         'username': username,
       };
 }

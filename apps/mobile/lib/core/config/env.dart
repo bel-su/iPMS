@@ -28,4 +28,14 @@ class AppConfig {
 
   static const Duration connectTimeout = Duration(seconds: 10);
   static const Duration receiveTimeout = Duration(seconds: 15);
+
+  /// Presigned uploads go straight to the bucket and can be several MB over a
+  /// field connection, so they get a longer window than API calls.
+  static const Duration uploadTimeout = Duration(minutes: 2);
+
+  /// Offline demo data (sample projects, work orders and checklists, and a
+  /// sign-in that works without a server). Off by default so a real gateway
+  /// failure is shown rather than hidden behind sample data.
+  /// Enable with `--dart-define=DEMO_MODE=true`.
+  static const bool demoMode = bool.fromEnvironment('DEMO_MODE');
 }

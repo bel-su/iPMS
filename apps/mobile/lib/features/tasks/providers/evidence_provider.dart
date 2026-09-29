@@ -16,6 +16,27 @@ class TaskEvidenceNotifier extends Notifier<Map<String, List<TaskEvidence>>> {
     };
   }
 
+  TaskEvidence? find(String taskId, String evidenceId) {
+    for (final e in state[taskId] ?? const <TaskEvidence>[]) {
+      if (e.id == evidenceId) return e;
+    }
+    return null;
+  }
+
+  /// Replaces one evidence record with [change] applied to it.
+  void updateEvidence(
+    String taskId,
+    String evidenceId,
+    TaskEvidence Function(TaskEvidence current) change,
+  ) {
+    final list = state[taskId];
+    if (list == null) return;
+    state = {
+      ...state,
+      taskId: [for (final e in list) e.id == evidenceId ? change(e) : e],
+    };
+  }
+
   /// Assigns a session photo to a specific checklist item
   void assignToItem({
     required String taskId,

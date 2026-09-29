@@ -13,6 +13,13 @@ final projectListProvider = FutureProvider<List<ProjectItem>>((ref) async {
   return await repo.getProjects();
 });
 
+/// A project with its sites, which the list endpoint does not include.
+final projectDetailProvider =
+    FutureProvider.family<ProjectItem, String>((ref, projectId) async {
+  final repo = ref.watch(projectRepositoryProvider);
+  return repo.getProjectById(projectId);
+});
+
 class SelectedProjectNotifier extends Notifier<ProjectItem?> {
   @override
   ProjectItem? build() => null;

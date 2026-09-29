@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 import '../../features/tasks/domain/models/task_evidence.dart';
 import 'watermark_service.dart';
 
@@ -47,10 +48,12 @@ class CameraService {
       return null;
     }
 
-    // 2. Fetch live GPS coordinates with fallback
-    double latitude = 27.7172;
-    double longitude = 85.3240;
-    double accuracy = 5.0;
+    // 2. Fetch live GPS coordinates. Without a fix the coordinates stay
+    // placeholders and accuracy stays negative, so neither the watermark nor
+    // the upload claims a location the phone never had.
+    double latitude = 0;
+    double longitude = 0;
+    double accuracy = -1;
 
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -119,8 +122,10 @@ class CameraService {
     } catch (_) {}
 
     // 6. Build evidence record
+    // UUIDv7: time-ordered, and the id the media service stores the file
+    // under, so every upload retry names the same object.
     final evidence = TaskEvidence(
-      id: 'ev-${now.millisecondsSinceEpoch}',
+      id: const Uuid().v7(),
       taskId: taskId,
       filePath: watermarkedFile.path,
       siteCode: siteCode,

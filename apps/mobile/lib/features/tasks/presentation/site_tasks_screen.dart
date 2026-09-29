@@ -18,9 +18,12 @@ class SiteTasksScreen extends ConsumerWidget {
   final ProjectItem project;
   final ProjectSite site;
 
+  ({String projectId, String siteId, String siteCode}) get _siteKey =>
+      (projectId: project.id, siteId: site.id, siteCode: site.siteCode);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tasksAsync = ref.watch(siteTasksProvider(site.siteCode));
+    final tasksAsync = ref.watch(siteTasksProvider(_siteKey));
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
@@ -66,7 +69,7 @@ class SiteTasksScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20),
             tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(siteTasksProvider(site.siteCode)),
+            onPressed: () => ref.invalidate(siteTasksProvider(_siteKey)),
           ),
         ],
       ),
@@ -254,7 +257,7 @@ class SiteTasksScreen extends ConsumerWidget {
                       TextButton.icon(
                         icon: const Icon(Icons.refresh_rounded, size: 16),
                         label: const Text('Retry'),
-                        onPressed: () => ref.invalidate(siteTasksProvider(site.siteCode)),
+                        onPressed: () => ref.invalidate(siteTasksProvider(_siteKey)),
                       ),
                     ],
                   ),

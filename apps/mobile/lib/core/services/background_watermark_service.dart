@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 import '../../features/tasks/domain/models/task_evidence.dart';
 import 'watermark_service.dart';
 
@@ -65,7 +65,7 @@ class BackgroundWatermarkService {
         }
 
         final evidence = TaskEvidence(
-          id: 'ev-${job.queuedAt.millisecondsSinceEpoch}',
+          id: const Uuid().v7(),
           taskId: job.taskId,
           filePath: watermarkedFile.path,
           siteCode: job.metadata.siteCode,
