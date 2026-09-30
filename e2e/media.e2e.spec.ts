@@ -72,6 +72,7 @@ describe('media', () => {
 
       // Internal routes stay off the edge.
       expect((await api('/api/v1/media/internal/attach', { method: 'POST', token: admin, body: {} })).status).toBe(404);
+      expect((await api('/api/v1/media/internal/check', { method: 'POST', token: admin, body: {} })).status).toBe(404);
 
       // Leave nothing behind in storage.
       expect((await api(`/api/v1/media/${id}`, { method: 'DELETE', token: engineer })).status).toBe(200);

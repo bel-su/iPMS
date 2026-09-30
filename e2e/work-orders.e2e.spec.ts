@@ -8,7 +8,6 @@ async function login(user: string): Promise<string> {
 }
 
 /** A syntactically valid v7 id for media the suite never uploads. */
-const mediaId = () => `0192f7a0-${Math.random().toString(16).slice(2, 6)}-7000-8000-${Date.now().toString(16).padStart(12, '0').slice(-12)}`;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let admin: string;
@@ -33,7 +32,7 @@ describe('work orders', () => {
     const stamp = Date.now();
     const created = await api<{ templateId: string }>('/api/v1/qc/templates', { method: 'POST', token: qc, body: { code: `WO-${stamp}`, name: 'E2E antenna', category: 'QUALITY' } });
     const templateId = created.body.templateId;
-    const document = { sections: [{ number: '1', title: 'EHS', items: [{ number: '1.1', requirementText: 'PPE worn', minPhotos: 1, maxPhotos: 2 }] }] };
+    const document = { sections: [{ number: '1', title: 'EHS', items: [{ number: '1.1', requirementText: 'PPE worn', minPhotos: 0, maxPhotos: 0 }] }] };
     await api(`/api/v1/qc/templates/${templateId}/draft`, { method: 'PUT', token: qc, body: { revision: 1, document } });
     expect((await api(`/api/v1/qc/templates/${templateId}/publish`, { method: 'POST', token: qc })).status).toBe(201);
 
@@ -65,7 +64,7 @@ describe('work orders', () => {
         method: 'POST', token: engineer,
         body: {
           taskId: id, siteId: antennaSite, projectId: antenna, templateVersionId: checklist.body.version.id, idempotencyKey: `e2e-${Math.random()}`,
-          responses: [{ itemId: checklist.body.version.sections[0]!.items[0]!.id, selfCheckResult: 'PASS', photoMediaIds: [mediaId()] }],
+          responses: [{ itemId: checklist.body.version.sections[0]!.items[0]!.id, selfCheckResult: 'PASS' }],
         },
       });
       const review = (submissionId: string, decision: string, result: string) => api(`/api/v1/qc/submissions/${submissionId}/review`, {
