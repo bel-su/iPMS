@@ -36,4 +36,51 @@ describe('MediaClient', () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
     await expect(client.attach({ ...body, submissionId: 'x' }, 'Bearer t')).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
+
+  const attachBody = { ...body, submissionId: 'x' };
+
+  it('turns 401 into Forbidden', async () => {
+    respond(401);
+    await expect(client.check(body, 'Bearer t')).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('check: a 200 whose body is not JSON is a 503', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('<html>oops', { status: 200 }));
+    await expect(client.check(body, 'Bearer t')).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('check: a 200 whose JSON is not an array is a 503', async () => {
+    respond(200, { error: 'nope' });
+    await expect(client.check(body, 'Bearer t')).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('check: a 409 (never expected from a read-only call) is a 503', async () => {
+    respond(409);
+    await expect(client.check(body, 'Bearer t')).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('attach: 500 is a 503 and 403 is Forbidden', async () => {
+    respond(500);
+    await expect(client.attach(attachBody, 'Bearer t')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    vi.restoreAllMocks();
+    respond(403);
+    await expect(client.attach(attachBody, 'Bearer t')).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('a timeout while waiting for headers is a 503', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new DOMException('The operation was aborted.', 'TimeoutError'));
+    await expect(client.check(body, 'Bearer t')).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('a body that stalls past the timeout is a 503', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      const stalled = new ReadableStream({
+        start(controller) {
+          init!.signal!.addEventListener('abort', () => controller.error(init!.signal!.reason));
+        },
+      });
+      return new Response(stalled, { status: 200 });
+    });
+    await expect(new MediaClient('http://media:3006', 20).check(body, 'Bearer t')).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
 });

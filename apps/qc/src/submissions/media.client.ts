@@ -12,8 +12,16 @@ export class MediaClient {
   constructor(private readonly baseUrl: string, private readonly timeoutMs = 5000) {}
 
   async check(body: MediaCheckRequestDto, bearer: string): Promise<MediaCheckResult[]> {
-    const response = await this.post('/api/v1/media/internal/check', body, bearer);
-    return (await response.json()) as MediaCheckResult[];
+    try {
+      const response = await this.post('/api/v1/media/internal/check', body, bearer);
+      // Still under the request timeout: a body that stalls or is not JSON lands in the catch.
+      const results: unknown = await response.json();
+      if (!Array.isArray(results)) throw unavailable();
+      return results as MediaCheckResult[];
+    } catch (err) {
+      // check is read-only, so a 409 is as unexpected as any other odd reply.
+      throw err instanceof ForbiddenException || err instanceof ServiceUnavailableException ? err : unavailable();
+    }
   }
 
   /** `refused`: some file changed since the check. */
