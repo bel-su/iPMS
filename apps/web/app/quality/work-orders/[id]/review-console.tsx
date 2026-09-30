@@ -3,6 +3,8 @@
 import { useActionState, useState } from 'react';
 import type { ReviewResult, SubmissionDetail } from '../../../lib/qc-api';
 import { reviewSubmissionAction } from '../actions';
+import { Evidence } from './evidence';
+import type { EvidenceFile } from './evidence-model';
 
 interface ReviewConsoleProps {
   submission: SubmissionDetail;
@@ -10,6 +12,8 @@ interface ReviewConsoleProps {
   workOrderId: string;
   canApprove: boolean;
   canReject: boolean;
+  /** Files per response id. */
+  evidence: Map<string, EvidenceFile[]>;
 }
 
 interface ItemReviewState {
@@ -23,6 +27,7 @@ export function ReviewConsole({
   workOrderId,
   canApprove,
   canReject,
+  evidence,
 }: ReviewConsoleProps) {
   const [state, formAction, isPending] = useActionState(reviewSubmissionAction, {});
 
@@ -95,7 +100,9 @@ export function ReviewConsole({
         <div className="review-items-list">
           {submission.responses.map((response: SubmissionDetail['responses'][number]) => {
             const current = reviews[response.itemId]?.result ?? 'APPROVED';
-            const photos = response.photos ?? [];
+            const files = evidence.get(response.id) ?? [];
+            const photoCount = files.filter((f) => f.kind === 'PHOTO').length;
+            const videoCount = files.length - photoCount;
             return (
               <div key={response.id} className={`review-item-card ${current.toLowerCase()}`}>
                 <div className="review-item-header">
@@ -109,10 +116,11 @@ export function ReviewConsole({
                       {response.textValue ? (
                         <span className="badge slate">Value: {response.textValue}</span>
                       ) : null}
-                      <span className={`badge ${photos.length >= (response.item.minPhotos ?? 1) ? 'green' : 'amber'}`}>
-                        📷 {photos.length} Photo(s) Attached
+                      <span className={`badge ${photoCount >= (response.item.minPhotos ?? 1) && videoCount >= (response.item.minVideos ?? 0) ? 'green' : 'amber'}`}>
+                        📷 {photoCount} Photo(s){videoCount > 0 ? ` · ${videoCount} Video(s)` : ''} Attached
                       </span>
                     </div>
+                    <Evidence files={files} />
                   </div>
                 </div>
 
