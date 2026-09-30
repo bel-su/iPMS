@@ -36,6 +36,23 @@ function assertSubmittable(order: Submittable, draft: DraftHolder | null, actorI
   if (draft && draft.deviceId !== deviceId) throw draftHeldElsewhere(draft);
 }
 
+/** A live submission of the task blocks another one, unless it is this very request, retried. */
+const pendingOf = (taskId: string) => ({
+  where: { taskId, status: { in: ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED'] as ('SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED')[] } },
+  select: { id: true, idempotencyKey: true, status: true },
+});
+
+/** Thrown when the live submission turns out to be this request's own: the caller answers with it. */
+class AlreadySubmitted {
+  constructor(readonly id: string) {}
+}
+
+function assertNoneLive(pending: { id: string; idempotencyKey: string; status: string } | null, idempotencyKey: string): void {
+  if (!pending) return;
+  if (pending.idempotencyKey === idempotencyKey) throw new AlreadySubmitted(pending.id);
+  throw new ConflictException(pending.status === 'APPROVED' ? 'This task has already been approved' : 'This task already has a submission awaiting review');
+}
+
 const DRAFT_HOLDER = { deviceId: true, deviceLabel: true, updatedAt: true } as const;
 const evidenceUncheckable = () => new ServiceUnavailableException('Evidence could not be checked right now. Try again shortly.');
 
@@ -69,6 +86,15 @@ export class SubmissionService {
    * the project service so the geofence lookup stays permission-checked.
    */
   async createSubmission(dto: CreateSubmissionDto, actorId: string, bearer: string) {
+    try {
+      return await this.submit(dto, actorId, bearer);
+    } catch (err) {
+      if (err instanceof AlreadySubmitted) return this.load(err.id);
+      throw err;
+    }
+  }
+
+  private async submit(dto: CreateSubmissionDto, actorId: string, bearer: string) {
     const duplicate = await this.prisma.submission.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
     if (duplicate) return this.load(duplicate.id);
     // The work order is what a submission moves, so it decides who may submit:
@@ -86,10 +112,7 @@ export class SubmissionService {
     const acceptance = acceptVersion(version, version.template, new Date(), this.graceDays);
     if (!acceptance.ok) throw REFUSAL[acceptance.reason]();
     if (task.templateId !== version.templateId) throw new BadRequestException('This is not the checklist assigned to this task');
-    const pending = await this.prisma.submission.findFirst({
-      where: { taskId: dto.taskId, status: { in: ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED'] } }, select: { status: true },
-    });
-    if (pending) throw new ConflictException(pending.status === 'APPROVED' ? 'This task has already been approved' : 'This task already has a submission awaiting review');
+    assertNoneLive(await this.prisma.submission.findFirst(pendingOf(dto.taskId)), dto.idempotencyKey);
 
     const items = version.sections.flatMap((section) => section.items);
     const responses = new Map(dto.responses.map((response) => [response.itemId, response]));
@@ -136,7 +159,6 @@ export class SubmissionService {
     // If the write below fails, the files stay attached to `submissionId`, which is never stored.
     // A retry still passes attach: files attached to this work order are reusable by its next submission.
 
-    const last = await this.prisma.submission.aggregate({ where: { taskId: dto.taskId }, _max: { attemptNo: true } });
     const integrityHash = createHash('sha256').update(JSON.stringify(dto.responses.map((r) => ({ itemId: r.itemId, result: r.selfCheckResult, media: r.mediaIds.map((id) => `${kinds.get(id)}:${id}`).sort() })).sort((a, b) => a.itemId.localeCompare(b.itemId)))).digest('hex');
     // Never throws: an unreachable project service records UNVERIFIED rather
     // than failing a submission that represents work already done in the field.
@@ -148,6 +170,9 @@ export class SubmissionService {
         const locked = await tx.workOrder.findUnique({ where: { id: task.id }, select: { assigneeId: true, status: true } });
         if (!locked) throw new NotFoundException('Work order not found');
         assertSubmittable(locked, await tx.workOrderDraft.findUnique({ where: { workOrderId: task.id }, select: DRAFT_HOLDER }), actorId, dto.deviceId);
+        // Another submission may have committed while media was being called.
+        assertNoneLive(await tx.submission.findFirst(pendingOf(dto.taskId)), dto.idempotencyKey);
+        const last = await tx.submission.aggregate({ where: { taskId: dto.taskId }, _max: { attemptNo: true } });
         const submission = await tx.submission.create({ data: { id: submissionId, taskId: dto.taskId, siteId: dto.siteId, projectId: dto.projectId, templateId: version.templateId, templateVersionId: version.id, templateVersion: version.version, attemptNo: (last._max.attemptNo ?? 0) + 1, status: 'SUBMITTED', submittedBy: actorId, submittedAt: new Date(), integrityHash, idempotencyKey: dto.idempotencyKey, deviceId: dto.deviceId ?? null, latitude: dto.latitude ?? null, longitude: dto.longitude ?? null, distanceFromSiteM: outcome.distanceFromSiteM, geofenceStatus: outcome.geofenceStatus } });
         for (const response of dto.responses) {
           const itemResponse = await tx.itemResponse.create({ data: { id: uuidv7(), submissionId: submission.id, itemId: response.itemId, selfCheckResult: response.selfCheckResult, selfCheckDescription: response.selfCheckDescription ?? null, textValue: response.textValue ?? null, numberValue: response.numberValue ?? null, booleanValue: response.booleanValue ?? null, selectValue: response.selectValue ?? null } });

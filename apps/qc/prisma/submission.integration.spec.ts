@@ -184,6 +184,16 @@ describe('createSubmission with evidence', () => {
     expect(await prisma.submission.count({ where: { taskId: task.id } })).toBe(0);
   });
 
+  it('refuses a submit when another submission of the work order commits while its evidence is being attached', async () => {
+    const { versionId, itemId, templateId } = await seedPhotoItem();
+    const task = await assignTask(templateId, { status: 'ONGOING' });
+    let other: { id: string } | undefined;
+    duringAttach = async () => { duringAttach = null; other = await withMedia(task, versionId, itemId, [uuidv7()]); };
+    await expect(withMedia(task, versionId, itemId, [uuidv7()])).rejects.toMatchObject({ status: 409, message: 'This task already has a submission awaiting review' });
+    const stored = await prisma.submission.findMany({ where: { taskId: task.id } });
+    expect(stored.map((s) => s.id)).toEqual([other!.id]);
+  });
+
   it('accepts a retry after a failure between attach and the write', async () => {
     const { versionId, itemId, templateId } = await seedPhotoItem();
     const task = await assignTask(templateId, { status: 'ONGOING' });
