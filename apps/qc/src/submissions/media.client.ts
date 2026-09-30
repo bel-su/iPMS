@@ -48,6 +48,8 @@ export class MediaClient {
       throw unavailable();
     }
     if (response.ok) return response;
+    // Release the connection: an unread error body keeps its socket out of the pool.
+    await response.body?.cancel().catch(() => {});
     if (response.status === 409) throw new Refused();
     if (response.status === 401 || response.status === 403) throw new ForbiddenException('You cannot submit evidence for this work order');
     throw unavailable();

@@ -39,6 +39,17 @@ describe('MediaClient', () => {
 
   const attachBody = { ...body, submissionId: 'x' };
 
+  it('releases the body of an error reply', async () => {
+    for (const status of [409, 403, 500]) {
+      const reply = new Response(JSON.stringify({ error: 'x' }), { status });
+      const cancel = vi.spyOn(reply.body!, 'cancel');
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(reply);
+      await client.attach(attachBody, 'Bearer t').catch(() => {});
+      expect(cancel).toHaveBeenCalled();
+      vi.restoreAllMocks();
+    }
+  });
+
   it('turns 401 into Forbidden', async () => {
     respond(401);
     await expect(client.check(body, 'Bearer t')).rejects.toBeInstanceOf(ForbiddenException);

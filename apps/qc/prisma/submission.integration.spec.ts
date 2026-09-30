@@ -15,9 +15,11 @@ const DAY = 86_400_000;
 // A media that finds every file usable, reporting kinds from `kinds`.
 let kinds: Record<string, 'PHOTO' | 'VIDEO'> = {};
 let attachCalls = 0;
+// Runs inside `attach`, after media has answered: the window between the checks and the write.
+let duringAttach: (() => Promise<unknown>) | null = null;
 const fakeMedia = {
   check: async (body: { mediaIds: string[] }) => body.mediaIds.map((id) => ({ id, kind: kinds[id] ?? 'PHOTO', usable: true })),
-  attach: async () => { attachCalls += 1; return 'attached' as const; },
+  attach: async () => { attachCalls += 1; await duringAttach?.(); return 'attached' as const; },
 } as unknown as MediaClient;
 
 beforeAll(async () => {
@@ -26,7 +28,7 @@ beforeAll(async () => {
   service = new SubmissionService(prisma, noGeofence, fakeMedia, 7);
 }, 180_000);
 afterAll(async () => { await db?.stop(); });
-beforeEach(async () => { await resetDb(prisma); kinds = {}; attachCalls = 0; });
+beforeEach(async () => { await resetDb(prisma); kinds = {}; attachCalls = 0; duringAttach = null; });
 
 const assignTask = (templateId: string, overrides: { status?: string } = {}) => seedWorkOrder(prisma, templateId, overrides);
 
@@ -137,6 +139,49 @@ describe('createSubmission with evidence', () => {
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect((results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason).toMatchObject({ status: 409 });
     expect(await prisma.submission.count({ where: { taskId: task.id } })).toBe(1);
+  });
+
+  it('returns the original to a concurrent retry with the same idempotency key', async () => {
+    const { versionId, itemId, templateId } = await seedPhotoItem();
+    const task = await assignTask(templateId, { status: 'ONGOING' });
+    const dto = {
+      taskId: task.id, siteId: task.siteId, projectId: task.projectId, templateVersionId: versionId,
+      idempotencyKey: `key-${uuidv7()}`, responses: [{ itemId, selfCheckResult: 'PASS' as const, mediaIds: [uuidv7()] }],
+    };
+    const [a, b] = await Promise.all([service.createSubmission(dto, ACTOR, 'Bearer t'), service.createSubmission(dto, ACTOR, 'Bearer t')]);
+    expect(a.id).toBe(b.id);
+    expect(await prisma.submission.count({ where: { taskId: task.id } })).toBe(1);
+  });
+
+  it('refuses when another device takes the draft over while evidence is being attached, keeping its draft', async () => {
+    const { versionId, itemId, templateId } = await seedPhotoItem();
+    const task = await assignTask(templateId, { status: 'ONGOING' });
+    await prisma.workOrderDraft.create({ data: { workOrderId: task.id, holderId: ACTOR, deviceId: 'd', deviceLabel: 'Pixel 7', version: 1, responses: [] } });
+    duringAttach = () => prisma.workOrderDraft.update({ where: { workOrderId: task.id }, data: { deviceId: 'tab', deviceLabel: 'Galaxy Tab', version: 2 } });
+    await expect(service.createSubmission({
+      taskId: task.id, siteId: task.siteId, projectId: task.projectId, templateVersionId: versionId, deviceId: 'd',
+      idempotencyKey: `key-${uuidv7()}`, responses: [{ itemId, selfCheckResult: 'PASS', mediaIds: [uuidv7()] }],
+    }, ACTOR, 'Bearer t')).rejects.toMatchObject({ status: 409, response: { details: { reason: 'DRAFT_HELD_ELSEWHERE', deviceLabel: 'Galaxy Tab' } } });
+    expect(await prisma.workOrderDraft.findUnique({ where: { workOrderId: task.id } })).toMatchObject({ deviceId: 'tab', version: 2 });
+    expect(await prisma.submission.count({ where: { taskId: task.id } })).toBe(0);
+    expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: task.id } })).status).toBe('ONGOING');
+  });
+
+  it('refuses when the work order is cancelled while evidence is being attached, and it stays cancelled', async () => {
+    const { versionId, itemId, templateId } = await seedPhotoItem();
+    const task = await assignTask(templateId, { status: 'ONGOING' });
+    duringAttach = () => prisma.workOrder.update({ where: { id: task.id }, data: { status: 'CANCELLED' } });
+    await expect(withMedia(task, versionId, itemId, [uuidv7()])).rejects.toMatchObject({ status: 409, message: 'This work order has been cancelled' });
+    expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: task.id } })).status).toBe('CANCELLED');
+    expect(await prisma.submission.count({ where: { taskId: task.id } })).toBe(0);
+  });
+
+  it('refuses the old assignee when the work order is reassigned while evidence is being attached', async () => {
+    const { versionId, itemId, templateId } = await seedPhotoItem();
+    const task = await assignTask(templateId, { status: 'ONGOING' });
+    duringAttach = () => prisma.workOrder.update({ where: { id: task.id }, data: { assigneeId: uuidv7() } });
+    await expect(withMedia(task, versionId, itemId, [uuidv7()])).rejects.toMatchObject({ status: 403 });
+    expect(await prisma.submission.count({ where: { taskId: task.id } })).toBe(0);
   });
 
   it('accepts a retry after a failure between attach and the write', async () => {

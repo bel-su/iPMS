@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma-clients/qc';
 import { scopeWhere, type AuthzScope } from '@ipms/authz';
@@ -18,6 +18,26 @@ const REFUSAL = {
   NOT_PUBLISHED: () => new ConflictException('This checklist version has not been published'),
   SUPERSEDED: () => new ConflictException('This checklist has been updated. Refresh to get the latest version.'),
 } as const;
+
+/** media's check and attach take at most this many ids per call. */
+const MAX_FILES_PER_SUBMISSION = 500;
+
+type Submittable = { assigneeId: string; status: string };
+type DraftHolder = { deviceId: string; deviceLabel: string; updatedAt: Date };
+
+/**
+ * Who may submit against a work order, and when. Checked once up front and
+ * again under the work-order row lock just before writing, so a cancel,
+ * reassign or draft takeover that lands in between is not missed.
+ */
+function assertSubmittable(order: Submittable, draft: DraftHolder | null, actorId: string, deviceId: string | undefined): void {
+  if (order.assigneeId !== actorId) throw new ForbiddenException('This work order is not assigned to you');
+  if (order.status === 'CANCELLED') throw new ConflictException('This work order has been cancelled');
+  if (draft && draft.deviceId !== deviceId) throw draftHeldElsewhere(draft);
+}
+
+const DRAFT_HOLDER = { deviceId: true, deviceLabel: true, updatedAt: true } as const;
+const evidenceUncheckable = () => new ServiceUnavailableException('Evidence could not be checked right now. Try again shortly.');
 
 @Injectable()
 export class SubmissionService {
@@ -55,8 +75,8 @@ export class SubmissionService {
     // the person it is assigned to, against the checklist it carries, while open.
     const task = await this.prisma.workOrder.findUnique({ where: { id: dto.taskId } });
     if (!task) throw new NotFoundException('Work order not found');
-    if (task.assigneeId !== actorId) throw new ForbiddenException('This work order is not assigned to you');
-    if (task.status === 'CANCELLED') throw new ConflictException('This work order has been cancelled');
+    const draft = await this.prisma.workOrderDraft.findUnique({ where: { workOrderId: task.id }, select: DRAFT_HOLDER });
+    assertSubmittable(task, draft, actorId, dto.deviceId);
     if (task.projectId !== dto.projectId || task.siteId !== dto.siteId) throw new BadRequestException('The submission does not match its work order’s project and site');
     const version = await this.prisma.templateVersion.findUnique({
       where: { id: dto.templateVersionId },
@@ -71,9 +91,6 @@ export class SubmissionService {
     });
     if (pending) throw new ConflictException(pending.status === 'APPROVED' ? 'This task has already been approved' : 'This task already has a submission awaiting review');
 
-    const draft = await this.prisma.workOrderDraft.findUnique({ where: { workOrderId: task.id }, select: { deviceId: true, deviceLabel: true, updatedAt: true } });
-    if (draft && draft.deviceId !== dto.deviceId) throw draftHeldElsewhere(draft);
-
     const items = version.sections.flatMap((section) => section.items);
     const responses = new Map(dto.responses.map((response) => [response.itemId, response]));
     if (responses.size !== dto.responses.length || items.some((item) => item.isRequired && !responses.has(item.id)) || [...responses.keys()].some((id) => !items.some((item) => item.id === id))) throw new BadRequestException('Responses must contain every required item from this template exactly once');
@@ -85,11 +102,16 @@ export class SubmissionService {
     }
     const allIds = dto.responses.flatMap((response) => response.mediaIds);
     if (new Set(allIds).size !== allIds.length) throw new BadRequestException('The same file is used by more than one item');
+    if (allIds.length > MAX_FILES_PER_SUBMISSION) throw new BadRequestException(`A submission can carry at most ${MAX_FILES_PER_SUBMISSION} files`);
 
     // Ask media before anything is attached: a submission that fails its counts must not lock files in as evidence.
     const kinds = new Map<string, MediaKind>();
     if (allIds.length) {
       const checked = await this.media.check({ workOrderId: task.id, siteId: task.siteId, mediaIds: allIds }, bearer);
+      // Exactly one answer per file asked about, and a kind for every usable one; anything else is a broken reply.
+      const answered = new Set(checked.map((file) => file.id));
+      if (checked.length !== allIds.length || answered.size !== allIds.length || allIds.some((id) => !answered.has(id))
+        || checked.some((file) => file.usable && file.kind == null)) throw evidenceUncheckable();
       const unusable = checked.filter((file) => !file.usable);
       if (unusable.length) throw mediaNotReady(unusable);
       for (const file of checked) kinds.set(file.id, file.kind!);
@@ -121,6 +143,11 @@ export class SubmissionService {
     const outcome = resolveGeofence(await this.geofence.fetch(dto.siteId, bearer), dto);
     try {
       return await this.prisma.$transaction(async (tx) => {
+        // The same lock drafts, takeover, cancel and reassign take: re-check what may have changed during the calls above.
+        await tx.$queryRaw`SELECT id FROM work_order WHERE id = ${task.id}::uuid FOR UPDATE`;
+        const locked = await tx.workOrder.findUnique({ where: { id: task.id }, select: { assigneeId: true, status: true } });
+        if (!locked) throw new NotFoundException('Work order not found');
+        assertSubmittable(locked, await tx.workOrderDraft.findUnique({ where: { workOrderId: task.id }, select: DRAFT_HOLDER }), actorId, dto.deviceId);
         const submission = await tx.submission.create({ data: { id: submissionId, taskId: dto.taskId, siteId: dto.siteId, projectId: dto.projectId, templateId: version.templateId, templateVersionId: version.id, templateVersion: version.version, attemptNo: (last._max.attemptNo ?? 0) + 1, status: 'SUBMITTED', submittedBy: actorId, submittedAt: new Date(), integrityHash, idempotencyKey: dto.idempotencyKey, deviceId: dto.deviceId ?? null, latitude: dto.latitude ?? null, longitude: dto.longitude ?? null, distanceFromSiteM: outcome.distanceFromSiteM, geofenceStatus: outcome.geofenceStatus } });
         for (const response of dto.responses) {
           const itemResponse = await tx.itemResponse.create({ data: { id: uuidv7(), submissionId: submission.id, itemId: response.itemId, selfCheckResult: response.selfCheckResult, selfCheckDescription: response.selfCheckDescription ?? null, textValue: response.textValue ?? null, numberValue: response.numberValue ?? null, booleanValue: response.booleanValue ?? null, selectValue: response.selectValue ?? null } });
@@ -138,7 +165,7 @@ export class SubmissionService {
         });
         await recordAudit(tx, {
           actorId, action: 'work_order.status_changed', objectType: 'WorkOrder', objectId: task.id,
-          previousState: { status: task.status }, newState: { status: 'REVIEWING', submissionId: submission.id, attemptNo: submission.attemptNo },
+          previousState: { status: locked.status }, newState: { status: 'REVIEWING', submissionId: submission.id, attemptNo: submission.attemptNo },
         });
         await event(tx, task.id, 'SUBMITTED', submission.submittedAt!, actorId, { submissionId: submission.id, attemptNo: submission.attemptNo });
         await tx.workOrderDraft.deleteMany({ where: { workOrderId: task.id } });
@@ -146,7 +173,12 @@ export class SubmissionService {
       });
     } catch (err) {
       // Two submissions for one work order raced past the pending check; the unique (taskId, attemptNo) kept one.
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') throw new ConflictException('This task already has a submission awaiting review');
+      // If the winner was this same request retried, answer with it, as the duplicate check up front would have.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const original = await this.prisma.submission.findUnique({ where: { idempotencyKey: dto.idempotencyKey }, select: { id: true } });
+        if (original) return this.load(original.id);
+        throw new ConflictException('This task already has a submission awaiting review');
+      }
       throw err;
     }
   }

@@ -48,6 +48,7 @@ describe('SubmissionService', () => {
       reviewDecision: {
         create: vi.fn(),
       },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (cb) => cb(prisma)),
     };
 
@@ -171,6 +172,33 @@ describe('SubmissionService', () => {
       await expect(service.createSubmission(dtoWith([P(1)], { deviceId: 'mine' }) as any, actorId, 'b')).rejects.toMatchObject({
         status: 409, response: { details: { reason: 'DRAFT_HELD_ELSEWHERE', deviceLabel: 'Pixel 7' } },
       });
+    });
+
+    it('refuses more than 500 files in one submission before asking media', async () => {
+      const ids = Array.from({ length: 501 }, (_, n) => `0192f7a0-0000-7000-8000-${String(n).padStart(12, '0')}`);
+      await expect(service.createSubmission(dtoWith(ids) as any, actorId, 'b')).rejects.toMatchObject({ status: 400, message: 'A submission can carry at most 500 files' });
+      expect(media.check).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a file is missing from the answer', [{ id: P(1), kind: 'PHOTO', usable: true }]],
+      ['a file is answered twice', [{ id: P(1), kind: 'PHOTO', usable: true }, { id: P(1), kind: 'PHOTO', usable: true }, { id: P(2), kind: 'PHOTO', usable: true }]],
+      ['an unknown file is answered', [{ id: P(1), kind: 'PHOTO', usable: true }, { id: P(3), kind: 'PHOTO', usable: true }]],
+      ['a usable file has no kind', [{ id: P(1), kind: 'PHOTO', usable: true }, { id: P(2), kind: null, usable: true }]],
+    ])('answers 503 when media’s answer is inconsistent: %s', async (_label, answer) => {
+      media.check.mockResolvedValue(answer);
+      await expect(service.createSubmission(dtoWith([P(1), P(2)]) as any, actorId, 'b')).rejects.toMatchObject({
+        status: 503, message: 'Evidence could not be checked right now. Try again shortly.',
+      });
+      expect(media.attach).not.toHaveBeenCalled();
+    });
+
+    it('re-checks the assignee, status and draft holder under the work-order lock', async () => {
+      // Pre-check sees a free work order; inside the transaction another device holds the draft.
+      prisma.workOrderDraft.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ deviceId: 'other', deviceLabel: 'Pixel 7', updatedAt: new Date() });
+      await expect(service.createSubmission(dtoWith([P(1)]) as any, actorId, 'b')).rejects.toMatchObject({ status: 409, response: { details: { reason: 'DRAFT_HELD_ELSEWHERE' } } });
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(prisma.submission.create).not.toHaveBeenCalled();
     });
 
     it('still refuses N/A where it is not allowed', async () => {
