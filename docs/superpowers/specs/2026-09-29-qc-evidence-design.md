@@ -253,3 +253,11 @@ Every 409 body carries a machine-readable `code`.
   submission (D4).
 - **§5.2 / A11 attach:** a file `ATTACHED` to another submission of the same work
   order is usable (D2); `attachedToSubmissionId` records the first attempt.
+- **Planning refinements (2026-09-30):**
+  - R1: the specific refusal code is `error.details.reason` (the envelope `code` stays the shared enum, e.g. `CONFLICT`). The shared exception filter passes `details` through.
+  - R2: the web serves evidence through `GET /api/media/:id/:variant`, which signs a fresh link and redirects on every request, instead of retrying expired links in the browser.
+  - R3: the web template editor has Min/Max videos inputs.
+  - R4: a lost race on `(taskId, attemptNo)` returns 409, not 500.
+  - R5: qc does not `depends_on` media in compose; submits with files answer 503 while media is down.
+  - R6: Download saves rather than opens: media's view link accepts `?download=1`, which signs `attachment` disposition; the web serves it at `GET /api/media/:id/download`.
+  - R7: `GET /qc/submissions/:id` is site-scoped, so a reviewer must hold scope on the project or site to read a submission and its evidence.
