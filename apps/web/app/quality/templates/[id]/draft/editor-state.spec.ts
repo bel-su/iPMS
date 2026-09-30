@@ -3,8 +3,8 @@ import { editorReducer, fieldKey, fromSections, nextItemNumber, nextSectionNumbe
 
 const WIRE = [
   { number: '1', title: 'EHS', items: [
-    { number: '1.1', requirementText: 'PPE', severity: 'CRITICAL' as const, responseType: 'RESULT_ONLY' as const, selectOptions: [], minPhotos: 1, maxPhotos: 3, allowsNa: false, isRequired: true, guidanceText: 'Helmet' },
-    { number: '1.2', requirementText: 'Mount', severity: 'NORMAL' as const, responseType: 'SELECT' as const, selectOptions: ['Pole', 'Wall'], minPhotos: 0, maxPhotos: 0, allowsNa: false, isRequired: true, guidanceText: null },
+    { number: '1.1', requirementText: 'PPE', severity: 'CRITICAL' as const, responseType: 'RESULT_ONLY' as const, selectOptions: [], minPhotos: 1, maxPhotos: 3, minVideos: 0, maxVideos: 0, allowsNa: false, isRequired: true, guidanceText: 'Helmet' },
+    { number: '1.2', requirementText: 'Mount', severity: 'NORMAL' as const, responseType: 'SELECT' as const, selectOptions: ['Pole', 'Wall'], minPhotos: 0, maxPhotos: 0, minVideos: 0, maxVideos: 0, allowsNa: false, isRequired: true, guidanceText: null },
   ] },
   { number: '2', title: 'Antenna', items: [] },
 ];
@@ -20,8 +20,8 @@ describe('fromSections / toDocument', () => {
     expect(toDocument(state)).toEqual({
       sections: [
         { number: '1', title: 'EHS', items: [
-          { number: '1.1', requirementText: 'PPE', severity: 'CRITICAL', responseType: 'RESULT_ONLY', selectOptions: [], minPhotos: 1, maxPhotos: 3, allowsNa: false, isRequired: true, guidanceText: 'Helmet' },
-          { number: '1.2', requirementText: 'Mount', severity: 'NORMAL', responseType: 'SELECT', selectOptions: ['Pole', 'Wall'], minPhotos: 0, maxPhotos: 0, allowsNa: false, isRequired: true },
+          { number: '1.1', requirementText: 'PPE', severity: 'CRITICAL', responseType: 'RESULT_ONLY', selectOptions: [], minPhotos: 1, maxPhotos: 3, minVideos: 0, maxVideos: 0, allowsNa: false, isRequired: true, guidanceText: 'Helmet' },
+          { number: '1.2', requirementText: 'Mount', severity: 'NORMAL', responseType: 'SELECT', selectOptions: ['Pole', 'Wall'], minPhotos: 0, maxPhotos: 0, minVideos: 0, maxVideos: 0, allowsNa: false, isRequired: true },
         ] },
         { number: '2', title: 'Antenna', items: [] },
       ],
@@ -94,5 +94,14 @@ describe('normalizeErrors', () => {
     });
     expect(fieldKey(0, 1, 'maxPhotos')).toBe('sections.0.items.1.maxPhotos');
     expect(fieldKey(1, null, 'items')).toBe('sections.1.items');
+  });
+});
+
+describe('video counts', () => {
+  it('carries video counts through load and save, defaulting new items to 0', () => {
+    const state = fromSections([{ number: '1', title: 'A', items: [{ number: '1.1', requirementText: 'R', severity: 'NORMAL', responseType: 'RESULT_ONLY', selectOptions: [], minPhotos: 0, maxPhotos: 0, minVideos: 1, maxVideos: 2, allowsNa: false, isRequired: true, guidanceText: null }] }]);
+    expect(toDocument(state).sections[0]!.items[0]).toMatchObject({ minVideos: 1, maxVideos: 2 });
+    const added = editorReducer(state, { type: 'addItem', sectionKey: state.sections[0]!.key });
+    expect(added.sections[0]!.items[1]).toMatchObject({ minVideos: 0, maxVideos: 0 });
   });
 });

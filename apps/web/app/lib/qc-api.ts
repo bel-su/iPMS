@@ -42,7 +42,7 @@ export type TemplateDetail = ChecklistTemplate & { versions: VersionSummary[] };
 export interface ChecklistItem {
   id: string; sectionId: string; number: string; requirementText: string;
   severity: Severity; responseType: ResponseType; selectOptions: string[];
-  minPhotos: number; maxPhotos: number; allowsNa: boolean; isRequired: boolean;
+  minPhotos: number; maxPhotos: number; minVideos: number; maxVideos: number; allowsNa: boolean; isRequired: boolean;
   guidanceText: string | null; order: number;
 }
 

@@ -2,7 +2,7 @@ import type { ResponseType, Severity, TemplateDocumentInput } from '@ipms/contra
 
 export interface EditorItem {
   key: string; number: string; requirementText: string; severity: Severity; responseType: ResponseType;
-  optionsText: string; minPhotos: number; maxPhotos: number; allowsNa: boolean; isRequired: boolean; guidanceText: string;
+  optionsText: string; minPhotos: number; maxPhotos: number; minVideos: number; maxVideos: number; allowsNa: boolean; isRequired: boolean; guidanceText: string;
 }
 export interface EditorSection { key: string; number: string; title: string; items: EditorItem[] }
 export interface EditorState { sections: EditorSection[]; dirty: boolean }
@@ -11,7 +11,7 @@ export interface WireSection {
   number: string; title: string;
   items: readonly {
     number: string; requirementText: string; severity: Severity; responseType: ResponseType; selectOptions: readonly string[];
-    minPhotos: number; maxPhotos: number; allowsNa: boolean; isRequired: boolean; guidanceText: string | null;
+    minPhotos: number; maxPhotos: number; minVideos: number; maxVideos: number; allowsNa: boolean; isRequired: boolean; guidanceText: string | null;
   }[];
 }
 
@@ -39,7 +39,7 @@ export function fromSections(sections: readonly WireSection[]): EditorState {
       items: section.items.map((item) => ({
         key: newKey(), number: item.number, requirementText: item.requirementText, severity: item.severity,
         responseType: item.responseType, optionsText: item.selectOptions.join('\n'), minPhotos: item.minPhotos,
-        maxPhotos: item.maxPhotos, allowsNa: item.allowsNa, isRequired: item.isRequired, guidanceText: item.guidanceText ?? '',
+        maxPhotos: item.maxPhotos, minVideos: item.minVideos, maxVideos: item.maxVideos, allowsNa: item.allowsNa, isRequired: item.isRequired, guidanceText: item.guidanceText ?? '',
       })),
     })),
   };
@@ -58,6 +58,8 @@ export function toDocument(state: EditorState): TemplateDocumentInput {
         selectOptions: item.responseType === 'SELECT' ? item.optionsText.split('\n').map((option) => option.trim()).filter(Boolean) : [],
         minPhotos: item.minPhotos,
         maxPhotos: item.maxPhotos,
+        minVideos: item.minVideos,
+        maxVideos: item.maxVideos,
         allowsNa: item.allowsNa,
         isRequired: item.isRequired,
         ...(item.guidanceText.trim() ? { guidanceText: item.guidanceText.trim() } : {}),
@@ -83,7 +85,7 @@ export function nextItemNumber(section: EditorSection): string {
 function blankItem(number: string): EditorItem {
   return {
     key: newKey(), number, requirementText: '', severity: 'NORMAL', responseType: 'RESULT_ONLY', optionsText: '',
-    minPhotos: 0, maxPhotos: 0, allowsNa: false, isRequired: true, guidanceText: '',
+    minPhotos: 0, maxPhotos: 0, minVideos: 0, maxVideos: 0, allowsNa: false, isRequired: true, guidanceText: '',
   };
 }
 
