@@ -392,7 +392,7 @@ ALTER TABLE "item_media" ADD COLUMN "kind" varchar(10) NOT NULL DEFAULT 'PHOTO';
 ALTER TABLE "item_media" ALTER COLUMN "kind" DROP DEFAULT;
 
 CREATE TABLE "work_order_draft" (
-  "workOrderId" uuid PRIMARY KEY REFERENCES "work_order"("id") ON DELETE CASCADE,
+  "workOrderId" uuid PRIMARY KEY REFERENCES "work_order"("id") ON DELETE CASCADE ON UPDATE CASCADE,
   "holderId" uuid NOT NULL,
   "deviceId" varchar(255) NOT NULL,
   "deviceLabel" varchar(100) NOT NULL,
