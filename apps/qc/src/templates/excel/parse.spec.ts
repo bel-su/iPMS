@@ -22,7 +22,7 @@ const FULL: TemplateDocument = TemplateDocumentSchema.parse({
   sections: [
     { number: '1', title: 'EHS On Site', items: [
       { number: '1.1', requirementText: 'PPE worn', severity: 'CRITICAL', minPhotos: 1, maxPhotos: 3, guidanceText: 'Helmet, harness, boots' },
-      { number: '1.2', requirementText: 'Barricaded', responseType: 'BOOLEAN', minPhotos: 1, maxPhotos: 2 },
+      { number: '1.2', requirementText: 'Barricaded', responseType: 'BOOLEAN', minPhotos: 1, maxPhotos: 2, minVideos: 0, maxVideos: 1 },
       { number: '1.3', requirementText: 'Remarks', responseType: 'TEXT', isRequired: false },
     ] },
     { number: '2', title: 'Antenna', items: [
@@ -100,7 +100,7 @@ describe('values', () => {
     const parsed = await parseWorkbook(await workbookOf([['1', 'EHS', '1.1', 'PPE']]));
     expect(parsed.document!.sections[0]!.items[0]).toEqual({
       number: '1.1', requirementText: 'PPE', severity: 'NORMAL', responseType: 'RESULT_ONLY',
-      selectOptions: [], minPhotos: 0, maxPhotos: 0, allowsNa: false, isRequired: true,
+      selectOptions: [], minPhotos: 0, maxPhotos: 0, minVideos: 0, maxVideos: 0, allowsNa: false, isRequired: true,
     });
   });
 
@@ -165,5 +165,27 @@ describe('file-level problems', () => {
     const rows = Array.from({ length: 1001 }, (_, i) => (i === 0 ? ['1', 'EHS', 'x0', 'r'] : ['', '', `x${i}`, 'r']));
     const parsed = await parseWorkbook(await workbookOf(rows));
     expect(parsed.errors[0]!.message).toContain('more than 1000 items');
+  });
+});
+
+describe('video counts', () => {
+  it('reads Min Videos / Max Videos', async () => {
+    const parsed = await parseWorkbook(await workbookOf([['1', 'EHS', '1.1', 'PPE', 1, 2]], [...HEADER, 'Min Videos', 'Max Videos']));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.document!.sections[0]!.items[0]).toMatchObject({ minVideos: 1, maxVideos: 2 });
+  });
+
+  it('defaults them to 0 in workbooks made before videos existed', async () => {
+    const parsed = await parseWorkbook(await workbookOf([['1', 'EHS', '1.1', 'PPE']]));
+    expect(parsed.document!.sections[0]!.items[0]).toMatchObject({ minVideos: 0, maxVideos: 0 });
+  });
+
+  it('refuses a count above 5', async () => {
+    const parsed = await parseWorkbook(await workbookOf([['1', 'EHS', '1.1', 'PPE', 0, 6]], [...HEADER, 'Min Videos', 'Max Videos']));
+    expect(parsed.errors.map((e) => e.message)).toContain('Must be a whole number from 0 to 5');
+  });
+
+  it('the example rows include an item that allows a video', () => {
+    expect(EXAMPLE_DOCUMENT.sections.flatMap((s) => s.items).some((item) => item.maxVideos > 0)).toBe(true);
   });
 });

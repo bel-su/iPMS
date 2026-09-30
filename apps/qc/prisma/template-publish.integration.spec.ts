@@ -14,7 +14,7 @@ afterAll(async () => { await db?.stop(); });
 beforeEach(async () => { await resetDb(prisma); });
 
 const META = { code: 'AI-RRU', name: 'Antenna + RRU', category: 'QUALITY' as const };
-const DOC = { sections: [{ number: '1', title: 'EHS', items: [{ number: '1.1', requirementText: 'PPE worn', severity: 'NORMAL' as const, responseType: 'RESULT_ONLY' as const, selectOptions: [], minPhotos: 0, maxPhotos: 0, allowsNa: false, isRequired: true }] }] };
+const DOC = { sections: [{ number: '1', title: 'EHS', items: [{ number: '1.1', requirementText: 'PPE worn', severity: 'NORMAL' as const, responseType: 'RESULT_ONLY' as const, selectOptions: [], minPhotos: 0, maxPhotos: 0, minVideos: 0, maxVideos: 0, allowsNa: false, isRequired: true }] }] };
 
 describe('publish', () => {
   it('publishes a first version and points the template at it', async () => {
