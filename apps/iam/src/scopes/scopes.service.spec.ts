@@ -9,6 +9,11 @@ const PROJECT = uuidv7();
 const SITE = uuidv7();
 const OVERRIDE = uuidv7();
 
+/** A platform administrator: may manage anyone, and reaches every project. */
+const ADMIN = { id: ACTOR, roles: ['SUPER_ADMIN'], permissions: ['scope.grant', 'scope.revoke', 'scope.grant_global'] };
+/** A project manager: may manage field engineers, only in projects they hold. */
+const PM = { id: ACTOR, roles: ['PROJECT_MANAGER'], permissions: ['scope.grant', 'scope.revoke'] };
+
 /** Everything the actor needs to hold for a plain `qc_review.approve` ALLOW grant. */
 const ACTOR_PERMISSIONS = ['qc_review.approve'];
 
@@ -28,7 +33,7 @@ interface BuildOptions {
 function build(opts: BuildOptions = {}) {
   const tx = {
     user: {
-      findUnique: vi.fn().mockResolvedValue(opts.user === undefined ? { id: USER, isActive: true } : opts.user),
+      findUnique: vi.fn().mockResolvedValue(opts.user === undefined ? { id: USER, isActive: true, roles: [] } : opts.user),
       update: vi.fn().mockResolvedValue({ id: USER, tokenVersion: 7 }),
     },
     permission: { findUnique: vi.fn().mockResolvedValue(opts.permission === undefined ? { id: uuidv7(), code: 'qc_review.approve' } : opts.permission) },
@@ -93,46 +98,46 @@ function payloadsOf(
 describe('ScopesService.grantProject', () => {
   it('creates the scope row', async () => {
     const { service, tx } = build();
-    await service.grantProject(USER, PROJECT, ACTOR);
+    await service.grantProject(USER, PROJECT, ADMIN);
     expect(tx.userProjectScope.create).toHaveBeenCalled();
   });
 
   it('emits iam.scope.granted in the same transaction', async () => {
     const { service, tx } = build();
-    await service.grantProject(USER, PROJECT, ACTOR);
+    await service.grantProject(USER, PROJECT, ADMIN);
     expect(subjectsOf(tx)).toContain('iam.scope.granted');
   });
 
   it('also emits an audit event', async () => {
     const { service, tx } = build();
-    await service.grantProject(USER, PROJECT, ACTOR);
+    await service.grantProject(USER, PROJECT, ADMIN);
     expect(subjectsOf(tx)).toContain('audit.event.recorded');
   });
 
   it('is idempotent when the scope already exists', async () => {
     const { service, tx } = build({ existingScope: { id: uuidv7() } });
-    await service.grantProject(USER, PROJECT, ACTOR);
+    await service.grantProject(USER, PROJECT, ADMIN);
     expect(tx.userProjectScope.create).not.toHaveBeenCalled();
     expect(tx.outboxEvent.create).not.toHaveBeenCalled();
   });
 
   it('rejects a grant to an unknown user', async () => {
     const { service } = build({ user: null });
-    await expect(service.grantProject(USER, PROJECT, ACTOR)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.grantProject(USER, PROJECT, ADMIN)).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
 describe('ScopesService.revokeProject', () => {
   it('emits iam.scope.revoked so caches drop the project immediately', async () => {
     const { service, tx } = build();
-    await service.revokeProject(USER, PROJECT, ACTOR);
+    await service.revokeProject(USER, PROJECT, ADMIN);
     expect(subjectsOf(tx)).toContain('iam.scope.revoked');
   });
 
   it('emits nothing when there was no scope to revoke', async () => {
     const { service, tx } = build();
     tx.userProjectScope.deleteMany.mockResolvedValue({ count: 0 });
-    await service.revokeProject(USER, PROJECT, ACTOR);
+    await service.revokeProject(USER, PROJECT, ADMIN);
     expect(tx.outboxEvent.create).not.toHaveBeenCalled();
   });
 
@@ -151,7 +156,7 @@ describe('ScopesService.revokeProject', () => {
         { id: uuidv7(), siteId: other, projectId: PROJECT },
       ],
     });
-    await service.revokeProject(USER, PROJECT, ACTOR);
+    await service.revokeProject(USER, PROJECT, ADMIN);
 
     const revokes = payloadsOf(tx, 'iam.scope.revoked');
     expect(revokes.filter((p) => p['level'] === 'SITE').map((p) => p['siteId']).sort())
@@ -160,14 +165,14 @@ describe('ScopesService.revokeProject', () => {
 
   it('gives each cascaded SITE event the project it was revoked under', async () => {
     const { service, tx } = build({ cascadedSites: [{ id: uuidv7(), siteId: SITE, projectId: PROJECT }] });
-    await service.revokeProject(USER, PROJECT, ACTOR);
+    await service.revokeProject(USER, PROJECT, ADMIN);
     const site = payloadsOf(tx, 'iam.scope.revoked').find((p) => p['level'] === 'SITE');
     expect(site).toMatchObject({ userId: USER, level: 'SITE', projectId: PROJECT, siteId: SITE });
   });
 
   it('reads the site rows before deleting them, or there is nothing left to name', async () => {
     const { service, tx } = build({ cascadedSites: [{ id: uuidv7(), siteId: SITE, projectId: PROJECT }] });
-    await service.revokeProject(USER, PROJECT, ACTOR);
+    await service.revokeProject(USER, PROJECT, ADMIN);
     const readAt = tx.userSiteScope.findMany.mock.invocationCallOrder[0]!;
     const deletedAt = tx.userSiteScope.deleteMany.mock.invocationCallOrder[0]!;
     expect(readAt).toBeLessThan(deletedAt);
@@ -175,7 +180,7 @@ describe('ScopesService.revokeProject', () => {
 
   it('still emits the PROJECT-level revoke', async () => {
     const { service, tx } = build({ cascadedSites: [{ id: uuidv7(), siteId: SITE, projectId: PROJECT }] });
-    await service.revokeProject(USER, PROJECT, ACTOR);
+    await service.revokeProject(USER, PROJECT, ADMIN);
     expect(payloadsOf(tx, 'iam.scope.revoked').some((p) => p['level'] === 'PROJECT')).toBe(true);
   });
 });
@@ -183,20 +188,20 @@ describe('ScopesService.revokeProject', () => {
 describe('ScopesService.grantSite', () => {
   it('creates the site scope row', async () => {
     const { service, tx } = build({ projectScope: { id: uuidv7(), userId: USER, projectId: PROJECT } });
-    await service.grantSite(USER, SITE, PROJECT, ACTOR);
+    await service.grantSite(USER, SITE, PROJECT, ADMIN);
     expect(tx.userSiteScope.create).toHaveBeenCalled();
   });
 
   it('emits iam.scope.granted with both ids in the payload', async () => {
     const { service, tx } = build({ projectScope: { id: uuidv7(), userId: USER, projectId: PROJECT } });
-    await service.grantSite(USER, SITE, PROJECT, ACTOR);
+    await service.grantSite(USER, SITE, PROJECT, ADMIN);
     expect(payloadsOf(tx, 'iam.scope.granted')[0])
       .toMatchObject({ userId: USER, level: 'SITE', projectId: PROJECT, siteId: SITE });
   });
 
   it('audits the grant', async () => {
     const { service, tx } = build({ projectScope: { id: uuidv7() } });
-    await service.grantSite(USER, SITE, PROJECT, ACTOR);
+    await service.grantSite(USER, SITE, PROJECT, ADMIN);
     expect(subjectsOf(tx)).toContain('audit.event.recorded');
   });
 
@@ -204,14 +209,14 @@ describe('ScopesService.grantSite', () => {
     const { service, tx } = build({
       projectScope: { id: uuidv7() }, existingSiteScope: { id: uuidv7() },
     });
-    await service.grantSite(USER, SITE, PROJECT, ACTOR);
+    await service.grantSite(USER, SITE, PROJECT, ADMIN);
     expect(tx.userSiteScope.create).not.toHaveBeenCalled();
     expect(tx.outboxEvent.create).not.toHaveBeenCalled();
   });
 
   it('rejects a grant to an unknown user', async () => {
     const { service } = build({ user: null, projectScope: { id: uuidv7() } });
-    await expect(service.grantSite(USER, SITE, PROJECT, ACTOR)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.grantSite(USER, SITE, PROJECT, ADMIN)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   /**
@@ -222,12 +227,12 @@ describe('ScopesService.grantSite', () => {
    */
   it('rejects a site grant under a project the user does not hold scope for', async () => {
     const { service } = build({ projectScope: null });
-    await expect(service.grantSite(USER, SITE, PROJECT, ACTOR)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.grantSite(USER, SITE, PROJECT, ADMIN)).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('writes nothing when the project scope is missing', async () => {
     const { service, tx } = build({ projectScope: null });
-    await service.grantSite(USER, SITE, PROJECT, ACTOR).catch(() => undefined);
+    await service.grantSite(USER, SITE, PROJECT, ADMIN).catch(() => undefined);
     expect(tx.userSiteScope.create).not.toHaveBeenCalled();
     expect(tx.outboxEvent.create).not.toHaveBeenCalled();
   });
@@ -236,7 +241,7 @@ describe('ScopesService.grantSite', () => {
 describe('ScopesService.revokeSite', () => {
   it('emits iam.scope.revoked at SITE level', async () => {
     const { service, tx } = build({ existingSiteScope: { id: uuidv7(), siteId: SITE, projectId: PROJECT } });
-    await service.revokeSite(USER, SITE, ACTOR);
+    await service.revokeSite(USER, SITE, ADMIN);
     expect(payloadsOf(tx, 'iam.scope.revoked')[0]).toMatchObject({ level: 'SITE', siteId: SITE });
   });
 
@@ -247,26 +252,26 @@ describe('ScopesService.revokeSite', () => {
    */
   it('names the real project the site sat under, not null', async () => {
     const { service, tx } = build({ existingSiteScope: { id: uuidv7(), siteId: SITE, projectId: PROJECT } });
-    await service.revokeSite(USER, SITE, ACTOR);
+    await service.revokeSite(USER, SITE, ADMIN);
     expect(payloadsOf(tx, 'iam.scope.revoked')[0]?.['projectId']).toBe(PROJECT);
   });
 
   it('reads the row before deleting it', async () => {
     const { service, tx } = build({ existingSiteScope: { id: uuidv7(), siteId: SITE, projectId: PROJECT } });
-    await service.revokeSite(USER, SITE, ACTOR);
+    await service.revokeSite(USER, SITE, ADMIN);
     expect(tx.userSiteScope.findUnique.mock.invocationCallOrder[0]!)
       .toBeLessThan(tx.userSiteScope.delete.mock.invocationCallOrder[0]!);
   });
 
   it('audits the revoke', async () => {
     const { service, tx } = build({ existingSiteScope: { id: uuidv7(), siteId: SITE, projectId: PROJECT } });
-    await service.revokeSite(USER, SITE, ACTOR);
+    await service.revokeSite(USER, SITE, ADMIN);
     expect(subjectsOf(tx)).toContain('audit.event.recorded');
   });
 
   it('emits nothing when there was no site scope to revoke', async () => {
     const { service, tx } = build({ existingSiteScope: null });
-    await service.revokeSite(USER, SITE, ACTOR);
+    await service.revokeSite(USER, SITE, ADMIN);
     expect(tx.outboxEvent.create).not.toHaveBeenCalled();
     expect(tx.userSiteScope.delete).not.toHaveBeenCalled();
   });
@@ -624,5 +629,70 @@ describe('ScopesService.listForUser', () => {
   it('reports no global reach when there is no grant', async () => {
     const { service } = build();
     expect(await service.listForUser(USER)).toMatchObject({ global: false });
+  });
+});
+
+/**
+ * A project manager may hand out access, but only to projects they already
+ * reach and only to users they could manage. Without both, `scope.grant` would
+ * let them add themselves-by-proxy to any project, or edit an administrator.
+ */
+describe('ScopesService project access for a project manager', () => {
+  const engineer = { id: USER, isActive: true, roles: [{ role: { code: 'FIELD_ENGINEER' } }] };
+
+  function asPm(opts: { actorHolds: boolean; target?: unknown; targetHolds?: boolean }) {
+    const built = build({ user: opts.target ?? engineer });
+    built.tx.userProjectScope.findUnique.mockImplementation(({ where }) => {
+      const { userId } = where.userId_projectId;
+      if (userId === ACTOR) return Promise.resolve(opts.actorHolds ? { id: uuidv7() } : null);
+      return Promise.resolve(opts.targetHolds ? { id: uuidv7() } : null);
+    });
+    return built;
+  }
+
+  it('grants a project the manager holds to a field engineer', async () => {
+    const { service, tx } = asPm({ actorHolds: true });
+    await service.grantProject(USER, PROJECT, PM);
+    expect(tx.userProjectScope.create).toHaveBeenCalled();
+  });
+
+  it('refuses a project the manager does not hold', async () => {
+    const { service, tx } = asPm({ actorHolds: false });
+    await expect(service.grantProject(USER, PROJECT, PM)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(tx.userProjectScope.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a target the manager may not manage', async () => {
+    const admin = { id: USER, isActive: true, roles: [{ role: { code: 'SUPER_ADMIN' } }] };
+    const { service, tx } = asPm({ actorHolds: true, target: admin });
+    await expect(service.grantProject(USER, PROJECT, PM)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(tx.userProjectScope.create).not.toHaveBeenCalled();
+  });
+
+  it('lets the manager hold global scope instead of the project', async () => {
+    const { service, tx } = asPm({ actorHolds: false });
+    tx.userGlobalScope.findUnique.mockResolvedValue({ id: uuidv7() });
+    await service.grantProject(USER, PROJECT, PM);
+    expect(tx.userProjectScope.create).toHaveBeenCalled();
+  });
+
+  it('applies the same rules to a revoke', async () => {
+    const outside = asPm({ actorHolds: false });
+    await expect(outside.service.revokeProject(USER, PROJECT, PM)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(outside.tx.userProjectScope.deleteMany).not.toHaveBeenCalled();
+
+    const inside = asPm({ actorHolds: true });
+    await inside.service.revokeProject(USER, PROJECT, PM);
+    expect(inside.tx.userProjectScope.deleteMany).toHaveBeenCalled();
+  });
+
+  it('applies the same rules to a site grant and revoke', async () => {
+    const outside = asPm({ actorHolds: false, targetHolds: true });
+    await expect(outside.service.grantSite(USER, SITE, PROJECT, PM)).rejects.toBeInstanceOf(ForbiddenException);
+
+    const revoke = asPm({ actorHolds: false });
+    revoke.tx.userSiteScope.findUnique.mockResolvedValue({ id: uuidv7(), userId: USER, siteId: SITE, projectId: PROJECT });
+    await expect(revoke.service.revokeSite(USER, SITE, PM)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(revoke.tx.userSiteScope.delete).not.toHaveBeenCalled();
   });
 });

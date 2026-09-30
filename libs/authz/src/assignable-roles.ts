@@ -15,7 +15,9 @@
  */
 export const ROLE_ASSIGNMENT: Readonly<Record<string, readonly string[] | 'ALL'>> = {
   SUPER_ADMIN: 'ALL',
-  PROJECT_MANAGER: ['FIELD_ENGINEER', 'QC_MANAGER'],
+  // Project and QC managers are appointed, edited and deactivated by an
+  // administrator only; a project manager staffs their team with engineers.
+  PROJECT_MANAGER: ['FIELD_ENGINEER'],
 };
 
 /** `'ALL'` for an unrestricted actor, otherwise the union of every listed role they hold. */
