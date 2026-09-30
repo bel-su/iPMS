@@ -178,6 +178,8 @@ export class WorkOrderService {
         previousState: asJson({ ...(reassign ? { assigneeId: current.assigneeId } : {}), ...(reschedule ? { plannedCompletionAt: current.plannedCompletionAt } : {}) }),
         newState: asJson({ ...(reassign ? { assigneeId: dto.assigneeId } : {}), ...(reschedule ? { plannedCompletionAt: dto.plannedCompletionAt } : {}) }),
       });
+      // The draft was the previous assignee's; the new one starts from the checklist. Its files stay with the work order.
+      if (reassign) await tx.workOrderDraft.deleteMany({ where: { workOrderId: id } });
       if (reassign) await event(tx, id, 'REASSIGNED', now, actorId, { from: current.assigneeId, to: dto.assigneeId! });
       if (reschedule) {
         await event(tx, id, 'RESCHEDULED', now, actorId, { from: current.plannedCompletionAt.toISOString(), to: dto.plannedCompletionAt!.toISOString() });
@@ -193,6 +195,7 @@ export class WorkOrderService {
       // Conditional, so a review landing between the check and the write is not overwritten.
       const changed = await tx.workOrder.updateMany({ where: { id, status: { in: OPEN } }, data: { status: 'CANCELLED', cancelReason: dto.reason } });
       if (changed.count === 0) throw new ConflictException('This work order has just been closed');
+      await tx.workOrderDraft.deleteMany({ where: { workOrderId: id } });
       await recordAudit(tx, {
         actorId, action: 'work_order.cancelled', objectType: 'WorkOrder', objectId: id,
         previousState: { status: current.status }, newState: { status: 'CANCELLED', reason: dto.reason },

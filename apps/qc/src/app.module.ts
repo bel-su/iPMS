@@ -7,6 +7,8 @@ import {
 } from '@ipms/authz';
 import { EventBus } from '@ipms/events';
 import { HealthController, MetricsController, registerReadinessCheck } from '@ipms/observability';
+import { DraftController } from './drafts/draft.controller.js';
+import { DraftService } from './drafts/draft.service.js';
 import { PrismaService } from './prisma.service.js';
 import { OutboxDrainer } from './outbox/outbox.drainer.js';
 import { SiteGeofenceClient } from './submissions/site-geofence.client.js';
@@ -45,7 +47,7 @@ function requireEnv(name: string): string {
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [TemplateImportController, TemplateController, SubmissionController, TaskChecklistController, WorkOrderController, WorkOrderUsageController, HealthController, MetricsController],
+  controllers: [TemplateImportController, TemplateController, SubmissionController, TaskChecklistController, DraftController, WorkOrderController, WorkOrderUsageController, HealthController, MetricsController],
   providers: [
     // Order matters: JwtUserGuard must populate request.user before AuthzGuard reads it.
     { provide: APP_GUARD, useClass: JwtUserGuard },
@@ -68,6 +70,7 @@ function requireEnv(name: string): string {
       useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient, media: MediaClient) => new SubmissionService(prisma.db, geofence, media, graceDays()),
       inject: [PrismaService, SiteGeofenceClient, MediaClient],
     },
+    { provide: DraftService, useFactory: (prisma: PrismaService) => new DraftService(prisma.db), inject: [PrismaService] },
     {
       provide: WorkOrderService,
       useFactory: (prisma: PrismaService, queries: TemplateQueries, projects: ProjectDirectoryClient) => new WorkOrderService(prisma.db, queries, projects),

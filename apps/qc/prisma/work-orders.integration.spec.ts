@@ -153,4 +153,27 @@ describe('work orders against a real database', () => {
     expect(await service.usage({ projectId: ANTENNA })).toEqual({ count: 1 });
     expect(await service.usage({ siteId: POWER_SITE })).toEqual({ count: 0 });
   });
+
+  it('deletes the draft when the work order is reassigned or cancelled', async () => {
+    const OTHER = uuidv7();
+    reach = { [ANTENNA]: [{ userId: ENGINEER, wholeProject: true, siteIds: [] }, { userId: OTHER, wholeProject: true, siteIds: [] }] };
+    const addDraft = (workOrderId: string) => prisma.workOrderDraft.create({ data: { workOrderId, holderId: ENGINEER, deviceId: 'd', deviceLabel: 'P', version: 1, responses: [] } });
+
+    const reassigned = (await create(ANTENNA, ANTENNA_SITE)).created[0]!;
+    await addDraft(reassigned.id);
+    await service.update(GLOBAL, reassigned.id, { assigneeId: OTHER }, ACTOR, 'Bearer t');
+    expect(await prisma.workOrderDraft.count({ where: { workOrderId: reassigned.id } })).toBe(0);
+
+    const cancelled = (await create(ANTENNA, ANTENNA_SITE)).created[0]!;
+    await addDraft(cancelled.id);
+    await service.cancel(GLOBAL, cancelled.id, { reason: 'Site dropped' }, ACTOR);
+    expect(await prisma.workOrderDraft.count({ where: { workOrderId: cancelled.id } })).toBe(0);
+  });
+
+  it('keeps the draft when only the date moves', async () => {
+    const order = (await create(ANTENNA, ANTENNA_SITE)).created[0]!;
+    await prisma.workOrderDraft.create({ data: { workOrderId: order.id, holderId: ENGINEER, deviceId: 'd', deviceLabel: 'P', version: 1, responses: [] } });
+    await service.update(GLOBAL, order.id, { plannedCompletionAt: new Date('2026-10-15T18:14:59Z') }, ACTOR, 'Bearer t');
+    expect(await prisma.workOrderDraft.count({ where: { workOrderId: order.id } })).toBe(1);
+  });
 });
