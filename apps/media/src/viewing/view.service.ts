@@ -20,14 +20,14 @@ const num = (value: { toString(): string } | null): number | null => (value === 
 export class ViewService {
   constructor(private readonly prisma: PrismaClient, private readonly storage: StorageClient) {}
 
-  async url(id: string, variant: 'original' | 'thumbnail', scope: AuthzScope): Promise<SignedGet> {
+  async url(id: string, variant: 'original' | 'thumbnail', scope: AuthzScope, download = false): Promise<SignedGet> {
     const row = await this.prisma.mediaObject.findUnique({ where: { id } });
     // Out of scope reads as absent: a 403 would confirm the id exists.
     if (!row || !inScope(scope, row)) throw new NotFoundException('Media not found');
     if (!VIEWABLE.includes(row.status as MediaStatus)) throw new ConflictException(`This file is ${row.status.toLowerCase()} and cannot be viewed`);
     const key = variant === 'thumbnail' ? row.thumbnailKey : row.storageKey;
     if (!key) throw new NotFoundException('This file has no thumbnail');
-    return this.storage.presignGet(key, VIEW_URL_TTL_SECONDS, readableName({ siteCode: row.siteCode, capturedAt: row.capturedAt, id: row.id, variant, kind: row.kind as MediaKind }));
+    return this.storage.presignGet(key, VIEW_URL_TTL_SECONDS, readableName({ siteCode: row.siteCode, capturedAt: row.capturedAt, id: row.id, variant, kind: row.kind as MediaKind }), download ? 'attachment' : 'inline');
   }
 
   async listForWorkOrder(workOrderId: string, scope: AuthzScope): Promise<MediaView[]> {

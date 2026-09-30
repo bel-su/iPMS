@@ -1,11 +1,13 @@
 import { getCurrentUser, hasPermission } from '../../../lib/iam-api';
 import { listAssignable } from '../../../lib/project-api';
 import { getWorkOrder, type WorkOrderEvent } from '../../../lib/work-order-api';
+import { listWorkOrderMedia } from '../../../lib/media-api';
 import { getSubmission, getTemplate, getVersion, type ChecklistSection } from '../../../lib/qc-api';
 import { listUserDirectory } from '../../../lib/user-api';
 import { Sidebar, StatePage, TopActions } from '../../../shell';
 import { ChecklistOutline } from '../checklist-outline';
 import { STATUS_TEXT, WORK_ORDERS_PATH, projectWorkOrdersPath, dueText, eligiblePeople, formatDateTime, formatDay, isOpen, isoDay, personLabel, typeInfo } from '../labels';
+import { buildEvidence, type EvidenceFile } from './evidence-model';
 import { FilledChecklist } from './filled-checklist';
 import { ManageWorkOrder } from './manage';
 import { ReviewConsole } from './review-console';
@@ -51,6 +53,21 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
   ]);
   const submission = submitted?.state === 'ready' ? submitted.data : null;
   const submissionSections = submission && may('qc_template.view') ? await versionSections(submission.templateId, submission.templateVersion) : null;
+  // Evidence facts and the previous attempt (for the New badge) come in parallel.
+  const previousId = submission && submission.attemptNo > 1
+    ? wo.events.filter((e) => e.kind === 'SUBMITTED' && e.detail['attemptNo'] === submission.attemptNo - 1).map((e) => e.detail['submissionId']).find((v): v is string => typeof v === 'string')
+    : undefined;
+  const [mediaFacts, previousResult] = await Promise.all([
+    submission ? listWorkOrderMedia(wo.id) : Promise.resolve(null),
+    previousId ? getSubmission(previousId) : Promise.resolve(null),
+  ]);
+  const facts = new Map((mediaFacts?.state === 'ready' ? mediaFacts.data : []).map((m) => [m.id, m]));
+  const previous = previousResult?.state === 'ready' ? previousResult.data : null;
+  const evidence = new Map<string, EvidenceFile[]>();
+  for (const response of submission?.responses ?? []) {
+    const before = previous ? new Set(previous.responses.find((r) => r.itemId === response.itemId)?.media.map((m) => m.mediaId) ?? []) : null;
+    evidence.set(response.id, buildEvidence(response, facts, before));
+  }
   const candidates = assignable?.state === 'ready' ? eligiblePeople(assignable.data, directory, [wo.site.id]).people : [];
   const info = wo.workOrderType ? typeInfo(wo.workOrderType) : null;
   const status = STATUS_TEXT[wo.status];
@@ -102,7 +119,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                 ? <section className="panel">
                     <h2 className="panel-title">Filled checklist</h2>
                     {submission
-                      ? <FilledChecklist submission={submission} sections={submissionSections} name={name} />
+                      ? <FilledChecklist submission={submission} sections={submissionSections} name={name} evidence={evidence} />
                       : <p className="subtle">{submitted && 'message' in submitted ? submitted.message : 'Nothing submitted yet.'}</p>}
                   </section>
                 : null}
@@ -114,6 +131,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                   workOrderId={wo.id}
                   canApprove={canApprove}
                   canReject={canReject}
+                  evidence={evidence}
                 />
               ) : null}
             </div>
@@ -176,11 +194,17 @@ function describe(event: WorkOrderEvent, name: (id: string | null | undefined) =
   const text = (key: string) => (typeof d[key] === 'string' ? d[key] as string : null);
   switch (event.kind) {
     case 'CREATED': return <>Assigned to <b>{name(text('assigneeId'))}</b>, due {formatDay(text('plannedCompletionAt'))}</>;
+    case 'STARTED': return <>Work started</>;
     case 'REASSIGNED': return <>Handed over from <b>{name(text('from'))}</b> to <b>{name(text('to'))}</b></>;
     case 'RESCHEDULED': return <>Due date moved from {formatDay(text('from'))} to <b>{formatDay(text('to'))}</b></>;
     case 'CANCELLED': return <>Cancelled — {text('reason')}</>;
     case 'SUBMITTED': return <>Checklist submitted{d['attemptNo'] && Number(d['attemptNo']) > 1 ? ` (attempt ${d['attemptNo']})` : ''}</>;
     case 'APPROVED': return <>Approved by QC{text('comment') ? ` — ${text('comment')}` : ''}</>;
     case 'REJECTED': return <>Sent back for rework{text('comment') ? ` — ${text('comment')}` : ''}</>;
+    default: {
+      // A new kind fails typecheck here until it is described.
+      const unknownKind: never = event.kind;
+      return unknownKind;
+    }
   }
 }

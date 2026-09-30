@@ -182,10 +182,10 @@ export class StorageClient {
     }
   }
 
-  async presignGet(key: string, ttlSeconds: number, downloadName: string): Promise<SignedGet> {
+  async presignGet(key: string, ttlSeconds: number, downloadName: string, disposition: 'inline' | 'attachment' = 'inline'): Promise<SignedGet> {
     const safe = downloadName.replace(/[^A-Za-z0-9._-]/g, '_');
     const signedUrl = await getSignedUrl(this.signer, new GetObjectCommand({
-      Bucket: this.bucket, Key: key, ResponseContentDisposition: `inline; filename="${safe}"`,
+      Bucket: this.bucket, Key: key, ResponseContentDisposition: `${disposition}; filename="${safe}"`,
     }), { expiresIn: ttlSeconds });
     return { signedUrl, expiresAt: expiresAt(ttlSeconds) };
   }

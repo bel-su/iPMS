@@ -47,8 +47,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
+      const body = exception.getResponse();
+      // A service may attach machine-readable details (e.g. `{ reason: 'MEDIA_NOT_READY' }`) by throwing
+      // `new ConflictException({ message, details })`; they reach the client in the envelope.
+      const raw = typeof body === 'object' && body !== null ? (body as { details?: unknown }).details : undefined;
+      const details = typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : undefined;
       response.status(status).send(
-        buildError(STATUS_TO_CODE[status] ?? 'INTERNAL', exception.message, correlationId),
+        buildError(STATUS_TO_CODE[status] ?? 'INTERNAL', exception.message, correlationId, details),
       );
       return;
     }

@@ -78,7 +78,21 @@ export const AttachRequestSchema = z.object({
 }).strip();
 export type AttachRequestDto = z.infer<typeof AttachRequestSchema>;
 
-export const ViewUrlQuerySchema = z.object({ variant: z.enum(['original', 'thumbnail']).default('original') }).strip();
+export const MediaCheckRequestSchema = z.object({
+  workOrderId: UuidSchema,
+  siteId: UuidSchema,
+  mediaIds: z.array(UuidSchema).min(1).max(500),
+}).strip();
+export type MediaCheckRequestDto = z.infer<typeof MediaCheckRequestSchema>;
+export type MediaCheckReason = 'UPLOADING' | 'VERIFYING' | 'REJECTED' | 'NOT_FOUND' | 'WRONG_WORK_ORDER';
+/** One per distinct requested id. `kind` is null when the file is missing or belongs elsewhere. */
+export interface MediaCheckResult { id: string; kind: MediaKind | null; usable: boolean; reason?: MediaCheckReason }
+
+export const ViewUrlQuerySchema = z.object({
+  variant: z.enum(['original', 'thumbnail']).default('original'),
+  /** Query-string boolean: sign an `attachment` link so the browser saves the file under its readable name. */
+  download: z.enum(['0', '1', 'true', 'false']).optional().transform((v) => v === '1' || v === 'true'),
+}).strip();
 export const ListMediaQuerySchema = z.object({ workOrderId: UuidSchema }).strip();
 
 export interface SignedPut { signedUrl: string; headers: Record<string, string>; expiresAt: string }

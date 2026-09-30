@@ -19,6 +19,7 @@ describe('media route permissions', () => {
     [ViewController, 'url', 'qc_submission.view'],
     [ViewController, 'list', 'qc_submission.view'],
     [AttachController, 'attach', 'qc_submission.submit'],
+    [AttachController, 'check', 'qc_submission.submit'],
   ] as const)('%o.%s needs %s', (controller, method, code) => {
     expect(permissionOf(controller, method)).toBe(code);
   });

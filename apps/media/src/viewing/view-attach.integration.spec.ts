@@ -49,6 +49,14 @@ describe('ViewService', () => {
     expect(new Date(signed.expiresAt).getTime() - Date.now()).toBeLessThanOrEqual(300_000);
   });
 
+  it('signs an attachment under the readable name when asked to download', async () => {
+    const row = await media('READY');
+    const inline = await fetch((await views.url(row.id, 'original', IN_SCOPE)).signedUrl);
+    expect(inline.headers.get('content-disposition')).toMatch(/^inline;/);
+    const download = await fetch((await views.url(row.id, 'original', IN_SCOPE, true)).signedUrl);
+    expect(download.headers.get('content-disposition')).toMatch(/^attachment;.*KOS121_20260928-080000/);
+  });
+
   it('hides media outside the caller’s scope as not found', async () => {
     const row = await media('READY');
     await expect(views.url(row.id, 'original', OUT_OF_SCOPE)).rejects.toMatchObject({ status: 404 });
@@ -88,14 +96,13 @@ describe('AttachService', () => {
     expect((await attach.attach({ submissionId: SUBMISSION, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [a.id] })).map((m) => m.id)).toEqual([a.id]);
   });
 
-  it('changes nothing when any file is missing, unverified, on another site, another work order, or already in another submission', async () => {
+  it('changes nothing when any file is missing, unverified, on another site, or another work order', async () => {
     const good = await media('READY');
     const cases = [
       [uuidv7()],
       [(await media('VERIFYING')).id],
       [(await media('READY', { siteId: uuidv7() })).id],
       [(await media('READY', { workOrderId: uuidv7() })).id],
-      [(await media('ATTACHED', { attachedToSubmissionId: uuidv7() })).id],
     ];
     for (const extra of cases) {
       await expect(attach.attach({ submissionId: SUBMISSION, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [good.id, ...extra] })).rejects.toMatchObject({ status: 409 });
@@ -117,7 +124,17 @@ describe('AttachService', () => {
     expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: f.id } })).status).toBe('ATTACHED');
   });
 
-  it('lets exactly one of two concurrent attaches of the same file win', async () => {
+  it('lets later attempts of the same work order reuse a file, keeping the first attempt on record', async () => {
+    const row = await media('READY');
+    const first = uuidv7();
+    const second = uuidv7();
+    await attach.attach({ submissionId: first, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [row.id] });
+    await attach.attach({ submissionId: second, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [row.id] });
+    const final = await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } });
+    expect(final).toMatchObject({ status: 'ATTACHED', attachedToSubmissionId: first });
+  });
+
+  it('serialises concurrent attaches of the same file: both succeed, one submission is on record', async () => {
     const row = await media('READY');
     const submissionA = uuidv7();
     const submissionB = uuidv7();
@@ -125,17 +142,13 @@ describe('AttachService', () => {
       attach.attach({ submissionId: submissionA, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [row.id] }),
       attach.attach({ submissionId: submissionB, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [row.id] }),
     ]);
-    const fulfilled = results.filter((r) => r.status === 'fulfilled');
-    const rejected = results.filter((r) => r.status === 'rejected');
-    expect(fulfilled).toHaveLength(1);
-    expect(rejected).toHaveLength(1);
-    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ status: 409 });
+    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
     const final = await prisma.mediaObject.findUniqueOrThrow({ where: { id: row.id } });
     expect(final.status).toBe('ATTACHED');
     expect([submissionA, submissionB]).toContain(final.attachedToSubmissionId);
   });
 
-  it('never leaves a partial result for overlapping multi-file attaches', async () => {
+  it('attaches every file of overlapping multi-file requests exactly once', async () => {
     const f = await media('READY');
     const g = await media('READY');
     const submissionFG = uuidv7();
@@ -144,23 +157,35 @@ describe('AttachService', () => {
       attach.attach({ submissionId: submissionFG, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [f.id, g.id] }),
       attach.attach({ submissionId: submissionF, workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [f.id] }),
     ]);
+    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
     const [rowF, rowG] = await Promise.all([
       prisma.mediaObject.findUniqueOrThrow({ where: { id: f.id } }),
       prisma.mediaObject.findUniqueOrThrow({ where: { id: g.id } }),
     ]);
-    if (results[0]!.status === 'fulfilled') {
-      // The [F, G] request won: both files belong to it, and the [F]-only
-      // request must have been refused outright (no partial claim of F).
-      expect(rowF.attachedToSubmissionId).toBe(submissionFG);
-      expect(rowG.attachedToSubmissionId).toBe(submissionFG);
-      expect(results[1]!.status).toBe('rejected');
-    } else {
-      // The [F]-only request won F first: the [F, G] request must then have
-      // been refused in full, leaving G untouched (never attached alone).
-      expect(rowF.attachedToSubmissionId).toBe(submissionF);
-      expect(rowG.status).toBe('READY');
-      expect(rowG.attachedToSubmissionId).toBeNull();
-      expect(results[1]!.status).toBe('fulfilled');
-    }
+    expect([submissionFG, submissionF]).toContain(rowF.attachedToSubmissionId);
+    expect(rowG.attachedToSubmissionId).toBe(submissionFG);
+  });
+});
+
+describe('AttachService.check', () => {
+  it('reports kind and usability per distinct id, writing nothing', async () => {
+    const ready = await media('READY');
+    const attached = await media('ATTACHED', { attachedToSubmissionId: uuidv7() });
+    const pending = await media('PENDING');
+    const video = await media('VERIFYING', { kind: 'VIDEO' });
+    const rejected = await media('REJECTED');
+    const foreign = await media('READY', { workOrderId: uuidv7() });
+    const missing = uuidv7();
+    const out = await attach.check({ workOrderId: WORK_ORDER, siteId: SITE, mediaIds: [ready.id, attached.id, pending.id, video.id, rejected.id, foreign.id, missing, ready.id] });
+    expect(out).toEqual([
+      { id: ready.id, kind: 'PHOTO', usable: true },
+      { id: attached.id, kind: 'PHOTO', usable: true },
+      { id: pending.id, kind: 'PHOTO', usable: false, reason: 'UPLOADING' },
+      { id: video.id, kind: 'VIDEO', usable: false, reason: 'VERIFYING' },
+      { id: rejected.id, kind: 'PHOTO', usable: false, reason: 'REJECTED' },
+      { id: foreign.id, kind: null, usable: false, reason: 'WRONG_WORK_ORDER' },
+      { id: missing, kind: null, usable: false, reason: 'NOT_FOUND' },
+    ]);
+    expect((await prisma.mediaObject.findUniqueOrThrow({ where: { id: ready.id } })).status).toBe('READY');
   });
 });

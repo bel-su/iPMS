@@ -11,13 +11,13 @@ export interface WorkbookSource {
 export const EXAMPLE_DOCUMENT: TemplateDocument = {
   sections: [
     { number: '1', title: 'EHS On Site', items: [
-      { number: '1.1', requirementText: 'All crew wear helmet, harness and safety boots', severity: 'CRITICAL', responseType: 'RESULT_ONLY', selectOptions: [], minPhotos: 1, maxPhotos: 3, allowsNa: false, isRequired: true, guidanceText: 'Show every crew member in frame' },
-      { number: '1.2', requirementText: 'Work area barricaded', severity: 'NORMAL', responseType: 'BOOLEAN', selectOptions: [], minPhotos: 1, maxPhotos: 2, allowsNa: false, isRequired: true },
+      { number: '1.1', requirementText: 'All crew wear helmet, harness and safety boots', severity: 'CRITICAL', responseType: 'RESULT_ONLY', selectOptions: [], minPhotos: 1, maxPhotos: 3, minVideos: 0, maxVideos: 0, allowsNa: false, isRequired: true, guidanceText: 'Show every crew member in frame' },
+      { number: '1.2', requirementText: 'Work area barricaded', severity: 'NORMAL', responseType: 'BOOLEAN', selectOptions: [], minPhotos: 1, maxPhotos: 2, minVideos: 0, maxVideos: 1, allowsNa: false, isRequired: true },
     ] },
     { number: '2', title: 'Antenna Installation', items: [
-      { number: '2.1', requirementText: 'Azimuth (degrees)', severity: 'NORMAL', responseType: 'NUMBER', selectOptions: [], minPhotos: 1, maxPhotos: 1, allowsNa: true, isRequired: true },
-      { number: '2.2', requirementText: 'Mount type', severity: 'NORMAL', responseType: 'SELECT', selectOptions: ['Pole', 'Wall', 'Tower'], minPhotos: 0, maxPhotos: 0, allowsNa: false, isRequired: true },
-      { number: '2.3', requirementText: 'Installer remarks', severity: 'NORMAL', responseType: 'TEXT', selectOptions: [], minPhotos: 0, maxPhotos: 0, allowsNa: false, isRequired: false },
+      { number: '2.1', requirementText: 'Azimuth (degrees)', severity: 'NORMAL', responseType: 'NUMBER', selectOptions: [], minPhotos: 1, maxPhotos: 1, minVideos: 0, maxVideos: 0, allowsNa: true, isRequired: true },
+      { number: '2.2', requirementText: 'Mount type', severity: 'NORMAL', responseType: 'SELECT', selectOptions: ['Pole', 'Wall', 'Tower'], minPhotos: 0, maxPhotos: 0, minVideos: 0, maxVideos: 0, allowsNa: false, isRequired: true },
+      { number: '2.3', requirementText: 'Installer remarks', severity: 'NORMAL', responseType: 'TEXT', selectOptions: [], minPhotos: 0, maxPhotos: 0, minVideos: 0, maxVideos: 0, allowsNa: false, isRequired: false },
     ] },
   ],
 };
@@ -32,6 +32,7 @@ const INSTRUCTIONS = [
   'Response Type: Result only, Text, Number, Yes/No or Select. Blank means Result only.',
   'Options: only for Select items. Separate 2 to 50 choices with a semicolon, e.g. "Pole; Wall; Tower".',
   'Min Photos / Max Photos: 0 to 20. Min 0 makes photos optional up to Max; Max 0 means no photos.',
+  'Min Videos / Max Videos: 0 to 5. Blank means 0. Videos are recorded at 720p, up to 100 MB each.',
   'Allow N/A: Yes or No (blank means No). Required: Yes or No (blank means Yes).',
   'Guidance: optional instructions shown to the field engineer.',
   'On the Template sheet, Code (upper case letters, digits, dash, underscore), Name and Category (Quality, EHS, Other) are required.',
@@ -71,7 +72,7 @@ export async function buildWorkbook(source: WorkbookSource): Promise<Buffer> {
       sheet.addRow([
         index === 0 ? section.number : '', index === 0 ? section.title : '',
         item.number, item.requirementText, SEVERITY_LABELS[item.severity], RESPONSE_TYPE_LABELS[item.responseType],
-        item.selectOptions.join('; '), item.minPhotos, item.maxPhotos, yesNo(item.allowsNa), yesNo(item.isRequired),
+        item.selectOptions.join('; '), item.minPhotos, item.maxPhotos, item.minVideos, item.maxVideos, yesNo(item.allowsNa), yesNo(item.isRequired),
         item.guidanceText ?? '',
       ]);
     });

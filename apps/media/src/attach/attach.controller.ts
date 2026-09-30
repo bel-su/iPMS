@@ -1,6 +1,6 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import { RequirePermission } from '@ipms/authz';
-import { AttachRequestSchema } from '@ipms/contracts';
+import { AttachRequestSchema, MediaCheckRequestSchema } from '@ipms/contracts';
 import { AttachService } from './attach.service.js';
 
 /**
@@ -14,5 +14,11 @@ export class AttachController {
   @Post('attach') @HttpCode(200) @RequirePermission('qc_submission.submit')
   attach(@Body() body: unknown) {
     return this.attachments.attach(AttachRequestSchema.parse(body));
+  }
+
+  /** Read-only: whether each file could be attached right now, and its kind. */
+  @Post('check') @HttpCode(200) @RequirePermission('qc_submission.submit')
+  check(@Body() body: unknown) {
+    return this.attachments.check(MediaCheckRequestSchema.parse(body));
   }
 }

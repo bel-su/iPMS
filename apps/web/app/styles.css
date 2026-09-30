@@ -389,10 +389,18 @@ a.link { color: var(--blue); }
 .filled-row p { margin: 0; line-height: 1.45; }
 .filled-value, .filled-note, .filled-review { margin: 6px 0 0; font-size: 12px; color: #4a566b; }
 .filled-note { padding: 6px 9px; border-radius: 6px; background: var(--pale); white-space: pre-wrap; }
-.filled-photos { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.filled-photos li { width: 96px; height: 96px; display: grid; place-content: center; justify-items: center; gap: 4px; border: 1px dashed #cfd6e1; border-radius: 8px; background: var(--pale); color: var(--muted); }
-.filled-photos li span { font-size: 22px; }
-.filled-photos li small { font-size: 11px; }
+.evidence { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.evidence li { width: 112px; display: grid; gap: 2px; }
+.evidence button { position: relative; width: 112px; height: 112px; padding: 0; border: 1px solid #cfd6e1; border-radius: 8px; overflow: hidden; background: var(--pale); cursor: zoom-in; }
+.evidence img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.evidence small { font-size: 11px; color: var(--muted); }
+.evidence-play { position: absolute; inset: 0; display: grid; place-content: center; font-size: 28px; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.evidence-new { position: absolute; top: 6px; left: 6px; padding: 1px 6px; border-radius: 999px; background: #1f6feb; color: #fff; font-size: 11px; font-weight: 600; }
+.evidence-missing { display: grid; place-content: center; width: 100%; height: 100%; font-size: 22px; color: var(--muted); }
+.evidence-viewer { position: fixed; inset: 0; z-index: 50; display: grid; grid-template-rows: 1fr auto; background: rgba(10, 14, 22, .92); }
+.evidence-stage { overflow: auto; display: grid; place-items: center; padding: 16px; }
+.evidence-stage img, .evidence-stage video { max-width: 100%; max-height: calc(100vh - 96px); }
+.evidence-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; padding: 12px 16px; color: #fff; }
 .project-row.due-row { grid-template-columns: 32px minmax(0, 1fr) 120px 90px; }
 .project-row.due-row > .due { justify-content: flex-end; font-size: 11px; }
 .project-row.due-row > .badge { justify-self: end; }

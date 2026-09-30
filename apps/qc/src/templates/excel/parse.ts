@@ -21,7 +21,7 @@ interface RowSection { row: number; number: string; title: string; items: RowIte
 
 const FIELD_COLUMNS: Record<string, ColumnKey> = {
   number: 'itemNo', requirementText: 'requirement', severity: 'severity', responseType: 'responseType',
-  selectOptions: 'options', minPhotos: 'minPhotos', maxPhotos: 'maxPhotos', allowsNa: 'allowNa',
+  selectOptions: 'options', minPhotos: 'minPhotos', maxPhotos: 'maxPhotos', minVideos: 'minVideos', maxVideos: 'maxVideos', allowsNa: 'allowNa',
   isRequired: 'required', guidanceText: 'guidance',
 };
 
@@ -160,6 +160,13 @@ function readItem(cells: Cells, error: CellError): Record<string, unknown> {
     if (raw === undefined) continue;
     const count = Number(raw);
     if (!Number.isInteger(count) || count < 0 || count > 20) { error(key, 'Must be a whole number from 0 to 20'); continue; }
+    values[key] = count;
+  }
+  for (const key of ['minVideos', 'maxVideos'] as const) {
+    const raw = cells[key];
+    if (raw === undefined) continue;
+    const count = Number(raw);
+    if (!Number.isInteger(count) || count < 0 || count > 5) { error(key, 'Must be a whole number from 0 to 5'); continue; }
     values[key] = count;
   }
   if (cells.options !== undefined) values['selectOptions'] = cells.options.split(';').map((option) => option.trim()).filter(Boolean);

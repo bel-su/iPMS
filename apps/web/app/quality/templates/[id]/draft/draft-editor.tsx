@@ -135,6 +135,14 @@ export function DraftEditor({ templateId, version, revision: initialRevision, se
                       <input type="number" min={0} max={20} value={item.maxPhotos} onChange={(e) => updateItem(section, item, { maxPhotos: Number(e.target.value) })} />
                       <FieldError message={err('maxPhotos')} />
                     </label>
+                    <label className="field">Min videos
+                      <input type="number" min={0} max={5} value={item.minVideos} onChange={(e) => updateItem(section, item, { minVideos: Number(e.target.value) })} />
+                      <FieldError message={err('minVideos')} />
+                    </label>
+                    <label className="field">Max videos
+                      <input type="number" min={0} max={5} value={item.maxVideos} onChange={(e) => updateItem(section, item, { maxVideos: Number(e.target.value) })} />
+                      <FieldError message={err('maxVideos')} />
+                    </label>
                     <label className="field"><span>Allow N/A</span>
                       <input type="checkbox" checked={item.allowsNa} onChange={(e) => updateItem(section, item, { allowsNa: e.target.checked })} />
                     </label>

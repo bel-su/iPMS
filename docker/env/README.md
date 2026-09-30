@@ -11,7 +11,7 @@ This directory contains individual environment files for each microservice and i
 | **Project Database** | `project-db.env` | 5435 (mapped to 5432) | PostgreSQL credentials for Project database (`ipms_project`) |
 | **Project Service** | `project.env` | 3004 | Projects, sites, and tasks management service + migrations |
 | **QC Database** | `qc-db.env` | 5436 (mapped to 5432) | PostgreSQL credentials for Quality Control database (`ipms_qc`) |
-| **QC Service** | `qc.env` | 3005 | Quality Control inspections and checklists service + migrations |
+| **QC Service** | `qc.env` | 3005 | Quality Control inspections and checklists service + migrations. Calls media at submit (MEDIA_INTERNAL_URL). |
 | **Media Database** | `media-db.env` | 5437 (mapped to 5432) | PostgreSQL credentials for Media database (`ipms_media`) |
 | **Media Service** | `media.env` | 3006 | Media (evidence uploads) service + migrations |
 | **Notification Database** | `notification-db.env` | 5438 (mapped to 5432) | PostgreSQL credentials for Notification database (`ipms_notification`) |

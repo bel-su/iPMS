@@ -7,9 +7,12 @@ import {
 } from '@ipms/authz';
 import { EventBus } from '@ipms/events';
 import { HealthController, MetricsController, registerReadinessCheck } from '@ipms/observability';
+import { DraftController } from './drafts/draft.controller.js';
+import { DraftService } from './drafts/draft.service.js';
 import { PrismaService } from './prisma.service.js';
 import { OutboxDrainer } from './outbox/outbox.drainer.js';
 import { SiteGeofenceClient } from './submissions/site-geofence.client.js';
+import { MediaClient } from './submissions/media.client.js';
 import { SubmissionController } from './submissions/submission.controller.js';
 import { SubmissionService } from './submissions/submission.service.js';
 import { TaskChecklistController } from './tasks/task-checklist.controller.js';
@@ -27,6 +30,7 @@ import { WorkOrderUsageController } from './work-orders/work-order-usage.control
 // Work order reads resolve the caller's real scope from project, per request — see WorkOrderController.
 const scopeProvider: ScopeProvider = { async for(): Promise<AuthzScope> { return { global: false, projectIds: [], siteIds: [] }; } };
 
+const mediaInternalUrl = (): string => process.env['MEDIA_INTERNAL_URL'] ?? 'http://media:3006';
 const projectInternalUrl = (): string => process.env['PROJECT_INTERNAL_URL'] ?? 'http://project:3004';
 function graceDays(): number {
   const raw = process.env['QC_RETIRED_VERSION_GRACE_DAYS']?.trim();
@@ -43,7 +47,7 @@ function requireEnv(name: string): string {
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [TemplateImportController, TemplateController, SubmissionController, TaskChecklistController, WorkOrderController, WorkOrderUsageController, HealthController, MetricsController],
+  controllers: [TemplateImportController, TemplateController, SubmissionController, TaskChecklistController, DraftController, WorkOrderController, WorkOrderUsageController, HealthController, MetricsController],
   providers: [
     // Order matters: JwtUserGuard must populate request.user before AuthzGuard reads it.
     { provide: APP_GUARD, useClass: JwtUserGuard },
@@ -59,12 +63,14 @@ function requireEnv(name: string): string {
       },
     },
     { provide: SiteGeofenceClient, useFactory: () => new SiteGeofenceClient(projectInternalUrl()) },
+    { provide: MediaClient, useFactory: () => new MediaClient(mediaInternalUrl()) },
     { provide: ProjectDirectoryClient, useFactory: () => new ProjectDirectoryClient(projectInternalUrl()) },
     {
       provide: SubmissionService,
-      useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient) => new SubmissionService(prisma.db, geofence, graceDays()),
-      inject: [PrismaService, SiteGeofenceClient],
+      useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient, media: MediaClient) => new SubmissionService(prisma.db, geofence, media, graceDays()),
+      inject: [PrismaService, SiteGeofenceClient, MediaClient],
     },
+    { provide: DraftService, useFactory: (prisma: PrismaService) => new DraftService(prisma.db), inject: [PrismaService] },
     {
       provide: WorkOrderService,
       useFactory: (prisma: PrismaService, queries: TemplateQueries, projects: ProjectDirectoryClient) => new WorkOrderService(prisma.db, queries, projects),

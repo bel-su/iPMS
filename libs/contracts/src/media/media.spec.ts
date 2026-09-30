@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AttachRequestSchema, MEDIA_LIMITS, MIB, RegisterUploadSchema, UploadStatusRequestSchema, partCountFor,
+  AttachRequestSchema, MEDIA_LIMITS, MIB, RegisterUploadSchema, UploadStatusRequestSchema, ViewUrlQuerySchema, partCountFor,
 } from './media.js';
 
 const id = (n: number) => `0192f7a0-0000-7000-8000-${n.toString().padStart(12, '0')}`;
@@ -60,5 +60,17 @@ describe('batch sizes', () => {
   it('requires a workOrderId on attach', () => {
     expect(AttachRequestSchema.safeParse({ submissionId: id(1), siteId: id(2), mediaIds: [id(3)] }).success).toBe(false);
     expect(AttachRequestSchema.safeParse({ submissionId: id(1), workOrderId: id(2), siteId: id(3), mediaIds: [id(4)] }).success).toBe(true);
+  });
+});
+
+describe('ViewUrlQuerySchema', () => {
+  it('reads download as a query-string boolean, false by default', () => {
+    expect(ViewUrlQuerySchema.parse({}).download).toBe(false);
+    expect(ViewUrlQuerySchema.parse({ download: '1' }).download).toBe(true);
+    expect(ViewUrlQuerySchema.parse({ download: 'true' }).download).toBe(true);
+    expect(ViewUrlQuerySchema.parse({ download: '0' }).download).toBe(false);
+    expect(ViewUrlQuerySchema.parse({ download: 'false' }).download).toBe(false);
+    expect(ViewUrlQuerySchema.parse({ variant: 'thumbnail' })).toEqual({ variant: 'thumbnail', download: false });
+    expect(() => ViewUrlQuerySchema.parse({ download: 'yes' })).toThrow();
   });
 });

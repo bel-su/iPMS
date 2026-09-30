@@ -110,6 +110,6 @@ export interface WorkOrderBrief {
 
 /** What happened to a work order, in order — the detail page's timeline. */
 export const WORK_ORDER_EVENT_KINDS = [
-  'CREATED', 'REASSIGNED', 'RESCHEDULED', 'CANCELLED', 'SUBMITTED', 'APPROVED', 'REJECTED',
+  'CREATED', 'STARTED', 'REASSIGNED', 'RESCHEDULED', 'CANCELLED', 'SUBMITTED', 'APPROVED', 'REJECTED',
 ] as const;
 export type WorkOrderEventKind = (typeof WORK_ORDER_EVENT_KINDS)[number];
