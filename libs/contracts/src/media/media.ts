@@ -88,7 +88,11 @@ export type MediaCheckReason = 'UPLOADING' | 'VERIFYING' | 'REJECTED' | 'NOT_FOU
 /** One per distinct requested id. `kind` is null when the file is missing or belongs elsewhere. */
 export interface MediaCheckResult { id: string; kind: MediaKind | null; usable: boolean; reason?: MediaCheckReason }
 
-export const ViewUrlQuerySchema = z.object({ variant: z.enum(['original', 'thumbnail']).default('original') }).strip();
+export const ViewUrlQuerySchema = z.object({
+  variant: z.enum(['original', 'thumbnail']).default('original'),
+  /** Query-string boolean: sign an `attachment` link so the browser saves the file under its readable name. */
+  download: z.enum(['0', '1', 'true', 'false']).optional().transform((v) => v === '1' || v === 'true'),
+}).strip();
 export const ListMediaQuerySchema = z.object({ workOrderId: UuidSchema }).strip();
 
 export interface SignedPut { signedUrl: string; headers: Record<string, string>; expiresAt: string }

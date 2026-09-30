@@ -18,6 +18,18 @@ describe('GET /api/media/:id/:variant', () => {
     expect(mediaUrl).toHaveBeenCalledWith('0192f7a0-0000-7000-8000-000000000001', 'thumbnail');
   });
 
+  it('signs the download variant as an attachment of the original', async () => {
+    mediaUrl.mockResolvedValue({ state: 'ready', data: { signedUrl: 'https://r2.example/x', expiresAt: '' } });
+    expect((await call('0192f7a0-0000-7000-8000-000000000001', 'download')).status).toBe(302);
+    expect(mediaUrl).toHaveBeenCalledWith('0192f7a0-0000-7000-8000-000000000001', 'original', true);
+  });
+
+  it('forbids caching of error responses too', async () => {
+    mediaUrl.mockResolvedValue({ state: 'forbidden', message: 'no' });
+    expect((await call('0192f7a0-0000-7000-8000-000000000001', 'original')).headers.get('cache-control')).toBe('no-store');
+    expect((await call('0192f7a0-0000-7000-8000-000000000001', 'raw')).headers.get('cache-control')).toBe('no-store');
+  });
+
   it('refuses an unknown variant or a malformed id without calling media', async () => {
     expect((await call('0192f7a0-0000-7000-8000-000000000001', 'raw')).status).toBe(404);
     expect((await call('../etc', 'original')).status).toBe(404);

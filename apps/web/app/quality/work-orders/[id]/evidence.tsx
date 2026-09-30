@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatDateTime } from '../labels';
-import type { EvidenceFile } from './evidence-model';
+import { viewerKeyAction, type EvidenceFile } from './evidence-model';
 
 /** A file that cannot be loaded shows a quiet placeholder instead of a broken image. */
 function Thumb({ file }: { file: EvidenceFile }) {
@@ -13,6 +13,16 @@ function Thumb({ file }: { file: EvidenceFile }) {
 
 export function Evidence({ files }: { files: EvidenceFile[] }) {
   const [open, setOpen] = useState<number | null>(null);
+  const dialog = useRef<HTMLDivElement>(null);
+  const opener = useRef<HTMLButtonElement | null>(null);
+  const isOpen = open !== null;
+  // Take focus when the viewer opens so Escape and arrows work at once; give it back on close.
+  useEffect(() => {
+    if (!isOpen) return;
+    dialog.current?.focus();
+    const button = opener.current;
+    return () => button?.focus();
+  }, [isOpen]);
   if (files.length === 0) return null;
   const current = open === null ? null : files[open]!;
   const step = (by: number) => setOpen((index) => (index === null ? null : (index + by + files.length) % files.length));
@@ -22,7 +32,7 @@ export function Evidence({ files }: { files: EvidenceFile[] }) {
       <ul className="evidence" aria-label="Evidence">
         {files.map((file, index) => (
           <li key={file.id}>
-            <button type="button" onClick={() => setOpen(index)} aria-label={`Open ${file.kind === 'VIDEO' ? 'video' : 'photo'} ${index + 1}`}>
+            <button type="button" onClick={(e) => { opener.current = e.currentTarget; setOpen(index); }} aria-label={`Open ${file.kind === 'VIDEO' ? 'video' : 'photo'} ${index + 1}`}>
               <Thumb file={file} />
               {file.kind === 'VIDEO' ? <span className="evidence-play" aria-hidden="true">▶</span> : null}
               {file.isNew ? <span className="evidence-new">New</span> : null}
@@ -33,7 +43,12 @@ export function Evidence({ files }: { files: EvidenceFile[] }) {
         ))}
       </ul>
       {current ? (
-        <div className="evidence-viewer" role="dialog" aria-modal="true" aria-label="Evidence viewer" onKeyDown={(e) => { if (e.key === 'Escape') setOpen(null); if (e.key === 'ArrowRight') step(1); if (e.key === 'ArrowLeft') step(-1); }} tabIndex={-1}>
+        <div className="evidence-viewer" role="dialog" aria-modal="true" aria-label="Evidence viewer" ref={dialog} tabIndex={-1} onKeyDown={(e) => {
+          const action = viewerKeyAction(e.key, e.target instanceof HTMLVideoElement);
+          if (action === 'close') setOpen(null);
+          else if (action === 'next') step(1);
+          else if (action === 'previous') step(-1);
+        }}>
           <div className="evidence-stage">
             {current.kind === 'VIDEO'
               ? <video key={current.id} src={current.originalSrc} poster={current.thumbSrc} controls autoPlay />

@@ -49,6 +49,14 @@ describe('ViewService', () => {
     expect(new Date(signed.expiresAt).getTime() - Date.now()).toBeLessThanOrEqual(300_000);
   });
 
+  it('signs an attachment under the readable name when asked to download', async () => {
+    const row = await media('READY');
+    const inline = await fetch((await views.url(row.id, 'original', IN_SCOPE)).signedUrl);
+    expect(inline.headers.get('content-disposition')).toMatch(/^inline;/);
+    const download = await fetch((await views.url(row.id, 'original', IN_SCOPE, true)).signedUrl);
+    expect(download.headers.get('content-disposition')).toMatch(/^attachment;.*KOS121_20260928-080000/);
+  });
+
   it('hides media outside the caller’s scope as not found', async () => {
     const row = await media('READY');
     await expect(views.url(row.id, 'original', OUT_OF_SCOPE)).rejects.toMatchObject({ status: 404 });

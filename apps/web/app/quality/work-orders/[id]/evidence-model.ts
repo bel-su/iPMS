@@ -27,11 +27,20 @@ export function distanceText(metres: number | null | undefined): string {
 export function buildEvidence(response: { media: ItemMedia[] }, facts: Map<string, Pick<MediaView, 'capturedAt' | 'distanceFromSiteM'>>, previous: Set<string> | null): EvidenceFile[] {
   return [...response.media].sort((a, b) => a.sequence - b.sequence).map((file) => {
     const fact = facts.get(file.mediaId);
-    const src = (variant: 'original' | 'thumbnail') => `/api/media/${file.mediaId}/${variant}`;
+    const src = (variant: 'original' | 'thumbnail' | 'download') => `/api/media/${file.mediaId}/${variant}`;
     return {
       id: file.mediaId, kind: file.kind, capturedAt: fact?.capturedAt ?? null, distanceText: distanceText(fact?.distanceFromSiteM),
       isNew: previous !== null && !previous.has(file.mediaId),
-      thumbSrc: src('thumbnail'), originalSrc: src('original'), downloadSrc: src('original'),
+      thumbSrc: src('thumbnail'), originalSrc: src('original'), downloadSrc: src('download'),
     };
   });
+}
+
+/** What a key does in the viewer. Arrows belong to the video player (seeking) while it has focus. */
+export function viewerKeyAction(key: string, fromVideo: boolean): 'close' | 'next' | 'previous' | null {
+  if (key === 'Escape') return 'close';
+  if (fromVideo) return null;
+  if (key === 'ArrowRight') return 'next';
+  if (key === 'ArrowLeft') return 'previous';
+  return null;
 }

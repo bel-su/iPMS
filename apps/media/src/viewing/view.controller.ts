@@ -13,8 +13,8 @@ export class ViewController {
 
   @Get(':id/url') @RequirePermission('qc_submission.view')
   async url(@Param('id') id: string, @Query() query: unknown, @Req() req: Authed) {
-    const { variant } = ViewUrlQuerySchema.parse(query);
-    return this.views.url(UuidSchema.parse(id), variant, await this.scope(req));
+    const { variant, download } = ViewUrlQuerySchema.parse(query);
+    return this.views.url(UuidSchema.parse(id), variant, await this.scope(req), download);
   }
 
   @Get() @RequirePermission('qc_submission.view')

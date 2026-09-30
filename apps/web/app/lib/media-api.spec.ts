@@ -14,4 +14,8 @@ describe('media-api', () => {
     await api.mediaUrl('m-1', 'thumbnail');
     expect(authFetch).toHaveBeenCalledWith('/api/v1/media/m-1/url', { query: { variant: 'thumbnail' } });
   });
+  it('adds download only when asked', async () => {
+    await api.mediaUrl('m-1', 'original', true);
+    expect(authFetch).toHaveBeenCalledWith('/api/v1/media/m-1/url', { query: { variant: 'original', download: '1' } });
+  });
 });

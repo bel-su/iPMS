@@ -9,7 +9,7 @@ export function listWorkOrderMedia(workOrderId: string): Promise<ApiResult<Media
   return authFetch<MediaView[]>('/api/v1/media', { query: { workOrderId } });
 }
 
-/** A 5-minute link to one file. Never rendered into a page: see `app/api/media/[id]/[variant]/route.ts`. */
-export function mediaUrl(id: string, variant: MediaVariant): Promise<ApiResult<SignedGet>> {
-  return authFetch<SignedGet>(`/api/v1/media/${encodeURIComponent(id)}/url`, { query: { variant } });
+/** A 5-minute link to one file; `download` signs it as an attachment so the browser saves it under its readable name. Never rendered into a page: see `app/api/media/[id]/[variant]/route.ts`. */
+export function mediaUrl(id: string, variant: MediaVariant, download = false): Promise<ApiResult<SignedGet>> {
+  return authFetch<SignedGet>(`/api/v1/media/${encodeURIComponent(id)}/url`, { query: download ? { variant, download: '1' } : { variant } });
 }
