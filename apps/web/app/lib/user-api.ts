@@ -108,6 +108,31 @@ export async function resetUserPassword(id: string, input: ResetPasswordDto): Pr
   return authFetch<User>(`/api/v1/users/${id}/reset-password`, { method: 'POST', json: input });
 }
 
+/**
+ * Where a user's work may reach — `ScopesService.listForUser` in iam. `global`
+ * is reported on its own: empty lists mean "granted nothing", the opposite of
+ * global reach. Needs `scope.view`.
+ */
+export interface UserScopes { global: boolean; projectIds: string[]; siteIds: string[] }
+
+export async function getUserScopes(id: string): Promise<ApiResult<UserScopes>> {
+  return authFetch<UserScopes>(`/api/v1/users/${id}/scopes`);
+}
+
+/**
+ * Project access. iam emits `iam.scope.granted`, the project service
+ * replicates it, and from then on the user is offered as the responsible
+ * person for work in that project. Both are idempotent. Revoking also drops
+ * any site access the user held under the project.
+ */
+export async function grantProjectAccess(id: string, projectId: string): Promise<ApiResult<{ status: string }>> {
+  return authFetch<{ status: string }>(`/api/v1/users/${id}/projects`, { method: 'POST', json: { level: 'PROJECT', projectId } });
+}
+
+export async function revokeProjectAccess(id: string, projectId: string): Promise<ApiResult<{ status: string }>> {
+  return authFetch<{ status: string }>(`/api/v1/users/${id}/projects`, { method: 'DELETE', json: { level: 'PROJECT', projectId } });
+}
+
 /** One entry of the name directory — see `UsersService.directory` in iam. */
 export interface DirectoryUser { id: string; fullName: string; employeeCode: string | null; isActive: boolean }
 

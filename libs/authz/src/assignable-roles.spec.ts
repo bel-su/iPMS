@@ -7,14 +7,14 @@ describe('assignableRoles', () => {
     expect(assignableRoles(['SUPER_ADMIN'])).toBe('ALL');
   });
 
-  it('gives a project manager field engineers and QC managers, and nothing else', () => {
+  it('gives a project manager field engineers, and nothing else', () => {
     const allowed = assignableRoles(['PROJECT_MANAGER']);
-    expect(allowed).toEqual(new Set(['FIELD_ENGINEER', 'QC_MANAGER']));
+    expect(allowed).toEqual(new Set(['FIELD_ENGINEER']));
   });
 
   it('unions the sets of an actor holding two listed roles', () => {
     expect(assignableRoles(['PROJECT_MANAGER', 'QC_MANAGER']))
-      .toEqual(new Set(['FIELD_ENGINEER', 'QC_MANAGER']));
+      .toEqual(new Set(['FIELD_ENGINEER']));
   });
 
   // Fail closed: a custom role created through RolesController confers no
@@ -38,9 +38,13 @@ describe('mayAssign', () => {
     expect(mayAssign(['PROJECT_MANAGER'], 'PROJECT_MANAGER')).toBe(false);
   });
 
-  it('allows a project manager the two team roles', () => {
+  it('allows a project manager field engineers only', () => {
     expect(mayAssign(['PROJECT_MANAGER'], 'FIELD_ENGINEER')).toBe(true);
-    expect(mayAssign(['PROJECT_MANAGER'], 'QC_MANAGER')).toBe(true);
+  });
+
+  // Managers are appointed by an administrator, not by a peer.
+  it('refuses a project manager the QC manager role', () => {
+    expect(mayAssign(['PROJECT_MANAGER'], 'QC_MANAGER')).toBe(false);
   });
 
   it('allows a super administrator anything, including a custom role', () => {
@@ -51,6 +55,11 @@ describe('mayAssign', () => {
 describe('mayManage', () => {
   it('lets a project manager manage a field engineer', () => {
     expect(mayManage(['PROJECT_MANAGER'], ['FIELD_ENGINEER'])).toBe(true);
+  });
+
+  // Deactivating ("deleting") a QC manager is an administrator's call too.
+  it('refuses a project manager a QC manager', () => {
+    expect(mayManage(['PROJECT_MANAGER'], ['QC_MANAGER'])).toBe(false);
   });
 
   it('refuses a project manager a target who also holds an unassignable role', () => {

@@ -33,11 +33,11 @@ describe('GET /roles assignable flag', () => {
     expect(listed.every((role) => role.assignable)).toBe(true);
   });
 
-  it('marks only field engineers and QC managers assignable for a project manager', async () => {
+  it('marks only field engineers assignable for a project manager', async () => {
     const { controller } = build();
     const listed = await controller.list(req(['PROJECT_MANAGER']) as never);
     const assignable = listed.filter((role) => role.assignable).map((role) => role.code);
-    expect(assignable.sort()).toEqual(['FIELD_ENGINEER', 'QC_MANAGER']);
+    expect(assignable).toEqual(['FIELD_ENGINEER']);
   });
 
   it('marks nothing assignable for a role that confers no assignment authority', async () => {

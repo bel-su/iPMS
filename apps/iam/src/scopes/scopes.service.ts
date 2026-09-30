@@ -3,6 +3,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 // the `output` comment in prisma/schema.prisma.
 import type { PrismaClient } from '@prisma-clients/iam';
 import { uuidv7, type CreateOverrideDto } from '@ipms/contracts';
+import { mayManage, type AuthzUser } from '@ipms/authz';
 import { buildOutboxRecord, type JsonObject } from '@ipms/persistence';
 import { SUBJECTS } from '@ipms/events';
 import { getCorrelationId } from '@ipms/observability';
@@ -10,6 +11,9 @@ import type { TokenVersionStore } from '../auth/auth.service.js';
 import type { TokenService } from '../auth/token.service.js';
 
 type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
+
+/** The parts of the caller a project or site grant is judged on. */
+export type ScopeActor = Pick<AuthzUser, 'id' | 'roles' | 'permissions'>;
 
 export interface OverrideView {
   id: string;
@@ -75,10 +79,46 @@ export class ScopesService {
     await this.versions.publish(userId, updated.tokenVersion, this.tokens.refreshTtlSeconds);
   }
 
-  async grantProject(userId: string, projectId: string, actorId: string): Promise<void> {
+  /**
+   * The object gate for project and site access, which `scope.grant` alone
+   * cannot express. Project managers hold the verb so they can staff their own
+   * projects; without this, it would let them staff *any* project — including
+   * one they cannot see — and edit an administrator's access.
+   *
+   * Two rules. The target must be someone the actor could manage at all (the
+   * same `mayManage` table the users screen enforces). And the actor must reach
+   * the project themselves, through global or project scope held in iam's own
+   * tables — the source of truth, not a replicated copy. An actor trusted with
+   * `scope.grant_global` skips the reach check: they may hand out every project
+   * already, one at a time or all at once.
+   *
+   * Throws `NotFoundException` for an unknown target, as the grants always did.
+   */
+  private async assertMayScope(tx: Tx, actor: ScopeActor, userId: string, projectId: string): Promise<void> {
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { id: true, roles: { select: { role: { select: { code: true } } } } },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    const targetRoles = [...new Set(user.roles.map((r) => r.role.code))];
+    if (!mayManage(actor.roles, targetRoles)) {
+      throw new ForbiddenException('You may not manage this user');
+    }
+    if (actor.permissions.includes('scope.grant_global')) return;
+
+    const [global, project] = await Promise.all([
+      tx.userGlobalScope.findUnique({ where: { userId: actor.id } }),
+      tx.userProjectScope.findUnique({ where: { userId_projectId: { userId: actor.id, projectId } } }),
+    ]);
+    if (!global && !project) {
+      throw new ForbiddenException('You can only grant access to projects you have access to');
+    }
+  }
+
+  async grantProject(userId: string, projectId: string, actor: ScopeActor): Promise<void> {
+    const actorId = actor.id;
     await this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user) throw new NotFoundException('User not found');
+      await this.assertMayScope(tx, actor, userId, projectId);
 
       const existing = await tx.userProjectScope.findUnique({ where: { userId_projectId: { userId, projectId } } });
       if (existing) return;   // idempotent: no duplicate row, no duplicate event
@@ -89,8 +129,10 @@ export class ScopesService {
     });
   }
 
-  async revokeProject(userId: string, projectId: string, actorId: string): Promise<void> {
+  async revokeProject(userId: string, projectId: string, actor: ScopeActor): Promise<void> {
+    const actorId = actor.id;
     await this.prisma.$transaction(async (tx) => {
+      await this.assertMayScope(tx, actor, userId, projectId);
       const { count } = await tx.userProjectScope.deleteMany({ where: { userId, projectId } });
       if (count === 0) return;
 
@@ -122,10 +164,10 @@ export class ScopesService {
     });
   }
 
-  async grantSite(userId: string, siteId: string, projectId: string, actorId: string): Promise<void> {
+  async grantSite(userId: string, siteId: string, projectId: string, actor: ScopeActor): Promise<void> {
+    const actorId = actor.id;
     await this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user) throw new NotFoundException('User not found');
+      await this.assertMayScope(tx, actor, userId, projectId);
 
       /**
        * `projectId` arrives in the request body and was previously trusted. A
@@ -157,13 +199,16 @@ export class ScopesService {
     });
   }
 
-  async revokeSite(userId: string, siteId: string, actorId: string): Promise<void> {
+  async revokeSite(userId: string, siteId: string, actor: ScopeActor): Promise<void> {
+    const actorId = actor.id;
     await this.prisma.$transaction(async (tx) => {
       // Read first: the payload needs the row's `projectId`, which is
       // non-nullable on the row and was previously hardcoded to `null` — leaving
-      // consumers unable to tell which project's site had gone.
+      // consumers unable to tell which project's site had gone. The object gate
+      // needs it too, to know which project the actor must reach.
       const existing = await tx.userSiteScope.findUnique({ where: { userId_siteId: { userId, siteId } } });
       if (!existing) return;
+      await this.assertMayScope(tx, actor, userId, existing.projectId);
 
       await tx.userSiteScope.delete({ where: { id: existing.id } });
       await this.emit(
