@@ -194,11 +194,17 @@ function describe(event: WorkOrderEvent, name: (id: string | null | undefined) =
   const text = (key: string) => (typeof d[key] === 'string' ? d[key] as string : null);
   switch (event.kind) {
     case 'CREATED': return <>Assigned to <b>{name(text('assigneeId'))}</b>, due {formatDay(text('plannedCompletionAt'))}</>;
+    case 'STARTED': return <>Work started</>;
     case 'REASSIGNED': return <>Handed over from <b>{name(text('from'))}</b> to <b>{name(text('to'))}</b></>;
     case 'RESCHEDULED': return <>Due date moved from {formatDay(text('from'))} to <b>{formatDay(text('to'))}</b></>;
     case 'CANCELLED': return <>Cancelled — {text('reason')}</>;
     case 'SUBMITTED': return <>Checklist submitted{d['attemptNo'] && Number(d['attemptNo']) > 1 ? ` (attempt ${d['attemptNo']})` : ''}</>;
     case 'APPROVED': return <>Approved by QC{text('comment') ? ` — ${text('comment')}` : ''}</>;
     case 'REJECTED': return <>Sent back for rework{text('comment') ? ` — ${text('comment')}` : ''}</>;
+    default: {
+      // A new kind fails typecheck here until it is described.
+      const unknownKind: never = event.kind;
+      return unknownKind;
+    }
   }
 }

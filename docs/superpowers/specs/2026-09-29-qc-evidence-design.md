@@ -148,15 +148,16 @@ the same steps.
 
 All draft endpoints require `qc_submission.update`, the caller must be the work
 order's assignee, and the work order must be `NOT_STARTED`, `ONGOING` or
-`RECTIFYING` (otherwise 409 `WORK_ORDER_CLOSED`).
+`RECTIFYING` (otherwise 409 `WORK_ORDER_CLOSED`). The paths are qc's
+`/work-orders/...` routes, reached through the gateway at `/api/v1/work-orders/...`.
 
-- **`GET /qc/work-orders/:id/draft`** → `{version, deviceId, deviceLabel,
+- **`GET /work-orders/:id/draft`** → `{version, deviceId, deviceLabel,
   updatedAt, responses}`.
   - No draft and status `RECTIFYING` → an **unsaved** draft (`version: 0`,
     `deviceId: null`) pre-filled from the latest submission: its answers and the
     same `mediaIds` per item. This is how rework reuse (D2) reaches the phone.
   - No draft otherwise → 404.
-- **`PUT /qc/work-orders/:id/draft`** body `SaveDraftSchema`:
+- **`PUT /work-orders/:id/draft`** body `SaveDraftSchema`:
   - no draft yet: `baseVersion` must be 0; creates it held by this device.
   - held by another device → 409 `DRAFT_HELD_ELSEWHERE` with
     `{deviceLabel, updatedAt}`.
@@ -166,7 +167,7 @@ order's assignee, and the work order must be `NOT_STARTED`, `ONGOING` or
   - the first save while the work order is `NOT_STARTED` moves it to
     **`ONGOING`** in the same transaction, with audit and a `STARTED` timeline
     entry.
-- **`POST /qc/work-orders/:id/draft/takeover`** body `TakeoverDraftSchema`: sets
+- **`POST /work-orders/:id/draft/takeover`** body `TakeoverDraftSchema`: sets
   the holder device, bumps `version`, returns the draft. If there is no draft,
   404.
 - Saves are serialised with `SELECT … FOR UPDATE` on the draft row (or an
@@ -261,3 +262,5 @@ Every 409 body carries a machine-readable `code`.
   - R5: qc does not `depends_on` media in compose; submits with files answer 503 while media is down.
   - R6: Download saves rather than opens: media's view link accepts `?download=1`, which signs `attachment` disposition; the web serves it at `GET /api/media/:id/download`.
   - R7: `GET /qc/submissions/:id` is site-scoped, so a reviewer must hold scope on the project or site to read a submission and its evidence.
+  - R8: submit re-checks assignee, status and the draft holder under the work-order row lock inside its transaction.
+  - Rollout note: Mobile builds before video capture send photos only; do not publish templates with minVideos > 0 until the field app records video.
