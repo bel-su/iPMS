@@ -70,4 +70,11 @@ describe('GlobalExceptionFilter', () => {
     filter.catch(new ConflictException('Taken'), h as never);
     expect(response.send.mock.calls[0]![0].error.details).toBeUndefined();
   });
+
+  it.each([['null', null], ['an empty array', []], ['an array', ['x']]])('omits details that are %s', (_label, details) => {
+    const { host: h, response } = host();
+    filter.catch(new ConflictException({ message: 'Taken', details }), h as never);
+    expect(response.send.mock.calls[0]![0].error.details).toBeUndefined();
+    expect('details' in response.send.mock.calls[0]![0].error).toBe(false);
+  });
 });
