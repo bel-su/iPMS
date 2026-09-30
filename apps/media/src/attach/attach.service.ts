@@ -1,16 +1,22 @@
 import { ConflictException } from '@nestjs/common';
-import type { MediaObject, PrismaClient } from '@prisma-clients/media';
-import type { AttachRequestDto, AttachedMedia, MediaKind } from '@ipms/contracts';
+import type { PrismaClient } from '@prisma-clients/media';
+import type { AttachRequestDto, AttachedMedia, MediaCheckRequestDto, MediaCheckResult, MediaKind } from '@ipms/contracts';
+import { judge } from './judge.js';
 
 const num = (value: { toString(): string } | null): number | null => (value === null ? null : Number(value.toString()));
 
 /**
- * qc's submit-time check: every referenced file exists, is verified, belongs
- * to the submission's site, and is not already evidence in another
- * submission. All or nothing, and repeat-safe for the same submission.
+ * qc's submit-time checks. `check` reports, per file, whether it can be evidence (read-only); `attach` makes the usable ones evidence of record, all or nothing, and is repeat-safe.
  */
 export class AttachService {
   constructor(private readonly prisma: PrismaClient) {}
+
+  async check(dto: MediaCheckRequestDto): Promise<MediaCheckResult[]> {
+    const ids = [...new Set(dto.mediaIds)];
+    const rows = await this.prisma.mediaObject.findMany({ where: { id: { in: ids } } });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return ids.map((id) => judge(id, byId.get(id), dto));
+  }
 
   async attach(dto: AttachRequestDto): Promise<AttachedMedia[]> {
     // A submission may reference the same file twice; dedupe for locking,
@@ -23,17 +29,14 @@ export class AttachService {
       // default), two concurrent attaches of the same READY file would both
       // read it as READY and both pass validation, so the loser's later
       // `updateMany` would silently match zero rows. FOR UPDATE makes the
-      // second transaction block here until the first commits, so it then
-      // reads the post-commit state and correctly refuses. Locked in a
+      // second transaction wait, so it reads the first one's ATTACHED rows and
+      // neither rewrites them. Locked in a
       // stable order (by id) so two overlapping multi-file attaches can
       // never deadlock on each other.
       await tx.$queryRaw`SELECT id FROM media_object WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
       const rows = await tx.mediaObject.findMany({ where: { id: { in: ids } } });
       const byId = new Map(rows.map((row) => [row.id, row]));
-      const usable = (row: MediaObject | undefined): row is MediaObject =>
-        !!row && row.siteId === dto.siteId && row.workOrderId === dto.workOrderId && row.category === 'EVIDENCE' &&
-        (row.status === 'READY' || (row.status === 'ATTACHED' && row.attachedToSubmissionId === dto.submissionId));
-      const refused = ids.filter((id) => !usable(byId.get(id)));
+      const refused = ids.filter((id) => !judge(id, byId.get(id), dto).usable);
       if (refused.length) throw new ConflictException(`These files cannot be attached: ${refused.join(', ')}`);
 
       const readyCount = ids.filter((id) => byId.get(id)!.status === 'READY').length;
