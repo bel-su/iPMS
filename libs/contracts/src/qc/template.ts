@@ -22,6 +22,8 @@ export const TemplateItemInputSchema = z.object({
   selectOptions: z.array(z.string().trim().min(1).max(100)).default([]),
   minPhotos: z.number().int().min(0).max(20).default(0),
   maxPhotos: z.number().int().min(0).max(20).default(0),
+  minVideos: z.number().int().min(0).max(5).default(0),
+  maxVideos: z.number().int().min(0).max(5).default(0),
   allowsNa: z.boolean().default(false),
   isRequired: z.boolean().default(true),
   guidanceText: z.string().trim().max(2000).optional(),
@@ -39,6 +41,9 @@ type ParsedSection = z.infer<typeof TemplateSectionInputSchema>;
 function checkItem(item: ParsedItem, path: (string | number)[], ctx: z.RefinementCtx): void {
   if (item.maxPhotos < item.minPhotos) {
     ctx.addIssue({ code: 'custom', path: [...path, 'maxPhotos'], message: `Must be at least Min Photos (${item.minPhotos})` });
+  }
+  if (item.maxVideos < item.minVideos) {
+    ctx.addIssue({ code: 'custom', path: [...path, 'maxVideos'], message: `Must be at least Min Videos (${item.minVideos})` });
   }
   if (item.responseType !== 'SELECT') {
     if (item.selectOptions.length > 0) {
@@ -107,11 +112,11 @@ export const UpdateTemplateSchema = z.object({
 }).strip().refine((dto) => dto.name !== undefined || dto.category !== undefined, { message: 'Nothing to update' });
 export type UpdateTemplateDto = z.infer<typeof UpdateTemplateSchema>;
 
-export const SaveDraftSchema = z.object({
+export const SaveTemplateDraftSchema = z.object({
   revision: z.number().int().min(1),
   document: TemplateDocumentSchema,
 }).strip();
-export type SaveDraftDto = z.infer<typeof SaveDraftSchema>;
+export type SaveTemplateDraftDto = z.infer<typeof SaveTemplateDraftSchema>;
 
 export const ImportCommitSchema = z.object({
   code: TemplateCodeSchema, name: NameSchema, category: TemplateCategorySchema,
