@@ -1,14 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { BadRequestException } from '@nestjs/common';
 import { SubmissionService } from './submission.service.js';
 
 describe('SubmissionService', () => {
   let service: SubmissionService;
   let prisma: any;
   let geofenceClient: any;
+  let media: any;
+  let kinds: Record<string, 'PHOTO' | 'VIDEO'> = {};
 
   beforeEach(() => {
     vi.clearAllMocks();
+    kinds = {};
 
     prisma = {
       submission: {
@@ -30,9 +32,10 @@ describe('SubmissionService', () => {
         create: vi.fn(),
         update: vi.fn(),
       },
-      itemPhoto: {
+      itemMedia: {
         createMany: vi.fn(),
       },
+      workOrderDraft: { findUnique: vi.fn().mockResolvedValue(null), deleteMany: vi.fn() },
       outboxEvent: {
         create: vi.fn(),
       },
@@ -52,7 +55,11 @@ describe('SubmissionService', () => {
       fetch: vi.fn().mockResolvedValue(null),
     };
 
-    service = new SubmissionService(prisma, geofenceClient, 7);
+    media = {
+      check: vi.fn(async (body: { mediaIds: string[] }) => body.mediaIds.map((id) => ({ id, kind: kinds[id] ?? 'PHOTO', usable: true }))),
+      attach: vi.fn().mockResolvedValue('attached'),
+    };
+    service = new SubmissionService(prisma, geofenceClient, media, 7);
   });
 
   describe('createSubmission validation', () => {
@@ -95,6 +102,8 @@ describe('SubmissionService', () => {
                 allowsNa: false,
                 minPhotos: 1,
                 maxPhotos: 5,
+                minVideos: 0,
+                maxVideos: 1,
               },
             ],
           },
@@ -102,102 +111,71 @@ describe('SubmissionService', () => {
       });
     });
 
-    it('rejects when required photos are missing (photoMediaIds.length < minPhotos)', async () => {
-      const dto = {
-        taskId,
-        siteId,
-        projectId,
-        templateVersionId,
-        idempotencyKey: 'idem-1',
-        responses: [
-          {
-            itemId,
-            selfCheckResult: 'PASS' as const,
-            photoMediaIds: [], // 0 photos, but minPhotos = 1
-          },
-        ],
-      };
-
-      await expect(service.createSubmission(dto as any, actorId, 'bearer')).rejects.toThrow(BadRequestException);
-      await expect(service.createSubmission(dto as any, actorId, 'bearer')).rejects.toThrow('Item 1.1 has an invalid photo count');
+    const P = (n: number) => `0192f7a0-0000-7000-8000-0000000000${String(n).padStart(2, '0')}`;
+    const dtoWith = (mediaIds: string[], extra: Record<string, unknown> = {}) => ({
+      taskId, siteId, projectId, templateVersionId, idempotencyKey: `idem-${Math.random()}`,
+      responses: [{ itemId, selfCheckResult: 'PASS' as const, mediaIds }], ...extra,
     });
 
-    it('rejects when photoMediaIds exceed maxPhotos', async () => {
-      const dto = {
-        taskId,
-        siteId,
-        projectId,
-        templateVersionId,
-        idempotencyKey: 'idem-2',
-        responses: [
-          {
-            itemId,
-            selfCheckResult: 'PASS' as const,
-            photoMediaIds: [
-              '0192f7a0-0000-7000-8000-000000000010',
-              '0192f7a0-0000-7000-8000-000000000011',
-              '0192f7a0-0000-7000-8000-000000000012',
-              '0192f7a0-0000-7000-8000-000000000013',
-              '0192f7a0-0000-7000-8000-000000000014',
-              '0192f7a0-0000-7000-8000-000000000015', // 6 photos, max is 5
-            ],
-          },
-        ],
-      };
-
-      await expect(service.createSubmission(dto as any, actorId, 'bearer')).rejects.toThrow('Item 1.1 has an invalid photo count');
-    });
-
-    it('rejects when selfCheckResult is NA but allowsNa is false', async () => {
-      const dto = {
-        taskId,
-        siteId,
-        projectId,
-        templateVersionId,
-        idempotencyKey: 'idem-3',
-        responses: [
-          {
-            itemId,
-            selfCheckResult: 'NA' as const,
-            photoMediaIds: ['0192f7a0-0000-7000-8000-000000000010'],
-          },
-        ],
-      };
-
-      await expect(service.createSubmission(dto as any, actorId, 'bearer')).rejects.toThrow('Item 1.1 does not allow N/A');
-    });
-
-    it('successfully creates submission and records photos when evidence requirements are met', async () => {
-      const photoId = '0192f7a0-0000-7000-8000-000000000010';
-      const dto = {
-        taskId,
-        siteId,
-        projectId,
-        templateVersionId,
-        idempotencyKey: 'idem-4',
-        responses: [
-          {
-            itemId,
-            selfCheckResult: 'PASS' as const,
-            photoMediaIds: [photoId],
-          },
-        ],
-      };
-
-      prisma.submission.create.mockResolvedValue({ id: 'sub-created-1', attemptNo: 2, submittedAt: new Date() });
+    it('counts photos and videos by the kinds media reports', async () => {
+      kinds = { [P(2)]: 'VIDEO' };
+      prisma.submission.create.mockResolvedValue({ id: 'sub-1', attemptNo: 2, submittedAt: new Date() });
       prisma.itemResponse.create.mockResolvedValue({ id: 'resp-1' });
+      await service.createSubmission(dtoWith([P(1), P(2)]) as any, actorId, 'Bearer t');
+      expect(media.check).toHaveBeenCalledWith({ workOrderId: taskId, siteId, mediaIds: [P(1), P(2)] }, 'Bearer t');
+      expect(prisma.itemMedia.createMany).toHaveBeenCalledWith({ data: [
+        { id: expect.any(String), itemResponseId: 'resp-1', mediaId: P(1), kind: 'PHOTO', sequence: 0 },
+        { id: expect.any(String), itemResponseId: 'resp-1', mediaId: P(2), kind: 'VIDEO', sequence: 1 },
+      ] });
+      const submissionId = prisma.submission.create.mock.calls[0][0].data.id;
+      expect(media.attach).toHaveBeenCalledWith({ submissionId, workOrderId: taskId, siteId, mediaIds: [P(1), P(2)] }, 'Bearer t');
+      expect(prisma.workOrderDraft.deleteMany).toHaveBeenCalledWith({ where: { workOrderId: taskId } });
+    });
 
-      const result = await service.createSubmission(dto as any, actorId, 'bearer');
-      expect(result).toBeDefined();
-      expect(prisma.submission.create).toHaveBeenCalled();
-      expect(prisma.itemPhoto.createMany).toHaveBeenCalledWith({
-        data: [{ id: expect.any(String), itemResponseId: 'resp-1', mediaId: photoId, sequence: 0 }],
+    it('refuses too few photos without attaching anything', async () => {
+      kinds = { [P(1)]: 'VIDEO' };
+      await expect(service.createSubmission(dtoWith([P(1)]) as any, actorId, 'b')).rejects.toThrow('Item 1.1 needs 1–5 photos; it has 0');
+      expect(media.attach).not.toHaveBeenCalled();
+    });
+
+    it('refuses too many videos', async () => {
+      kinds = { [P(2)]: 'VIDEO', [P(3)]: 'VIDEO' };
+      await expect(service.createSubmission(dtoWith([P(1), P(2), P(3)]) as any, actorId, 'b')).rejects.toThrow('Item 1.1 allows at most 1 video; it has 2');
+    });
+
+    it('refuses the same file twice', async () => {
+      await expect(service.createSubmission(dtoWith([P(1), P(1)]) as any, actorId, 'b')).rejects.toThrow('Item 1.1 lists the same file twice');
+    });
+
+    it('refuses with MEDIA_NOT_READY and each file’s reason', async () => {
+      media.check.mockResolvedValue([{ id: P(1), kind: 'PHOTO', usable: false, reason: 'UPLOADING' }]);
+      await expect(service.createSubmission(dtoWith([P(1)]) as any, actorId, 'b')).rejects.toMatchObject({
+        status: 409, response: { details: { reason: 'MEDIA_NOT_READY', files: [{ id: P(1), reason: 'UPLOADING' }] } },
       });
-      expect(prisma.workOrder.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: 'REVIEWING' }),
-        }),
-      );
+      expect(media.attach).not.toHaveBeenCalled();
+    });
+
+    it('re-checks and refuses when attach loses a race', async () => {
+      media.attach.mockResolvedValue('refused');
+      media.check
+        .mockResolvedValueOnce([{ id: P(1), kind: 'PHOTO', usable: true }])
+        .mockResolvedValueOnce([{ id: P(1), kind: 'PHOTO', usable: false, reason: 'NOT_FOUND' }]);
+      await expect(service.createSubmission(dtoWith([P(1)]) as any, actorId, 'b')).rejects.toMatchObject({
+        status: 409, response: { details: { reason: 'MEDIA_NOT_READY', files: [{ id: P(1), reason: 'NOT_FOUND' }] } },
+      });
+      expect(prisma.submission.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses while the draft is held by another device', async () => {
+      prisma.workOrderDraft.findUnique.mockResolvedValue({ deviceId: 'other', deviceLabel: 'Pixel 7', updatedAt: new Date('2026-09-30T08:00:00Z') });
+      await expect(service.createSubmission(dtoWith([P(1)], { deviceId: 'mine' }) as any, actorId, 'b')).rejects.toMatchObject({
+        status: 409, response: { details: { reason: 'DRAFT_HELD_ELSEWHERE', deviceLabel: 'Pixel 7' } },
+      });
+    });
+
+    it('still refuses N/A where it is not allowed', async () => {
+      const dto = { ...dtoWith([P(1)]), responses: [{ itemId, selfCheckResult: 'NA' as const, mediaIds: [P(1)] }] };
+      await expect(service.createSubmission(dto as any, actorId, 'b')).rejects.toThrow('Item 1.1 does not allow N/A');
     });
   });
 

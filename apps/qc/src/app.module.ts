@@ -10,6 +10,7 @@ import { HealthController, MetricsController, registerReadinessCheck } from '@ip
 import { PrismaService } from './prisma.service.js';
 import { OutboxDrainer } from './outbox/outbox.drainer.js';
 import { SiteGeofenceClient } from './submissions/site-geofence.client.js';
+import { MediaClient } from './submissions/media.client.js';
 import { SubmissionController } from './submissions/submission.controller.js';
 import { SubmissionService } from './submissions/submission.service.js';
 import { TaskChecklistController } from './tasks/task-checklist.controller.js';
@@ -27,6 +28,7 @@ import { WorkOrderUsageController } from './work-orders/work-order-usage.control
 // Work order reads resolve the caller's real scope from project, per request — see WorkOrderController.
 const scopeProvider: ScopeProvider = { async for(): Promise<AuthzScope> { return { global: false, projectIds: [], siteIds: [] }; } };
 
+const mediaInternalUrl = (): string => process.env['MEDIA_INTERNAL_URL'] ?? 'http://media:3006';
 const projectInternalUrl = (): string => process.env['PROJECT_INTERNAL_URL'] ?? 'http://project:3004';
 function graceDays(): number {
   const raw = process.env['QC_RETIRED_VERSION_GRACE_DAYS']?.trim();
@@ -59,11 +61,12 @@ function requireEnv(name: string): string {
       },
     },
     { provide: SiteGeofenceClient, useFactory: () => new SiteGeofenceClient(projectInternalUrl()) },
+    { provide: MediaClient, useFactory: () => new MediaClient(mediaInternalUrl()) },
     { provide: ProjectDirectoryClient, useFactory: () => new ProjectDirectoryClient(projectInternalUrl()) },
     {
       provide: SubmissionService,
-      useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient) => new SubmissionService(prisma.db, geofence, graceDays()),
-      inject: [PrismaService, SiteGeofenceClient],
+      useFactory: (prisma: PrismaService, geofence: SiteGeofenceClient, media: MediaClient) => new SubmissionService(prisma.db, geofence, media, graceDays()),
+      inject: [PrismaService, SiteGeofenceClient, MediaClient],
     },
     {
       provide: WorkOrderService,
