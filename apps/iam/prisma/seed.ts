@@ -23,7 +23,7 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
       'project.view', 'project.create', 'project.update', 'project.archive',
       'site.view', 'site.create', 'site.update', 'site.import',
       'milestone.view', 'milestone.create', 'milestone.update', 'milestone.declare',
-      'task.view', 'task.create', 'task.update', 'task.assign', 'task.generate', 'task.cancel',
+      'task.view', 'task.view_all', 'task.create', 'task.update', 'task.assign', 'task.generate', 'task.cancel',
       'qc_template.view',
       'qc_submission.view', 'qc_review.view', 'qc_review.approve', 'qc_review.reject',
       'qc_evidence.export', 'audit.view', 'user.view', 'scope.view',
@@ -44,7 +44,7 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
     description: 'Owns checklist templates and quality review. Can raise ad-hoc spot-check tasks.',
     permissions: [
       'project.view', 'site.view', 'milestone.view',
-      'task.view', 'task.create', 'task.update', 'task.assign',
+      'task.view', 'task.view_all', 'task.create', 'task.update', 'task.assign',
       'qc_template.view', 'qc_template.create', 'qc_template.update', 'qc_template.publish', 'qc_template.import',
       'qc_submission.view', 'qc_review.view', 'qc_review.approve', 'qc_review.reject',
       'qc_evidence.export', 'audit.view',
@@ -62,7 +62,7 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
   {
     code: 'VIEWER', name: 'Viewer',
     description: 'Read-only access to scoped projects.',
-    permissions: ['project.view', 'site.view', 'milestone.view', 'task.view', 'qc_submission.view'],
+    permissions: ['project.view', 'site.view', 'milestone.view', 'task.view', 'task.view_all', 'qc_submission.view'],
   },
 ];
 

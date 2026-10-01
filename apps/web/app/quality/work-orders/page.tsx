@@ -27,11 +27,11 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
         </header>
         <div className="dashboard">
           <div className="toolbar">
-            <div><p className="eyebrow">QUALITY &amp; EHS</p><h1>Work orders</h1><p className="subtle">Checklists assigned to sites, across every project you can see.</p></div>
+            <div><p className="eyebrow">QUALITY &amp; EHS</p><h1>Work orders</h1><p className="subtle">{queue.ownWorkOnly ? 'Checklists assigned to you.' : 'Checklists assigned to sites, across every project you can see.'}</p></div>
             {queue.may('task.create') && queue.may('task.assign') ? <a className="primary-button" href={newHref}>+ Assign a checklist</a> : null}
           </div>
           <section className="panel">
-            <WorkOrderQueue data={result.data} params={queue.params} basePath={WORK_ORDERS_PATH} projects={choices} names={queue.names} now={new Date()} created={queue.created} />
+            <WorkOrderQueue data={result.data} params={queue.params} basePath={WORK_ORDERS_PATH} projects={choices} names={queue.names} now={new Date()} created={queue.created} ownWorkOnly={queue.ownWorkOnly} />
           </section>
         </div>
       </section>

@@ -19,6 +19,21 @@ const CATEGORY_LABEL: Record<string, string> = { QUALITY: 'Quality', EHS: 'EHS',
 type Tx = Prisma.TransactionClient;
 
 /**
+ * What a caller may read. `onlyAssignee` is set for a caller without
+ * `task.view_all` — a field engineer — and narrows every read to the work
+ * assigned to them, cancelled work excluded: their queue is their own work.
+ */
+export type WorkOrderScope = AuthzScope & { onlyAssignee?: string };
+
+/** The scope filter plus, for a restricted caller, the own-work filter. ANDed by every read. */
+function reachWhere(scope: WorkOrderScope): Prisma.WorkOrderWhereInput[] {
+  return [
+    scopeWhere(scope),
+    ...(scope.onlyAssignee ? [{ assigneeId: scope.onlyAssignee, status: { not: 'CANCELLED' } }] : []),
+  ];
+}
+
+/**
  * Work orders: a checklist template assigned to one site of a project.
  *
  * qc owns them, and moves their status itself when a submission or review
@@ -93,13 +108,13 @@ export class WorkOrderService {
    * honour the project, type, assignee and search, so they always describe
    * what those found.
    */
-  async list(scope: AuthzScope, query: ListWorkOrdersQueryDto, now = new Date()) {
+  async list(scope: WorkOrderScope, query: ListWorkOrdersQueryDto, now = new Date()) {
     const q = query.q || undefined;
     const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
     // ANDed rather than spread: scopeWhere and the search both use an `OR` key.
     const base: Prisma.WorkOrderWhereInput = {
       AND: [
-        scopeWhere(scope),
+        ...reachWhere(scope),
         ...(query.workOrderType ? [{ workOrderType: query.workOrderType }] : []),
         ...(query.projectId ? [{ projectId: query.projectId }] : []),
         ...(query.assigneeId ? [{ assigneeId: query.assigneeId }] : []),
@@ -141,18 +156,18 @@ export class WorkOrderService {
   }
 
   /** Every work order of one project the caller can see, in brief — the project dashboard's input. */
-  async brief(scope: AuthzScope, projectId: string): Promise<WorkOrderBrief[]> {
+  async brief(scope: WorkOrderScope, projectId: string): Promise<WorkOrderBrief[]> {
     const rows = await this.prisma.workOrder.findMany({
-      where: { AND: [{ projectId }, scopeWhere(scope)] },
+      where: { AND: [{ projectId }, ...reachWhere(scope)] },
       select: { id: true, siteId: true, siteCode: true, title: true, workOrderType: true, status: true, assigneeId: true, plannedCompletionAt: true },
       orderBy: [{ plannedCompletionAt: 'asc' }, { id: 'asc' }],
     });
     return rows.map((row) => ({ ...row, workOrderType: row.workOrderType as WorkOrderType, status: row.status as WorkOrderBrief['status'] }));
   }
 
-  async get(scope: AuthzScope, id: string) {
+  async get(scope: WorkOrderScope, id: string) {
     const found = await this.prisma.workOrder.findFirst({
-      where: { AND: [{ id }, scopeWhere(scope)] },
+      where: { AND: [{ id }, ...reachWhere(scope)] },
       include: { events: { orderBy: [{ at: 'asc' }, { id: 'asc' }] } },
     });
     if (!found) throw new NotFoundException('Work order not found');

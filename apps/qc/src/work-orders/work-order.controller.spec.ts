@@ -46,7 +46,25 @@ describe('WorkOrderController', () => {
     const { controller, service, projects } = make();
     await controller.list({ page: '2', view: 'overdue', projectId: ID }, req(['task.view']));
     expect(projects.scope).toHaveBeenCalledWith('Bearer t');
-    expect(service.list).toHaveBeenCalledWith(SCOPE, { page: 2, limit: 20, view: 'overdue', projectId: ID });
+    expect(service.list).toHaveBeenCalledWith({ ...SCOPE, onlyAssignee: 'u-1' }, { page: 2, limit: 20, view: 'overdue', projectId: ID });
+  });
+
+  it('lets a caller holding task.view_all see every work order in scope', async () => {
+    const { controller, service } = make();
+    await controller.list({}, req(['task.view', 'task.view_all']));
+    await controller.brief(ID, req(['task.view', 'task.view_all']));
+    await controller.get(ID, req(['task.view', 'task.view_all']));
+    expect(service.list.mock.calls[0]![0]).toEqual(SCOPE);
+    expect(service.brief).toHaveBeenCalledWith(SCOPE, ID);
+    expect(service.get).toHaveBeenCalledWith(SCOPE, ID);
+  });
+
+  it('restricts a caller without task.view_all to their own work on every read', async () => {
+    const { controller, service } = make();
+    await controller.brief(ID, req(['task.view']));
+    await controller.get(ID, req(['task.view']));
+    expect(service.brief).toHaveBeenCalledWith({ ...SCOPE, onlyAssignee: 'u-1' }, ID);
+    expect(service.get).toHaveBeenCalledWith({ ...SCOPE, onlyAssignee: 'u-1' }, ID);
   });
 
   it('shows nothing when project cannot say what the caller may see', async () => {

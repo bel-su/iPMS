@@ -18,10 +18,13 @@ export async function loadQueue(search: QueueSearch): Promise<{
   viewer: ApiResult<CurrentUser>;
   names: Map<string, string>;
   created: number | undefined;
+  /** Sees only the work assigned to them — qc enforces it; the page only stops offering what cannot appear. */
+  ownWorkOnly: boolean;
   may: (permission: string) => boolean;
 }> {
-  const filter = queueFilter(search.filter);
   const viewer = await getCurrentUser();
+  const ownWorkOnly = viewer.state === 'ready' && !hasPermission(viewer.data, 'task.view_all');
+  const filter = queueFilter(search.filter, ownWorkOnly);
   const projectId = search.projectId && UUID.test(search.projectId) ? search.projectId : undefined;
   const params: QueueParams = {
     filter: filter.key,
@@ -46,6 +49,7 @@ export async function loadQueue(search: QueueSearch): Promise<{
     params, result, viewer,
     names: new Map(people.state === 'ready' ? people.data.map((person) => [person.id, personLabel(person)]) : []),
     created: Number.isFinite(created) && created > 0 ? created : undefined,
+    ownWorkOnly,
     may: (permission) => viewer.state === 'ready' && hasPermission(viewer.data, permission),
   };
 }

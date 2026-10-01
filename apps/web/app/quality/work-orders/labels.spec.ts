@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   dueBucket, dueText, eligiblePeople, endOfDayIso, filterCount, initials, isWorkOrderType, pageWindow,
-  personLabel, queueFilter, quickDates, taskKind, templatesFor,
+  personLabel, queueFilter, queueFilters, quickDates, taskKind, templatesFor,
 } from './labels';
 
 const NOW = new Date(2026, 8, 25, 10, 0); // 25 Sep 2026, 10:00 local
@@ -58,6 +58,14 @@ describe('queue filters', () => {
   it('defaults to open', () => {
     expect(queueFilter(undefined).key).toBe('open');
     expect(queueFilter('rework').query).toEqual({ status: 'RECTIFYING' });
+  });
+  it('offers no Cancelled pill to someone who sees only their own work', () => {
+    expect(queueFilters(false).map((entry) => entry.key)).toContain('cancelled');
+    expect(queueFilters(true).map((entry) => entry.key)).toEqual(['open', 'overdue', 'review', 'rework', 'done', 'all']);
+  });
+  it('falls back to open when such a viewer asks for cancelled by URL', () => {
+    expect(queueFilter('cancelled').key).toBe('cancelled');
+    expect(queueFilter('cancelled', true).key).toBe('open');
   });
 });
 

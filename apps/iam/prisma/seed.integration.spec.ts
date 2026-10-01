@@ -134,6 +134,17 @@ describe('seedIam', () => {
     expect(codes).not.toContain('scope.revoke_global');
   });
 
+  it('limits field engineers to their own work orders; every other role sees all in scope', async () => {
+    for (const [code, expected] of [
+      ['FIELD_ENGINEER', false], ['PROJECT_MANAGER', true], ['QC_MANAGER', true], ['VIEWER', true], ['SUPER_ADMIN', true],
+    ] as const) {
+      const role = await prisma.role.findUniqueOrThrow({
+        where: { code }, include: { permissions: { include: { permission: true } } },
+      });
+      expect(role.permissions.some((rp) => rp.permission.code === 'task.view_all'), code).toBe(expected);
+    }
+  });
+
   it('keeps field engineers out of the template library', async () => {
     const role = await prisma.role.findUniqueOrThrow({
       where: { code: 'FIELD_ENGINEER' }, include: { permissions: { include: { permission: true } } },
