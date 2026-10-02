@@ -118,6 +118,34 @@ void main() {
       expect(project.sites.last.latitude, isNull);
       expect(project.sites.last.geofenceRadiusM, 80);
     });
+
+    test('resolves each site\'s geofence the way the server does', () {
+      final project = ProjectItem.fromJson({
+        'id': 'p-1',
+        'code': 'PRJ-1',
+        'name': 'Metro',
+        'defaultGeofenceRadiusM': 250,
+        'sites': [
+          {'id': 'a', 'siteCode': 'A', 'name': 'A', 'geofenceMode': 'INHERIT', 'geofenceRadiusM': null},
+          {'id': 'b', 'siteCode': 'B', 'name': 'B', 'geofenceMode': 'CUSTOM', 'geofenceRadiusM': 80},
+          {'id': 'c', 'siteCode': 'C', 'name': 'C', 'geofenceMode': 'OFF', 'geofenceRadiusM': 80},
+        ],
+      });
+      expect(project.sites.map((s) => s.geofenceRadiusM), [250, 80, null]);
+    });
+
+    test('a project with no default radius runs no check on inheriting sites', () {
+      final project = ProjectItem.fromJson({
+        'id': 'p-1',
+        'code': 'PRJ-1',
+        'name': 'Metro',
+        'defaultGeofenceRadiusM': null,
+        'sites': [
+          {'id': 'a', 'siteCode': 'A', 'name': 'A', 'geofenceMode': 'INHERIT'},
+        ],
+      });
+      expect(project.sites.single.geofenceRadiusM, isNull);
+    });
   });
 
   group('AuthUser.fromJson', () {

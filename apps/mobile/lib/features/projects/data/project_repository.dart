@@ -36,7 +36,12 @@ class ProjectRepository {
         ApiEndpoints.workOrders,
         queryParameters: {'projectId': projectId, 'limit': 1},
       );
-      return (response.data?['total'] as num?)?.toInt();
+      final total = (response.data?['total'] as num?)?.toInt();
+      if (total == null) return null;
+      // Cancelled work orders are not shown to the field, so not counted.
+      final counts = response.data?['counts'];
+      final cancelled = counts is Map ? (counts['CANCELLED'] as num?)?.toInt() ?? 0 : 0;
+      return total - cancelled;
     } catch (_) {
       return null;
     }

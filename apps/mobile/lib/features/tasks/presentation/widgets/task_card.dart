@@ -67,6 +67,15 @@ class TaskCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        if (task.note != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Notes: ${task.note}',
+                            style: AppTypography.caption,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
                     ),
                   ),

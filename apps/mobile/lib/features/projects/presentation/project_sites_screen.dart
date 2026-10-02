@@ -326,7 +326,7 @@ class _SiteCard extends StatelessWidget {
                         initialLongitude: site.longitude,
                         siteCode: site.siteCode,
                         siteName: site.name,
-                        geofenceRadiusMeters: (site.geofenceRadiusM ?? 100).toDouble(),
+                        geofenceRadiusMeters: site.geofenceRadiusM?.toDouble(),
                       ),
                     ),
                   );

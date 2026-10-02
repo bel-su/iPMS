@@ -7,7 +7,7 @@ class ProjectItem {
     this.clientName,
     this.phase,
     required this.status,
-    this.defaultGeofenceRadiusM = 500,
+    this.defaultGeofenceRadiusM,
     this.startDate,
     this.targetDate,
     this.siteCount = 0,
@@ -21,7 +21,8 @@ class ProjectItem {
   final String? clientName;
   final String? phase;
   final String status;
-  final int defaultGeofenceRadiusM;
+  /// Null when the project runs no geofence check by default.
+  final int? defaultGeofenceRadiusM;
   final DateTime? startDate;
   final DateTime? targetDate;
   final int siteCount;
@@ -69,7 +70,7 @@ class ProjectItem {
       clientName: json['clientName'] as String?,
       phase: json['phase'] as String?,
       status: json['status'] as String? ?? 'ACTIVE',
-      defaultGeofenceRadiusM: (json['defaultGeofenceRadiusM'] as num?)?.toInt() ?? 500,
+      defaultGeofenceRadiusM: (json['defaultGeofenceRadiusM'] as num?)?.toInt(),
       startDate: json['startDate'] != null ? DateTime.tryParse(json['startDate'].toString()) : null,
       targetDate: json['targetDate'] != null ? DateTime.tryParse(json['targetDate'].toString()) : null,
       siteCount: (count?['sites'] as num?)?.toInt() ?? rawSites.length,
@@ -115,16 +116,24 @@ class ProjectSite {
   final String? city;
   final String status;
 
-  /// A site whose geofence mode is INHERIT has no radius of its own and uses
-  /// the project's [defaultGeofenceRadiusM].
+  /// The radius the site is checked against, resolved the way the server does:
+  /// OFF means no check (null), CUSTOM its own radius, and INHERIT the
+  /// project's [defaultGeofenceRadiusM].
   factory ProjectSite.fromJson(Map<String, dynamic> json, {int? defaultGeofenceRadiusM}) {
+    final own = (json['geofenceRadiusM'] as num?)?.toInt();
+    final radius = switch (json['geofenceMode'] as String?) {
+      'OFF' => null,
+      'CUSTOM' => own,
+      'INHERIT' => defaultGeofenceRadiusM,
+      _ => own ?? defaultGeofenceRadiusM,
+    };
     return ProjectSite(
       id: json['id'] as String? ?? '',
       siteCode: json['siteCode'] as String? ?? '',
       name: json['name'] as String? ?? '',
       latitude: _toDouble(json['latitude']),
       longitude: _toDouble(json['longitude']),
-      geofenceRadiusM: (json['geofenceRadiusM'] as num?)?.toInt() ?? defaultGeofenceRadiusM,
+      geofenceRadiusM: radius,
       address: json['address'] as String?,
       city: json['city'] as String?,
       status: json['status'] as String? ?? 'ACTIVE',

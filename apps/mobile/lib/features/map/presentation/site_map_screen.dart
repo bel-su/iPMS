@@ -13,14 +13,15 @@ class SiteMapScreen extends ConsumerStatefulWidget {
     this.initialLongitude,
     this.siteCode,
     this.siteName,
-    this.geofenceRadiusMeters = 100.0,
+    this.geofenceRadiusMeters,
   });
 
   final double? initialLatitude;
   final double? initialLongitude;
   final String? siteCode;
   final String? siteName;
-  final double geofenceRadiusMeters;
+  /// Null when the site runs no geofence check.
+  final double? geofenceRadiusMeters;
 
   @override
   ConsumerState<SiteMapScreen> createState() => _SiteMapScreenState();
@@ -79,8 +80,9 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
       distanceText = 'Acquiring GPS...';
     }
 
+    final radius = widget.geofenceRadiusMeters;
     final isWithinGeofence =
-        distanceMeters != null && distanceMeters <= widget.geofenceRadiusMeters;
+        distanceMeters != null && radius != null && distanceMeters <= radius;
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
@@ -149,12 +151,12 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
               ),
 
               // Geofence Circle Overlay (around site coordinates)
-              if (site != null)
+              if (site != null && radius != null)
                 CircleLayer(
                   circles: [
                     CircleMarker(
                       point: site,
-                      radius: widget.geofenceRadiusMeters,
+                      radius: radius,
                       useRadiusInMeter: true,
                       color: AppColors.primaryLavender.withValues(alpha: 0.35),
                       borderColor: AppColors.primaryLavenderDark,
@@ -297,7 +299,7 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: distanceMeters == null
+                            color: distanceMeters == null || radius == null
                                 ? AppColors.searchFieldBackground
                                 : isWithinGeofence
                                 ? AppColors.statusCompletedBg
@@ -307,11 +309,13 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
                           child: Text(
                             distanceMeters == null
                                 ? 'Unknown'
+                                : radius == null
+                                ? 'No geofence'
                                 : isWithinGeofence
                                 ? 'On Site'
                                 : 'Off Site',
                             style: AppTypography.badge.copyWith(
-                              color: distanceMeters == null
+                              color: distanceMeters == null || radius == null
                                   ? AppColors.textSecondary
                                   : isWithinGeofence
                                   ? AppColors.statusCompletedText
@@ -351,9 +355,9 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        if (site != null)
+                        if (site != null && radius != null)
                           Text(
-                            'Radius: ${widget.geofenceRadiusMeters.toInt()}m',
+                            'Radius: ${radius.toInt()}m',
                             style: AppTypography.caption,
                           ),
                       ],
