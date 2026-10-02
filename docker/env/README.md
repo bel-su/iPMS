@@ -15,7 +15,7 @@ This directory contains individual environment files for each microservice and i
 | **Media Database** | `media-db.env` | 5437 (mapped to 5432) | PostgreSQL credentials for Media database (`ipms_media`) |
 | **Media Service** | `media.env` | 3006 | Media (evidence uploads) service + migrations |
 | **Notification Database** | `notification-db.env` | 5438 (mapped to 5432) | PostgreSQL credentials for Notification database (`ipms_notification`) |
-| **Notification Service** | `notification.env` | 3007 | Notification service + migrations |
+| **Notification Service** | `notification.env` | 3007 | Notification service + migrations. Consumes qc submission events from NATS; calls iam (IAM_INTERNAL_URL) with INTERNAL_SERVICE_KEY. |
 | **Docs Database** | `docs-db.env` | 5439 (mapped to 5432) | PostgreSQL credentials for Docs database (`ipms_docs`) |
 | **Docs Service** | `docs.env` | 3008 | Documents service + migrations |
 | **API Gateway** | `gateway.env` | 3000 | Reverse proxy, authentication verification, rate limiter |
@@ -65,3 +65,13 @@ MinIO container.
 5. When the environment has a web domain: CORS policy allowing `GET`, `PUT`, `HEAD` from that origin only, headers `content-type` and `x-amz-checksum-sha256`, exposing `ETag`.
 6. Check the media startup log shows `storage configured` with the R2 host and the expected bucket.
 7. Smoke test: register, upload and complete one photo against the bucket, confirm it turns `READY`, open its view link, then delete it. Also confirm the multipart (video) path against the same bucket: register an 11 MiB mp4, upload part 1, check `POST /media/uploads/status`, fetch fresh URLs for the remaining parts (`POST /media/uploads/:id/parts`), finish uploading, call `complete`, and confirm the object turns `READY`. This exercises R2's actual multipart behaviour and error names (`NoSuchUpload`, `InvalidPart`, …), which MinIO does not always reproduce exactly.
+
+## Internal service key
+
+`INTERNAL_SERVICE_KEY` authenticates service-to-service calls that carry no user token. Today that is
+notification asking iam which users may review a project (`POST /api/v1/internal/authz/holders`).
+The value must be identical in `iam.env` and `notification.env`. iam refuses to start in
+`NODE_ENV=production` without it. To rotate: change both files and redeploy iam and notification
+within seconds of each other. Events handled while the two differ are retried only briefly (about
+30 s of backoff) and then dropped and logged: there is no dead-letter store yet, so those reviewer
+notifications are lost.

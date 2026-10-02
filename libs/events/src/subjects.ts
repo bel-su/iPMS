@@ -37,7 +37,6 @@ export const STREAMS: Record<'IAM' | 'AUDIT' | 'QC', StreamDefinition> = {
      */
     durableConsumers: [
       'project-scope-granted', 'project-scope-revoked', 'project-scope-deactivated',
-      'qc-scope-cache',
     ],
   },
   AUDIT: {
@@ -51,8 +50,13 @@ export const STREAMS: Record<'IAM' | 'AUDIT' | 'QC', StreamDefinition> = {
     name: 'QC',
     subjects: ['qc.>'],
     maxAgeMs: 7 * 24 * 60 * 60 * 1000,
-    // Submission facts have no consumer yet (notifications will). media hears of
-    // cancelled work orders so it can release their unsubmitted evidence.
-    durableConsumers: ['media-work-order-cancelled'],
+    // media hears of cancelled work orders so it can release their unsubmitted
+    // evidence; notification has one durable per submission subject (a durable
+    // carries a single filter_subject, see the note on IAM above).
+    durableConsumers: [
+      'media-work-order-cancelled',
+      'notification-submission-submitted',
+      'notification-submission-reviewed',
+    ],
   },
 };

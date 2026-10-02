@@ -7,7 +7,12 @@
 export interface QcSubmissionSubmitted {
   submissionId: string;
   taskId: string;
+  /** The work order's id; the same value as `taskId`, named for what consumers mean by it. */
+  workOrderId: string;
+  workOrderTitle: string;
   projectId: string;
+  siteId: string;
+  siteCode: string;
   attemptNo: number;
   submittedBy: string;
   submittedAt: string;
@@ -16,8 +21,14 @@ export interface QcSubmissionSubmitted {
 export interface QcSubmissionReviewed {
   submissionId: string;
   taskId: string;
+  workOrderId: string;
+  workOrderTitle: string;
   projectId: string;
+  siteId: string;
+  siteCode: string;
   attemptNo: number;
+  /** Who submitted the work being reviewed: the person to tell about the decision. */
+  submittedBy: string;
   decision: 'APPROVE' | 'REJECT_REWORK';
   reviewedBy: string;
   reviewedAt: string;

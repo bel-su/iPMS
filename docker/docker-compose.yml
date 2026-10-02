@@ -351,8 +351,11 @@ services:
     depends_on:
       postgres-notification: { condition: service_healthy }
 
-  # Postgres only: notification has no EventBus and no Redis client, so it waits on
-  # neither and its env file carries no NATS_URL or REDIS_URL.
+  # Postgres and NATS: notification consumes qc submission events. It needs no
+  # Redis (idempotency is a unique key in its own database) and reaches iam
+  # directly, but does not wait on it: a lookup that fails is retried with
+  # backoff for about 30 s, then the event is dropped (no dead-letter store yet),
+  # so start iam promptly after notification.
   notification:
     <<: *service-defaults
     build:
@@ -363,6 +366,7 @@ services:
       - ./env/notification.env
     depends_on:
       postgres-notification: { condition: service_healthy }
+      nats:                  { condition: service_healthy }
       notification-migrate:  { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3007/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]

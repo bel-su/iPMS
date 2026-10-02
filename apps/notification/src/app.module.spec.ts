@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthzGuard, JwtUserGuard, OVERRIDE_PROVIDER, SCOPE_PROVIDER } from '@ipms/authz';
 import { AppModule } from './app.module.js';
+import { NotificationController } from './notifications/notification.controller.js';
+import { NotificationService } from './notifications/notification.service.js';
+import { QcNotificationConsumer } from './events/qc-notification.consumer.js';
 
 interface ClassProvider {
   provide: unknown;
@@ -49,5 +52,20 @@ describe('AppModule guard registration', () => {
 
   it('provides OVERRIDE_PROVIDER, without which the module fails at bootstrap', () => {
     expect(providers.filter(isClassProvider).some((p) => p.provide === OVERRIDE_PROVIDER)).toBe(true);
+  });
+
+  it('serves the notification routes', () => {
+    const controllers = reflectMetadata.getMetadata('controllers', AppModule) as unknown[];
+    expect(controllers).toContain(NotificationController);
+  });
+
+  it('provides the service the controller injects', () => {
+    expect(providers.filter(isClassProvider).some((p) => p.provide === NotificationService)).toBe(true);
+  });
+
+  // A provider that is never listed is never constructed, so its onModuleInit never runs
+  // and the service would start without ever subscribing.
+  it('provides the QC consumer so it subscribes at startup', () => {
+    expect(providers.filter(isClassProvider).some((p) => p.provide === QcNotificationConsumer)).toBe(true);
   });
 });

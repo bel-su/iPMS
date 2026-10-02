@@ -3,9 +3,18 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 // the `output` comment in prisma/schema.prisma.
 import type { PrismaClient } from '@prisma-clients/iam';
 import {
-  check, resolvePermissions, type AuthzOverride, type AuthzScope, type AuthzUser,
+  check, resolvePermissions, type AuthzOverride, type AuthzResource, type AuthzScope, type AuthzUser,
 } from '@ipms/authz';
 import type { AccessCheckDto, AccessCheckResult, EffectivePermission } from '@ipms/contracts';
+
+/** Everything `check()` needs about one user; shared by `load` and `holders`. */
+const USER_INCLUDE = {
+  roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
+  globalScopes: true,
+  projectScopes: true,
+  siteScopes: true,
+  overrides: { include: { permission: true } },
+} as const;
 
 interface LoadedUser {
   id: string;
@@ -38,13 +47,7 @@ export class EffectiveService {
   private async load(userId: string): Promise<LoadedUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
-        globalScopes: true,
-        projectScopes: true,
-        siteScopes: true,
-        overrides: { include: { permission: true } },
-      },
+      include: USER_INCLUDE,
     });
     if (!user) throw new NotFoundException('User not found');
     return user as unknown as LoadedUser;
@@ -226,5 +229,38 @@ export class EffectiveService {
     }
 
     return { allowed: decision.allowed, reason: decision.reason, checks: decision.checks };
+  }
+
+  /**
+   * Users who hold `permission` with reach to `projectId`, for callers that act
+   * on an event rather than a user's request and so have no token to forward.
+   *
+   * Runs the shared `check()` with the project as the resource, exactly as the
+   * owning endpoint would, so "who may review" cannot drift from what review
+   * enforces. Global-scope users pass the project gate; a user with only site
+   * scopes does not, because `check()` decides that, not this method.
+   *
+   * Loads every active user with their relations. Fine while that is tens or
+   * hundreds; if it grows into the thousands, narrow the query by role first.
+   */
+  async holders(permission: string, projectId: string, siteId?: string): Promise<string[]> {
+    const now = new Date();
+    const users = (await this.prisma.user.findMany({
+      where: { isActive: true },
+      include: USER_INCLUDE,
+    })) as unknown as LoadedUser[];
+    return users
+      .filter((user) => {
+        const authzUser = this.toAuthzUser(user, now);
+        const scope = this.toScope(user);
+        const overrides = this.toOverrides(user, now);
+        const allowedFor = (resource: AuthzResource) =>
+          check({ user: authzUser, permission, resource, scope, overrides, now }).allowed;
+        // qc treats a project scope and a site scope as alternatives, so a
+        // reviewer granted only the site must be found too.
+        return allowedFor({ type: 'PROJECT', id: projectId, projectId })
+          || (siteId !== undefined && allowedFor({ type: 'SITE', id: siteId, siteId }));
+      })
+      .map((user) => user.id);
   }
 }
