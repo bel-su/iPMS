@@ -107,7 +107,7 @@ describe('QC notifications', () => {
   });
 
   it('refuses the internal holders lookup at the gateway, even for an admin with a valid body', async () => {
-    // A valid token gets past the JWT guard, so only a gateway /internal/ block yields 404 (IAM itself would answer 401/403/422).
+    // A valid token gets past the JWT guard, so the 404 is the gateway's: no allowed route reaches this path. The /internal/ segment rule itself is pinned by the unit tests in apps/gateway/src/proxy/routes.spec.ts.
     const res = await api('/api/v1/internal/authz/holders', { method: 'POST', token: admin, body: { permission: 'qc_review.approve', projectId: uuidv7() } });
     expect(res.status).toBe(404);
   });
