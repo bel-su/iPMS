@@ -50,6 +50,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
   bool _loadingChecklist = false;
   String? _checklistError;
 
+  /// The reviewer's feedback, when the work order was sent back for rework.
+  ReviewFeedback? _review;
+
   /// Kept across retries of one submission so a resend after a dropped
   /// response cannot create a second attempt; cleared once it succeeds.
   String? _submissionKey;
@@ -68,8 +71,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     // Reactively receive completed background watermark jobs
     _watermarkSub =
         BackgroundWatermarkService.onWatermarkCompleted.listen((evidence) {
+      // The evidence notifier records the photo (even if this screen has
+      // closed); here only the checklist display follows.
       if (evidence.taskId == widget.task.id && mounted) {
-        ref.read(taskEvidenceProvider.notifier).addEvidence(evidence);
         if (evidence.checklistItemId != null) {
           final idx =
               _checklist.indexWhere((c) => c.id == evidence.checklistItemId);
@@ -101,6 +105,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     try {
       final checklist =
           await ref.read(taskRepositoryProvider).getChecklist(widget.task.id);
+      // Photos saved from an earlier session count towards their items.
+      await ref.read(taskEvidenceProvider.notifier).restored;
       if (!mounted) return;
       final evidence = ref.read(taskEvidenceListProvider(widget.task.id));
       setState(() {
@@ -111,6 +117,12 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
         }).toList();
         _loadingChecklist = false;
       });
+      unawaited(_loadReview());
+      // Pick up where an earlier session stopped: send what has not gone
+      // yet, and ask about what the server was still checking.
+      final uploader = ref.read(evidenceUploaderProvider);
+      unawaited(uploader.uploadPending(widget.task.id));
+      unawaited(uploader.refreshStatuses(widget.task.id).catchError((_) {}));
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -119,6 +131,22 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       });
     }
   }
+
+  Future<void> _loadReview() async {
+    final task = ref.read(taskDetailProvider(widget.task.id)).value ?? widget.task;
+    final submissionId = task.currentSubmissionId;
+    if (task.status != 'RECTIFYING' || submissionId == null) return;
+    try {
+      final review = await ref.read(taskRepositoryProvider).getReviewFeedback(submissionId);
+      if (mounted) setState(() => _review = review);
+    } catch (_) {
+      // The checklist is still usable without the reviewer's notes.
+    }
+  }
+
+  /// Evidence can be added only while the work order is waiting on the
+  /// assignee (not under review, completed or cancelled).
+  bool _canWork(TaskItem task) => AppConfig.demoMode || task.isSubmittable;
 
   void _showMessage(String message, {bool isError = false}) {
     if (!mounted) return;
@@ -148,7 +176,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
 
       final result = await CameraService.captureAndWatermark(
         taskId: task.id,
-        siteCode: task.siteCode ?? 'KOS121',
+        siteCode: task.siteCode ?? '',
         siteName: task.siteName ?? 'Site Location',
         projectCode: task.projectCode ?? task.category,
         username: username,
@@ -305,7 +333,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       final now = DateTime.now();
 
       final metadata = WatermarkMetadata(
-        siteCode: task.siteCode ?? 'KOS121',
+        siteCode: task.siteCode ?? '',
         siteName: task.siteName ?? 'Site Location',
         projectCode: task.projectCode ?? task.category,
         latitude: latitude,
@@ -953,6 +981,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                             initialLongitude: task.longitude,
                             siteCode: task.siteCode,
                             siteName: task.siteName,
+                            geofenceRadiusMeters: (task.geofenceRadiusM ?? 100).toDouble(),
                           ),
                         ),
                       );
@@ -980,7 +1009,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                           style: TextStyle(
                               fontSize: 12, fontWeight: FontWeight.bold),
                         ),
-                        onPressed: () => _startMultiPhotoCapture(task),
+                        onPressed: _canWork(task) ? () => _startMultiPhotoCapture(task) : null,
                       ),
                     ),
                   ),
@@ -1066,6 +1095,68 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     return ListView(
       padding: const EdgeInsets.only(top: 8, bottom: 20),
       children: [
+        if (!_canWork(task))
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.searchFieldBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.subtleDivider),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.lock_outline, size: 18, color: AppColors.textSecondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    switch (task.status) {
+                      'REVIEWING' => 'Submitted and waiting for QC review. Nothing to do until the reviewer responds.',
+                      'COMPLETED' => 'This work order is complete.',
+                      'CANCELLED' => 'This work order was cancelled.',
+                      _ => 'This work order cannot be changed right now.',
+                    },
+                    style: AppTypography.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (_review != null && task.status == 'RECTIFYING')
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.statusBlockedBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.replay_rounded, size: 18, color: AppColors.statusBlockedText),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Sent back for rework'
+                        '${_review!.rejectedCount > 0 ? ': ${_review!.rejectedCount} item${_review!.rejectedCount == 1 ? '' : 's'} rejected' : ''}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.statusBlockedText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_review!.comment != null && _review!.comment!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text('Reviewer: ${_review!.comment}', style: AppTypography.bodySmall),
+                ],
+              ],
+            ),
+          ),
         // Checklist Evidence Progress Status Banner
         Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -1272,6 +1363,26 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                     ],
                   ),
 
+                  if (_review?.items[item.id]?.isRejected ?? false) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.statusBlockedBg,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Rejected by QC'
+                        '${(_review!.items[item.id]!.note ?? '').isNotEmpty ? ': ${_review!.items[item.id]!.note}' : ''}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.statusBlockedText,
+                        ),
+                      ),
+                    ),
+                  ],
                   if (item.guidanceText != null &&
                       item.guidanceText!.isNotEmpty) ...[
                     const SizedBox(height: 6),
@@ -1476,7 +1587,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                               style: TextStyle(
                                   fontSize: 11, fontWeight: FontWeight.bold),
                             ),
-                            onPressed: item.acceptsPhotos
+                            onPressed: item.acceptsPhotos && _canWork(task)
                                 ? () => _capturePhotoForItem(task, item)
                                 : null,
                           ),
@@ -1517,7 +1628,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                         size: 18, color: AppColors.darkSlate),
                     const SizedBox(width: 8),
                     Text(
-                      'Site Code: ${task.siteCode ?? "KOS121"}',
+                      'Site Code: ${task.siteCode ?? "—"}',
                       style: AppTypography.bodyMedium
                           .copyWith(fontWeight: FontWeight.w600),
                     ),
@@ -1530,7 +1641,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                         size: 18, color: AppColors.darkSlate),
                     const SizedBox(width: 8),
                     Text(
-                      'Lat: ${task.latitude?.toStringAsFixed(5) ?? "27.71720"} N',
+                      task.latitude != null ? 'Lat: ${task.latitude!.toStringAsFixed(5)}' : 'Lat: not recorded',
                       style: AppTypography.bodyMedium,
                     ),
                   ],
@@ -1542,7 +1653,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                         size: 18, color: AppColors.darkSlate),
                     const SizedBox(width: 8),
                     Text(
-                      'Long: ${task.longitude?.toStringAsFixed(5) ?? "85.32400"} E',
+                      task.longitude != null ? 'Long: ${task.longitude!.toStringAsFixed(5)}' : 'Long: not recorded',
                       style: AppTypography.bodyMedium,
                     ),
                   ],

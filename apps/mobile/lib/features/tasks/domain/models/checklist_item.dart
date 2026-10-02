@@ -185,3 +185,44 @@ class TaskChecklist {
     );
   }
 }
+
+/// What the QC reviewer said about the latest submission: the overall
+/// comment and, per checklist item, the result and note.
+class ReviewFeedback {
+  const ReviewFeedback({this.decision, this.comment, this.items = const {}});
+
+  factory ReviewFeedback.fromSubmission(Map<String, dynamic> json) {
+    final decisions = List<Map<String, dynamic>>.from(
+        (json['decisions'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>())
+      ..sort((a, b) => (a['decidedAt']?.toString() ?? '').compareTo(b['decidedAt']?.toString() ?? ''));
+    final latest = decisions.isEmpty ? null : decisions.last;
+    return ReviewFeedback(
+      decision: latest?['decision'] as String?,
+      comment: latest?['comment'] as String?,
+      items: {
+        for (final r in (json['responses'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>())
+          if (r['itemId'] != null)
+            r['itemId'] as String: ItemReview(
+              result: r['reviewResult'] as String? ?? 'PENDING',
+              note: r['reviewDescription'] as String?,
+            ),
+      },
+    );
+  }
+
+  final String? decision;
+  final String? comment;
+  final Map<String, ItemReview> items;
+
+  int get rejectedCount => items.values.where((r) => r.isRejected).length;
+}
+
+class ItemReview {
+  const ItemReview({required this.result, this.note});
+
+  /// APPROVED, REJECTED, NA or PENDING.
+  final String result;
+  final String? note;
+
+  bool get isRejected => result == 'REJECTED';
+}

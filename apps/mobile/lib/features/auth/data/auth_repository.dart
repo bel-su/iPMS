@@ -33,6 +33,12 @@ class AuthRepository {
         throw const ApiException(message: 'Invalid response from authentication service.');
       }
 
+      // An account that owes a password change gets a token with no
+      // permissions; nothing in the app would work with it.
+      if (data['mustChangePassword'] == true) {
+        throw const ApiException(message: mustChangePasswordMessage, errorCode: 'MUST_CHANGE_PASSWORD');
+      }
+
       await tokenStorage.saveTokens(
         accessToken: data['accessToken'] as String,
         refreshToken: data['refreshToken'] as String? ?? '',
@@ -62,6 +68,7 @@ class AuthRepository {
       final identity = AuthUser.fromJson(me);
       if (identity.id.isNotEmpty) {
         await tokenStorage.saveUserId(identity.id);
+        await tokenStorage.bindBiometricSession(identity.id);
       }
 
       AuthUser? profile;
@@ -97,54 +104,71 @@ class AuthRepository {
     }
   }
 
-  /// Authenticates using device hardware biometrics (Face ID / Touch ID / Fingerprint).
-  /// Restores access via the existing access token or the refresh token that
-  /// was kept for biometric sign-in. The biometric check itself only unlocks
-  /// that stored session; it never stands in for the server.
+  /// Restores a session after the device's biometric check has passed.
+  ///
+  /// The biometric check only unlocks what is stored on this device: the
+  /// current session if it is still valid, otherwise the refresh token kept
+  /// for biometric sign-in. It never stands in for the server.
   Future<AuthUser> loginWithBiometrics({required String username}) async {
     final cleanUsername = username.trim().isEmpty ? 'engineer' : username.trim();
 
-    // 1. Try to restore using active access token if available
+    // 1. The current session, if there is one. An expired access token is
+    //    refreshed by the interceptor on the way.
     final accessToken = await tokenStorage.getAccessToken();
     if (accessToken != null && accessToken.isNotEmpty) {
       try {
         return await getCurrentUser(username: cleanUsername);
-      } catch (_) {
-        // Access token expired, proceed to refresh
+      } on NetworkException {
+        if (AppConfig.demoMode) return _fallbackLogin(cleanUsername);
+        rethrow;
+      } on ApiException {
+        // Session no longer valid; fall through to the biometric session.
       }
     }
 
-    // 2. Try refresh token (either active or biometric-persisted)
-    final refreshToken = await tokenStorage.getRefreshToken() ??
-        await tokenStorage.getBiometricRefreshToken();
-
-    if (refreshToken != null && refreshToken.isNotEmpty) {
-      try {
-        final response = await apiClient.dio.post<Map<String, dynamic>>(
-          ApiEndpoints.refresh,
-          data: {'refreshToken': refreshToken},
-        );
-        final data = response.data;
-        if (data != null && data['accessToken'] != null) {
-          await tokenStorage.saveTokens(
-            accessToken: data['accessToken'] as String,
-            refreshToken: (data['refreshToken'] as String?) ?? refreshToken,
-          );
-          return await getCurrentUser(username: cleanUsername);
-        }
-      } on DioException catch (e) {
-        if (AppConfig.demoMode && ApiException.isConnectionIssue(e)) {
-          return _fallbackLogin(cleanUsername);
-        }
-        if (ApiException.isConnectionIssue(e)) throw const NetworkException();
-      }
+    // 2. The session kept for biometric sign-in.
+    final refreshToken = await tokenStorage.getBiometricRefreshToken() ??
+        await tokenStorage.getRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) {
+      if (AppConfig.demoMode) return _fallbackLogin(cleanUsername);
+      throw const ApiException(message: biometricSessionExpired);
     }
 
-    if (AppConfig.demoMode) return _fallbackLogin(cleanUsername);
-    throw const ApiException(
-      message: 'Your saved session has expired. Please sign in with your password.',
-    );
+    try {
+      final response = await apiClient.dio.post<Map<String, dynamic>>(
+        ApiEndpoints.refresh,
+        data: {'refreshToken': refreshToken},
+      );
+      final data = response.data;
+      if (data == null || data['accessToken'] == null) {
+        throw const ApiException(message: 'Invalid response from authentication service.');
+      }
+      await tokenStorage.saveTokens(
+        accessToken: data['accessToken'] as String,
+        refreshToken: (data['refreshToken'] as String?) ?? refreshToken,
+        userId: await tokenStorage.getBiometricUserId(),
+      );
+      return await getCurrentUser(username: cleanUsername);
+    } on DioException catch (e) {
+      if (AppConfig.demoMode && ApiException.isConnectionIssue(e)) {
+        return _fallbackLogin(cleanUsername);
+      }
+      if (e.response?.statusCode == 401) {
+        // Revoked or expired (password changed, signed out everywhere, or
+        // 30 days unused). Keep the enrollment; the next password sign-in
+        // stores a fresh session for it.
+        await tokenStorage.clearBiometricSession();
+        throw const ApiException(message: biometricSessionExpired, statusCode: 401);
+      }
+      throw ApiException.fromDio(e, fallbackMessage: 'Could not restore your session.');
+    }
   }
+
+  static const String mustChangePasswordMessage =
+      'You need to set a new password before using the app. Change it on the iPMS web portal, then sign in here.';
+
+  static const String biometricSessionExpired =
+      'Your biometric sign-in has expired. Sign in with your password once to turn it back on.';
 
   Future<AuthUser> updateProfile({
     String? fullName,
@@ -224,13 +248,25 @@ class AuthRepository {
     return (token != null && token.isNotEmpty) || (refresh != null && refresh.isNotEmpty);
   }
 
-  Future<void> logout() async {
+  /// Signs out.
+  ///
+  /// With [keepBiometricSession] the device is only locked: the session kept
+  /// for biometric sign-in is left valid on the server, so Face ID / fingerprint
+  /// can open it again. Otherwise every session is revoked server-side, which
+  /// also ends the biometric one.
+  Future<void> logout({bool keepBiometricSession = false}) async {
+    if (keepBiometricSession) {
+      await tokenStorage.clearTokens();
+      return;
+    }
     try {
-      await apiClient.dio.post<void>(ApiEndpoints.logout);
+      // An empty JSON body, not none: the gateway rejects a JSON request
+      // without one, and the revoke would silently never happen.
+      await apiClient.dio.post<void>(ApiEndpoints.logout, data: const <String, dynamic>{});
     } catch (_) {
       // Best-effort server notification
     } finally {
-      await tokenStorage.clearTokens();
+      await tokenStorage.clearTokens(purgeBiometrics: true);
     }
   }
 }

@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/config/env.dart';
+import 'package:mobile/core/security/biometric_auth_service.dart';
 import 'package:mobile/core/services/watermark_service.dart';
 import 'package:mobile/features/auth/providers/auth_provider.dart';
 import 'package:mobile/features/media/providers/evidence_upload_provider.dart';
@@ -161,6 +162,61 @@ void main() {
 
     final after = await container.read(taskRepositoryProvider).getTaskById(task.id);
     expect(after.status, 'REVIEWING');
+    expect(after.assigneeName, 'Field Engineer');
+
+    // QC sends it back: the engineer sees which item was rejected and why,
+    // then resubmits with the photo that is already on the server.
+    await admin.post<void>('/api/v1/qc/submissions/${submission['id']}/review', data: {
+      'decision': 'REJECT_REWORK',
+      'comment': 'Retake the foundation photo',
+      'itemReviews': [
+        {'itemId': photoItem.id, 'result': 'REJECTED', 'description': 'Blurry'},
+        {'itemId': checklist.items[1].id, 'result': 'NA'},
+      ],
+    });
+    final rework = await container.read(taskRepositoryProvider).getTaskById(task.id);
+    expect(rework.status, 'RECTIFYING');
+    expect(rework.isSubmittable, isTrue);
+    final review = await container.read(taskRepositoryProvider).getReviewFeedback(rework.currentSubmissionId!);
+    expect(review.comment, 'Retake the foundation photo');
+    expect(review.items[photoItem.id]!.isRejected, isTrue);
+    expect(review.items[photoItem.id]!.note, 'Blurry');
+
+    final resubmitted = await container.read(taskRepositoryProvider).submitChecklist(
+          checklist: checklist,
+          responses: [
+            ItemResponse(itemId: photoItem.id, result: 'PASS', photoMediaIds: [evidence.mediaId]),
+            ItemResponse(itemId: checklist.items[1].id, result: 'NA'),
+          ],
+          idempotencyKey: const Uuid().v4(),
+          deviceId: 'e2e-device',
+        );
+    expect(resubmitted['attemptNo'], 2);
+
+    // Biometric sign-in against the real iam service: enroll, lock, unlock.
+    final storage = container.read(tokenStorageProvider);
+    await BiometricAuthService(tokenStorage: storage).enrollBiometric(user.username);
+    final biometricSession = await storage.getBiometricRefreshToken();
+    expect(biometricSession, isNotNull);
+
+    await container.read(authStateProvider.notifier).logout(); // lock: Face ID stays on
+    expect(container.read(authStateProvider).value, isNull);
+    expect(await storage.getAccessToken(), isNull);
+
+    await container.read(authStateProvider.notifier).loginWithBiometrics(user.username);
+    expect(container.read(authStateProvider).value?.id, engineerId,
+        reason: '${container.read(authStateProvider).error}');
+    // The unlocked session really works.
+    expect(await container.read(taskRepositoryProvider).getTaskById(task.id), isNotNull);
+
+    // A full sign-out revokes on the server, so the old biometric session is dead.
+    final keptSession = await storage.getBiometricRefreshToken();
+    await container.read(authStateProvider.notifier).logout(purgeBiometrics: true);
+    expect(await storage.isBiometricEnabled(), isFalse);
+    await expectLater(
+      Dio(BaseOptions(baseUrl: baseUrl)).post<void>('/api/v1/auth/refresh', data: {'refreshToken': keptSession}),
+      throwsA(isA<DioException>().having((e) => e.response?.statusCode, 'status', 401)),
+    );
   }, skip: baseUrl == null ? 'Set IPMS_E2E_URL to run against a live stack' : false,
       timeout: const Timeout(Duration(minutes: 3)));
 }

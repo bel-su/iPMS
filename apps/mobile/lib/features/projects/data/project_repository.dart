@@ -15,12 +15,30 @@ class ProjectRepository {
   Future<List<ProjectItem>> getProjects() async {
     try {
       final response = await apiClient.dio.get<List<dynamic>>(ApiEndpoints.projects);
-      return (response.data ?? const [])
+      final projects = (response.data ?? const [])
           .map((item) => ProjectItem.fromJson(item as Map<String, dynamic>))
           .toList();
+      // The project's own task count predates work orders, which are what
+      // the field works on; count those instead.
+      return await Future.wait(projects.map((p) async {
+        final count = await _workOrderCount(p.id);
+        return count == null ? p : p.copyWith(taskCount: count);
+      }));
     } on DioException catch (e) {
       if (AppConfig.demoMode) return _getDemoProjects();
       throw ApiException.fromDio(e, fallbackMessage: 'Failed to load projects.');
+    }
+  }
+
+  Future<int?> _workOrderCount(String projectId) async {
+    try {
+      final response = await apiClient.dio.get<Map<String, dynamic>>(
+        ApiEndpoints.workOrders,
+        queryParameters: {'projectId': projectId, 'limit': 1},
+      );
+      return (response.data?['total'] as num?)?.toInt();
+    } catch (_) {
+      return null;
     }
   }
 

@@ -45,10 +45,29 @@ In demo mode nothing is uploaded or submitted.
 | Tasks (work orders) | `GET /api/v1/work-orders?assigneeId=…`, `GET /api/v1/work-orders/:id` | qc |
 | Checklist | `GET /api/v1/qc/tasks/:workOrderId/checklist` | qc |
 | Submit to QC | `POST /api/v1/qc/submissions` | qc |
+| Rework feedback | `GET /api/v1/qc/submissions/:id` | qc |
+| Assignee names | `GET /api/v1/users/directory` | iam |
 | Photo upload | `POST /api/v1/media/uploads` → `PUT` presigned URL → `POST /media/uploads/:id/complete` → `POST /media/uploads/status` | media + bucket |
 | Delete a photo | `DELETE /api/v1/media/:id` | media |
 
 Paths live in `lib/core/config/api_endpoints.dart`.
+
+## Sign-in and Face ID / fingerprint
+
+After a password sign-in the app offers to turn on biometric sign-in. Once on:
+
+- **Log Out** locks the app. The session kept for biometrics stays valid on the
+  server, so Face ID / fingerprint reopens it.
+- **Sign out & forget device** (in the logout dialog) revokes every session on
+  the server and turns biometrics off on this phone.
+- If the kept session has expired or been revoked (password changed, 30 days
+  unused), Face ID says so and one password sign-in re-arms it.
+- A different account signing in on the same phone removes the previous
+  user's biometric enrollment, and starts with its own tasks and photos.
+- An account that must change its password is told to do so on the web.
+
+When the server refuses to refresh a session mid-use, the app returns to the
+sign-in screen.
 
 ## Photo evidence
 
@@ -63,6 +82,14 @@ Paths live in `lib/core/config/api_endpoints.dart`.
 
 Retries reuse the same media id, so a dropped connection never creates a
 duplicate. A photo the server rejects is sent again under a new id.
+
+The phone remembers its photos and their upload state per account (a small
+index next to the photos in app-private storage), so closing the app loses
+nothing: reopening a work order resumes interrupted uploads. Submitted photos
+are deleted from the phone after 30 days.
+
+Work orders sent back by QC ("Rework") show the reviewer's comment and flag
+each rejected item with its note.
 
 ## Checks
 

@@ -6,6 +6,7 @@ import '../domain/models/checklist_item.dart';
 import '../domain/models/task_item.dart';
 
 final taskRepositoryProvider = Provider<TaskRepository>((ref) {
+  ref.watch(sessionOwnerProvider);
   return TaskRepository(
     apiClient: ref.watch(apiClientProvider),
     projectRepository: ref.watch(projectRepositoryProvider),

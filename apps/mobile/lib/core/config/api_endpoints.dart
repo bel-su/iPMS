@@ -9,6 +9,7 @@ class ApiEndpoints {
   static const String logout = '/api/v1/auth/logout';
   static const String authMe = '/api/v1/auth/me';
   static const String usersMe = '/api/v1/users/me';
+  static const String userDirectory = '/api/v1/users/directory';
 
   // project
   static const String projects = '/api/v1/projects';
@@ -20,6 +21,7 @@ class ApiEndpoints {
   static String checklist(String workOrderId) =>
       '/api/v1/qc/tasks/$workOrderId/checklist';
   static const String submissions = '/api/v1/qc/submissions';
+  static String submission(String id) => '/api/v1/qc/submissions/$id';
 
   // media
   static const String mediaUploads = '/api/v1/media/uploads';

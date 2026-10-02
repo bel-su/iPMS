@@ -4,6 +4,7 @@ import '../data/project_repository.dart';
 import '../domain/models/project_item.dart';
 
 final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
+  ref.watch(sessionOwnerProvider);
   final apiClient = ref.watch(apiClientProvider);
   return ProjectRepository(apiClient: apiClient);
 });

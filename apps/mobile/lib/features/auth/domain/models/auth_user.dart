@@ -23,6 +23,19 @@ class AuthUser {
 
   bool can(String permission) => permissions.contains(permission);
 
+  /// The role for display: `FIELD_ENGINEER` reads as "Field Engineer".
+  String? get roleLabel {
+    final code = role;
+    if (code == null || code.isEmpty) return null;
+    if (!code.contains('_') && code != code.toUpperCase()) return code;
+    const acronyms = {'QC', 'EHS', 'PM'};
+    return code
+        .split('_')
+        .where((w) => w.isNotEmpty)
+        .map((w) => acronyms.contains(w) ? w : w[0] + w.substring(1).toLowerCase())
+        .join(' ');
+  }
+
   String get username {
     if (_username != null && _username.isNotEmpty) {
       return _username;

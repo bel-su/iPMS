@@ -24,6 +24,7 @@ class TaskItem {
     this.templateName,
     this.siteCity,
     this.geofenceRadiusM,
+    this.currentSubmissionId,
   });
 
   final String id;
@@ -49,6 +50,9 @@ class TaskItem {
   final String? templateName;
   final String? siteCity;
   final int? geofenceRadiusM;
+
+  /// The latest submission, whose review explains a rework (RECTIFYING).
+  final String? currentSubmissionId;
 
   /// Open work whose planned completion has passed.
   bool get isOverdue =>
@@ -92,6 +96,7 @@ class TaskItem {
       templateName: templateName,
       siteCity: siteCity,
       geofenceRadiusM: geofenceRadiusM ?? this.geofenceRadiusM,
+      currentSubmissionId: currentSubmissionId,
     );
   }
 
@@ -134,13 +139,28 @@ class TaskItem {
       assigneeId: json['assigneeId'] as String?,
       workOrderType: type,
       templateName: json['templateName'] as String?,
+      currentSubmissionId: json['currentSubmissionId'] as String?,
     );
   }
 
+  /// Checklist progress when the counts are known; otherwise how far the
+  /// work order is through its lifecycle (the work order list carries no
+  /// per-item counts).
   double get progressPercentage {
-    if (totalChecklistCount == 0) return status == 'COMPLETED' ? 1.0 : 0.25;
-    return (completedChecklistCount / totalChecklistCount).clamp(0.0, 1.0);
+    if (totalChecklistCount > 0) {
+      return (completedChecklistCount / totalChecklistCount).clamp(0.0, 1.0);
+    }
+    return switch (status) {
+      'NOT_STARTED' => 0.0,
+      'ONGOING' => 0.35,
+      'RECTIFYING' => 0.5,
+      'REVIEWING' => 0.8,
+      'COMPLETED' => 1.0,
+      _ => 0.0,
+    };
   }
+
+  bool get hasChecklistCounts => totalChecklistCount > 0;
 
   factory TaskItem.fromJson(Map<String, dynamic> json) {
     DateTime? plannedDate;
