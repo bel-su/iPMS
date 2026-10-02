@@ -106,8 +106,9 @@ describe('QC notifications', () => {
     expect((await api('/api/v1/notifications/unread-count')).status).toBe(401);
   });
 
-  it('refuses the internal holders lookup from outside, even with the right shape', async () => {
-    const res = await api('/api/v1/internal/authz/holders', { method: 'POST', body: { permission: 'qc_review.approve', projectId: uuidv7() } });
-    expect([401, 403, 404]).toContain(res.status);
+  it('refuses the internal holders lookup at the gateway, even for an admin with a valid body', async () => {
+    // A valid token gets past the JWT guard, so only a gateway /internal/ block yields 404 (IAM itself would answer 401/403/422).
+    const res = await api('/api/v1/internal/authz/holders', { method: 'POST', token: admin, body: { permission: 'qc_review.approve', projectId: uuidv7() } });
+    expect(res.status).toBe(404);
   });
 });
