@@ -48,13 +48,22 @@ describe('durable naming', () => {
 
   it('gives media its own durable for cancelled work orders', () => {
     expect(SUBJECTS.QC_WORK_ORDER_CANCELLED).toBe('qc.work_order.cancelled');
-    expect(STREAMS.QC.durableConsumers).toEqual(['media-work-order-cancelled']);
+    expect(STREAMS.QC.durableConsumers).toContain('media-work-order-cancelled');
+  });
+
+  it('gives notification one durable per submission subject', () => {
+    // One filter_subject per durable, as for the IAM stream above.
+    expect(STREAMS.QC.durableConsumers).toContain('notification-submission-submitted');
+    expect(STREAMS.QC.durableConsumers).toContain('notification-submission-reviewed');
+  });
+
+  it('no longer declares the unused qc-scope-cache placeholder', () => {
+    expect(STREAMS.IAM.durableConsumers).not.toContain('qc-scope-cache');
   });
 });
 
 describe('QC stream', () => {
-  it('carries the submission subjects to one durable each for project', () => {
+  it('carries every qc subject', () => {
     expect(STREAMS.QC.subjects).toEqual(['qc.>']);
-    expect(STREAMS.QC.durableConsumers).toEqual(['media-work-order-cancelled']);
   });
 });

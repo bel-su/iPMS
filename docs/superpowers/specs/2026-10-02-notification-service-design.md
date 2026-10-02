@@ -37,8 +37,12 @@ the mobile app.
 
 Additive; existing consumers are unaffected.
 
-- `QcSubmissionSubmitted` gains `workOrderId: string` and `siteId: string`.
-- `QcSubmissionReviewed` gains `submittedBy: string`, `workOrderId: string`, `siteId: string`.
+- `QcSubmissionSubmitted` gains `workOrderId`, `workOrderTitle`, `siteId`, `siteCode`.
+- `QcSubmissionReviewed` gains `submittedBy`, `workOrderId`, `workOrderTitle`, `siteId`, `siteCode`.
+
+The title and site code let a reviewer tell notifications apart. Events published before
+this change lack the fields; the consumer logs and acknowledges them rather than retrying
+(§4.2).
 
 `qc` fills these from the submission it already loaded in `submission.service.ts` (submit,
 ~line 185; review, ~line 230). No new queries.
@@ -52,7 +56,9 @@ consumers do not need to know that.
 
 `Notification` gains:
 
-- `eventId String @db.Uuid` — the envelope's `eventId`;
+- `eventId String? @db.Uuid` — the envelope's `eventId`. Nullable: seeded rows
+  (`docker/seed-notification.sql`) have none, and Postgres treats NULLs as distinct in a
+  unique index;
 - `workOrderId String? @db.Uuid`;
 - `@@unique([recipientId, eventId])`.
 
@@ -63,8 +69,7 @@ every list query.
 `type` values: `QC_SUBMISSION_SUBMITTED`, `QC_SUBMISSION_APPROVED`, `QC_SUBMISSION_REJECTED`.
 `actionUrl` is `/quality/work-orders/<workOrderId>`. `DevicePushToken` is untouched.
 
-Existing rows: none in any environment (the service has no writers), so the new `NOT NULL`
-column needs no backfill.
+Existing rows: seeded development rows keep a NULL `eventId` and are unaffected by the unique key.
 
 ### 4.2 Consumers
 
@@ -94,7 +99,8 @@ Failure behaviour:
   `MAX_DELIVERIES` (5), then terminates to the DLQ. No notification is silently dropped.
 - IAM returns an empty reviewer list → log a warning and ack (a project with no reviewers is
   not a delivery error).
-- Malformed payload (missing recipient fields) → throw; it is retried then DLQ'd.
+- Payload without the enrichment fields (an event published before this change) → log a
+  warning and acknowledge; retrying cannot supply them.
 
 ### 4.3 API
 
