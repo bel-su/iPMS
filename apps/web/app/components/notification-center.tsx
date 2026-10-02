@@ -1,73 +1,106 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import type { NotificationPage, UnreadCount } from '@ipms/contracts';
+import {
+  markEveryRead, markOneRead, toItem,
+  type Category, type NotificationItem,
+} from './notification-model';
 
-export interface NotificationItem {
-  id: string;
-  category: 'work-order' | 'qc' | 'system';
-  title: string;
-  description: string;
-  time: string;
-  unread: boolean;
-  href?: string;
+/** How often the badge re-checks while the tab is visible. */
+const POLL_MS = 30_000;
+const NO_STORE: RequestInit = { cache: 'no-store' };
+
+type LoadState = 'idle' | 'loading' | 'ready' | 'error';
+
+/**
+ * `keepalive` lets the request outlive the page: clicking a notification marks it
+ * read and navigates away in the same gesture, and without it the browser may
+ * cancel the request as the page unloads.
+ */
+async function post(url: string): Promise<boolean> {
+  try {
+    return (await fetch(url, { method: 'POST', keepalive: true })).ok;
+  } catch {
+    return false;
+  }
 }
-
-const INITIAL_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: 'notif-1',
-    category: 'qc',
-    title: 'Submission Awaiting QC Review',
-    description: 'Work order #WO-104 (5G Massive MIMO) submitted with 2 watermarked photos.',
-    time: '5m ago',
-    unread: true,
-    href: '/quality/work-orders',
-  },
-  {
-    id: 'notif-2',
-    category: 'work-order',
-    title: 'Checklist Rework Required',
-    description: 'Tower foundation check #WO-098 sent back for rework: Missing slump test photo.',
-    time: '42m ago',
-    unread: true,
-    href: '/quality/work-orders',
-  },
-  {
-    id: 'notif-3',
-    category: 'system',
-    title: 'Site Geofence Verified',
-    description: 'Field engineer checked in at Site KOS121 within 8.5m accuracy.',
-    time: '2h ago',
-    unread: true,
-    href: '/projects',
-  },
-  {
-    id: 'notif-4',
-    category: 'qc',
-    title: 'Quality Check Approved',
-    description: 'Substation civil foundation inspection passed full QC verification.',
-    time: '5h ago',
-    unread: false,
-    href: '/quality/work-orders',
-  },
-];
 
 export function NotificationCenter() {
   const [open, setOpen] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'work-order' | 'qc'>('all');
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [filter, setFilter] = useState<'all' | Category>('all');
+  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [count, setCount] = useState(0);
+  const [load, setLoad] = useState<LoadState>('idle');
+  const [failure, setFailure] = useState<string | null>(null);
 
-  const unreadCount = notifications.filter((n) => n.unread).length;
-  const filtered = notifications.filter((n) => filter === 'all' || n.category === filter);
+  const refreshCount = useCallback(async () => {
+    try {
+      const response = await fetch('/api/notifications/unread-count', NO_STORE);
+      if (!response.ok) return;
+      setCount(((await response.json()) as UnreadCount).count);
+    } catch {
+      // The badge keeps its last value; the next poll tries again.
+    }
+  }, []);
 
-  function markAllAsRead() {
-    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+  const loadList = useCallback(async () => {
+    setLoad('loading');
+    try {
+      const response = await fetch('/api/notifications?limit=20', NO_STORE);
+      if (!response.ok) throw new Error(String(response.status));
+      const page = (await response.json()) as NotificationPage;
+      const now = new Date();
+      setItems(page.items.map((dto) => toItem(dto, now)));
+      setLoad('ready');
+    } catch {
+      setLoad('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshCount();
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshCount();
+    }, POLL_MS);
+    return () => clearInterval(timer);
+  }, [refreshCount]);
+
+  useEffect(() => {
+    if (!open) return;
+    setFailure(null);
+    void loadList();
+    void refreshCount();
+  }, [open, loadList, refreshCount]);
+
+  /** Optimistic: update at once, put it back if the server refuses. */
+  async function markAsRead(id: string) {
+    if (!items.find((item) => item.id === id)?.unread) return;
+    const before = { items, count };
+    setItems(markOneRead(items, id));
+    setCount(Math.max(0, count - 1));
+    if (!(await post(`/api/notifications/${encodeURIComponent(id)}/read`))) {
+      setItems(before.items);
+      setCount(before.count);
+      setFailure('Could not mark that notification as read.');
+    }
   }
 
-  function markAsRead(id: string) {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, unread: false } : n)),
-    );
+  async function markAllAsRead() {
+    const before = { items, count };
+    setItems(markEveryRead(items));
+    setCount(0);
+    if (await post('/api/notifications/read-all')) {
+      // The panel lists the newest 20; older unread ones are still counted by the server.
+      void refreshCount();
+    } else {
+      setItems(before.items);
+      setCount(before.count);
+      setFailure('Could not mark notifications as read.');
+    }
   }
+
+  const filtered = items.filter((item) => filter === 'all' || item.category === filter);
 
   return (
     <div className="notif-wrapper">
@@ -75,7 +108,7 @@ export function NotificationCenter() {
         type="button"
         className={`notif-bell-btn${open ? ' active' : ''}`}
         onClick={() => setOpen(!open)}
-        aria-label={`Notifications, ${unreadCount} unread`}
+        aria-label={`Notifications, ${count} unread`}
         title="Notifications"
       >
         <svg
@@ -93,9 +126,9 @@ export function NotificationCenter() {
           <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
         </svg>
 
-        {unreadCount > 0 ? (
+        {count > 0 ? (
           <span className="notif-badge" aria-hidden="true">
-            {unreadCount}
+            {count}
           </span>
         ) : null}
       </button>
@@ -111,15 +144,15 @@ export function NotificationCenter() {
             <div className="notif-header">
               <div className="notif-header-title">
                 <h3>Notifications</h3>
-                {unreadCount > 0 ? (
-                  <span className="notif-count-pill">{unreadCount} new</span>
+                {count > 0 ? (
+                  <span className="notif-count-pill">{count} new</span>
                 ) : null}
               </div>
-              {unreadCount > 0 ? (
+              {count > 0 ? (
                 <button
                   type="button"
                   className="notif-mark-read-btn"
-                  onClick={markAllAsRead}
+                  onClick={() => void markAllAsRead()}
                 >
                   Mark all as read
                 </button>
@@ -150,12 +183,29 @@ export function NotificationCenter() {
               </button>
             </div>
 
+            {failure ? (
+              <div className="notif-empty" role="alert">
+                <span>{failure}</span>
+              </div>
+            ) : null}
+
             <div className="notif-list">
-              {filtered.length === 0 ? (
+              {load === 'loading' && items.length === 0 ? (
+                <div className="notif-empty" role="status">
+                  <span>Loading notifications…</span>
+                </div>
+              ) : load === 'error' ? (
+                <div className="notif-empty" role="alert">
+                  <p>Could not load notifications.</p>
+                  <button type="button" className="notif-mark-read-btn" onClick={() => void loadList()}>
+                    Try again
+                  </button>
+                </div>
+              ) : filtered.length === 0 ? (
                 <div className="notif-empty">
                   <div className="notif-empty-icon" aria-hidden="true">✓</div>
                   <p>All caught up!</p>
-                  <span>No unread notifications in this category.</span>
+                  <span>No notifications in this category.</span>
                 </div>
               ) : (
                 filtered.map((item) => (
@@ -164,7 +214,7 @@ export function NotificationCenter() {
                     href={item.href ?? '#'}
                     className={`notif-item${item.unread ? ' unread' : ''}`}
                     onClick={() => {
-                      markAsRead(item.id);
+                      void markAsRead(item.id);
                       setOpen(false);
                     }}
                   >
