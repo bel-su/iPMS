@@ -82,6 +82,8 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   def('audit', 'view', 'View the audit ledger'),
   def('audit', 'verify', 'Verify audit chain integrity', ['audit.view']),
 
+  // notification needs none: its routes are authenticated and own-data-only, enforced by the
+  // recipientId filter (spec 2026-10-02 §4.3). Only `docs.*` remains deferred.
   // DEFERRED — no `notification.*` or `docs.*` permissions (spec 2026-09-20 §6.4).
   //
   // `media` needs none added: `qc_evidence.upload` and `qc_evidence.export`
