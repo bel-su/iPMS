@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/config/env.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../providers/auth_provider.dart';
 import '../providers/biometric_provider.dart';
+import 'widgets/server_settings_sheet.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -307,6 +309,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                   ],
+
+                  // Which server this app signs in to, and a way to change it
+                  // without rebuilding (e.g. a laptop's address on the LAN).
+                  const SizedBox(height: 16),
+                  TextButton.icon(
+                    key: const Key('server-settings'),
+                    icon: const Icon(Icons.dns_outlined, size: 16),
+                    label: Text(
+                      'Server: ${Uri.tryParse(AppConfig.apiBaseUrl)?.authority ?? AppConfig.apiBaseUrl}',
+                      style: AppTypography.caption,
+                    ),
+                    onPressed: isLoading
+                        ? null
+                        : () async {
+                            await ServerSettingsSheet.show(context);
+                            if (mounted) setState(() {});
+                          },
+                  ),
                 ],
               ),
             ),

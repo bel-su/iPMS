@@ -21,6 +21,7 @@ class TokenStorage {
   static const String _biometricRefreshTokenKey = 'ipms_biometric_refresh_token';
   static const String _biometricUserIdKey = 'ipms_biometric_user_id';
   static const String _deviceIdKey = 'ipms_device_id';
+  static const String _apiBaseUrlKey = 'ipms_api_base_url';
 
   Future<void> saveTokens({
     required String accessToken,
@@ -77,6 +78,14 @@ class TokenStorage {
 
   Future<void> saveUserId(String userId) =>
       _storage.write(key: _userIdKey, value: userId);
+
+  /// The server address chosen on the sign-in screen, overriding the one
+  /// the app was built with. Null when none was chosen.
+  Future<String?> getApiBaseUrl() => _storage.read(key: _apiBaseUrlKey);
+
+  Future<void> setApiBaseUrl(String? url) => url == null || url.isEmpty
+      ? _storage.delete(key: _apiBaseUrlKey)
+      : _storage.write(key: _apiBaseUrlKey, value: url);
 
   /// A stable id for this installation, sent with every evidence upload so
   /// the server can tell which phone a file came from. Survives sign-out.
