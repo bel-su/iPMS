@@ -11,7 +11,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../domain/models/checklist_item.dart';
 import '../domain/models/task_item.dart';
-import '../providers/evidence_provider.dart';
 
 /// A camera that stays open: every tap of the shutter files a photo against
 /// one checklist item and is ready for the next. There is no retake / use
@@ -140,20 +139,6 @@ class _ContinuousCameraScreenState extends ConsumerState<ContinuousCameraScreen>
     position: _position,
   );
 
-  int get _alreadyOnItem => ref
-      .read(
-        checklistItemEvidenceProvider((
-          taskId: widget.task.id,
-          itemId: widget.item.id,
-        )),
-      )
-      .length;
-
-  int? get _roomLeft {
-    final max = widget.item.maxPhotos;
-    return max == null ? null : max - _alreadyOnItem - _taken;
-  }
-
   Future<void> _toggleTorch() async {
     final camera = _camera;
     if (camera == null) return;
@@ -166,12 +151,6 @@ class _ContinuousCameraScreenState extends ConsumerState<ContinuousCameraScreen>
     final camera = _camera;
     if (camera == null || _taking || !camera.value.isInitialized) return;
     if (!_fence.allowed) return;
-    if ((_roomLeft ?? 1) <= 0) {
-      _toast(
-        'This item already has its maximum of ${widget.item.maxPhotos} photos.',
-      );
-      return;
-    }
     setState(() => _taking = true);
     try {
       final shot = await camera.takePicture();
@@ -244,9 +223,7 @@ class _ContinuousCameraScreenState extends ConsumerState<ContinuousCameraScreen>
   Widget build(BuildContext context) {
     final fence = _fence;
     final camera = _camera;
-    final roomLeft = _roomLeft;
-    final canShoot =
-        camera != null && fence.allowed && !_taking && (roomLeft ?? 1) > 0;
+    final canShoot = camera != null && fence.allowed && !_taking;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -354,9 +331,7 @@ class _ContinuousCameraScreenState extends ConsumerState<ContinuousCameraScreen>
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Text(
-                            roomLeft == null
-                                ? '$_taken taken'
-                                : '$_taken taken · $roomLeft left',
+                            '$_taken taken',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 14,
