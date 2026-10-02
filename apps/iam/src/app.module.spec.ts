@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthzGuard, JwtUserGuard, OVERRIDE_PROVIDER, SCOPE_PROVIDER } from '@ipms/authz';
+import { InternalAuthzController } from './internal/internal-authz.controller.js';
 import { AppModule } from './app.module.js';
 
 interface Provider {
@@ -47,5 +48,10 @@ describe('AppModule guard registration', () => {
     const provider = registered.find((p) => p.provide === OVERRIDE_PROVIDER);
     expect(provider).toBeDefined();
     expect(typeof provider?.useFactory).toBe('function');
+  });
+
+  it('serves the internal holders lookup', () => {
+    const controllers = reflectMetadata.getMetadata('controllers', AppModule) as unknown[];
+    expect(controllers).toContain(InternalAuthzController);
   });
 });
