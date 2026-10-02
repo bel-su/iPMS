@@ -29,6 +29,26 @@ or uploads will fail with a connection error. Against R2 no forwarding is needed
 Sign in as `engineer@ipms.local` with the demo password (`IAM_DEMO_PASSWORD` in
 `docker/env/iam.env`) to see the field engineer's assigned work orders.
 
+### Changing the server without rebuilding
+
+Tap **Server: …** under the sign-in form, enter the gateway address (e.g.
+`192.168.1.20:3000`), **Test connection**, then **Save**. The choice is kept
+on the phone; **Use built-in address** goes back to `API_BASE_URL`.
+
+### "Can't reach the iPMS server" on a phone
+
+The phone never got an answer from the gateway. Check, in order:
+
+1. In the phone's Safari, open `http://<mac-ip>:3000/health/live`. If that
+   fails too, it is the network, not the app: same Wi-Fi (not a guest network
+   with client isolation), the stack is up (`docker compose ps`), and the Mac
+   firewall allows incoming connections to Docker.
+2. iOS Settings → iPMS (the app) → **Local Network** must be on. iOS asks the
+   first time the app contacts the LAN; if it was denied, nothing on the LAN
+   is reachable.
+3. The Mac's IP changes between networks; check it with
+   `ipconfig getifaddr en0`.
+
 ### Demo mode
 
 `--dart-define=DEMO_MODE=true` restores the offline sample data (projects,

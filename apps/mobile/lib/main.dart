@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/config/env.dart';
+import 'core/security/token_storage.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/providers/auth_provider.dart';
@@ -9,8 +11,14 @@ import 'features/projects/presentation/project_list_screen.dart';
 import 'features/tasks/presentation/task_list_screen.dart';
 import 'shared/layout/main_scaffold.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // A server address chosen on the sign-in screen wins over the built-in one.
+  try {
+    AppConfig.setCustomApiUrl(await TokenStorage().getApiBaseUrl());
+  } catch (_) {
+    // Keychain unavailable: fall back to the built-in address.
+  }
   runApp(
     const ProviderScope(
       child: IpmsApp(),
