@@ -20,7 +20,7 @@ export class InternalAuthzController {
   @Post('holders')
   @HttpCode(200)
   async holders(@Body() body: unknown): Promise<HoldersResult> {
-    const { permission, projectId } = HoldersRequestSchema.parse(body);
-    return { userIds: await this.effective.holders(permission, projectId) };
+    const { permission, projectId, siteId } = HoldersRequestSchema.parse(body);
+    return { userIds: await this.effective.holders(permission, projectId, siteId) };
   }
 }

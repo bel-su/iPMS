@@ -13,7 +13,16 @@ describe('InternalAuthzController', () => {
     const effective = { holders: vi.fn().mockResolvedValue(['u-1', 'u-2']) };
     const controller = new InternalAuthzController(effective as never);
     expect(await controller.holders({ permission: 'qc_review.approve', projectId })).toEqual({ userIds: ['u-1', 'u-2'] });
-    expect(effective.holders).toHaveBeenCalledWith('qc_review.approve', projectId);
+    expect(effective.holders).toHaveBeenCalledWith('qc_review.approve', projectId, undefined);
+  });
+
+  it('passes a site id through to the service', async () => {
+    const projectId = uuidv7();
+    const siteId = uuidv7();
+    const effective = { holders: vi.fn().mockResolvedValue(['u-1']) };
+    const controller = new InternalAuthzController(effective as never);
+    await controller.holders({ permission: 'qc_review.approve', projectId, siteId });
+    expect(effective.holders).toHaveBeenCalledWith('qc_review.approve', projectId, siteId);
   });
 
   it('refuses a malformed body', async () => {

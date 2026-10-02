@@ -22,6 +22,13 @@ describe('IamDirectoryClient.holders', () => {
     expect(JSON.parse(init.body as string)).toEqual({ permission: 'qc_review.approve', projectId: 'p-1' });
   });
 
+  it('sends the site id when given', async () => {
+    const { client: c, fetchImpl } = client(ok({ userIds: [] }));
+    await c.holders('qc_review.approve', 'p-1', 'si-1');
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ permission: 'qc_review.approve', projectId: 'p-1', siteId: 'si-1' });
+  });
+
   it('throws on a non-2xx answer so the event is redelivered', async () => {
     await expect(client(new Response('', { status: 503 })).client.holders('x', 'p')).rejects.toThrow('503');
   });

@@ -4,6 +4,8 @@ import { EffectiveService } from './effective.service.js';
 
 const PROJECT = uuidv7();
 const OTHER_PROJECT = uuidv7();
+const SITE = uuidv7();
+const OTHER_SITE = uuidv7();
 const PERMISSION = 'qc_review.approve';
 const PAST = new Date('2026-01-01T00:00:00Z');
 
@@ -14,6 +16,7 @@ interface UserOptions {
   roleActive?: boolean;
   validUntil?: Date | null;
   projectIds?: string[];
+  siteIds?: string[];
   global?: boolean;
   overrides?: unknown[];
 }
@@ -34,7 +37,7 @@ function user(opts: UserOptions = {}) {
     }],
     globalScopes: opts.global ? [{ id: 'g' }] : [],
     projectScopes: (opts.projectIds ?? [PROJECT]).map((projectId) => ({ projectId })),
-    siteScopes: [],
+    siteScopes: (opts.siteIds ?? []).map((siteId) => ({ siteId })),
     overrides: opts.overrides ?? [],
   };
 }
@@ -92,5 +95,47 @@ describe('EffectiveService.holders', () => {
   it('excludes a deactivated user even if one reaches this method', async () => {
     const { service } = build([user({ isActive: false })]);
     expect(await service.holders(PERMISSION, PROJECT)).toEqual([]);
+  });
+
+  describe('site-scoped reviewers', () => {
+    it('includes a site-only user for the matching site', async () => {
+      const holder = user({ projectIds: [], siteIds: [SITE] });
+      const { service } = build([holder]);
+      expect(await service.holders(PERMISSION, PROJECT, SITE)).toEqual([holder.id]);
+    });
+
+    it('excludes a site-only user for a different site', async () => {
+      const { service } = build([user({ projectIds: [], siteIds: [SITE] })]);
+      expect(await service.holders(PERMISSION, PROJECT, OTHER_SITE)).toEqual([]);
+    });
+
+    it('excludes a site-only user when no site id is supplied', async () => {
+      const { service } = build([user({ projectIds: [], siteIds: [SITE] })]);
+      expect(await service.holders(PERMISSION, PROJECT)).toEqual([]);
+    });
+
+    it('still includes a project-only user when a site id is supplied', async () => {
+      const holder = user();
+      const { service } = build([holder]);
+      expect(await service.holders(PERMISSION, PROJECT, SITE)).toEqual([holder.id]);
+    });
+
+    it('includes a user scoped to a different project but to this site', async () => {
+      const holder = user({ projectIds: [OTHER_PROJECT], siteIds: [SITE] });
+      const { service } = build([holder]);
+      expect(await service.holders(PERMISSION, PROJECT, SITE)).toEqual([holder.id]);
+    });
+
+    it('excludes a site-scoped user with a live DENY override', async () => {
+      const denied = user({
+        projectIds: [], siteIds: [SITE],
+        overrides: [{
+          permission: { code: PERMISSION }, effect: 'DENY', projectId: null, siteId: null,
+          validFrom: null, validUntil: null, reason: 'suspended',
+        }],
+      });
+      const { service } = build([denied]);
+      expect(await service.holders(PERMISSION, PROJECT, SITE)).toEqual([]);
+    });
   });
 });

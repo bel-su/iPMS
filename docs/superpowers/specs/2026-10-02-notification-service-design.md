@@ -129,14 +129,18 @@ The cursor is `(createdAt, id)` encoded opaquely. Response shape lives in `libs/
 
 `POST /internal/authz/holders` (under the `api/v1` prefix; the gateway refuses `/internal/`).
 
-Request `{ permission: string, projectId: string }`; response `{ userIds: string[] }`.
+Request `{ permission: string, projectId: string, siteId?: string }`; response `{ userIds: string[] }`.
 
 ### 5.2 Behaviour
 
 Loads active users with their roles, scopes and overrides through the same
 `toAuthzUser` / `toScope` / `toOverrides` path `EffectiveService` uses, and runs `check()` with
-`resource = { projectId }`. Included: users with the permission and reach (global scope, or the
-project in their project scope, or a site scope inside it as `check()` decides). Excluded:
+`resource = { type: 'PROJECT', id: projectId, projectId }`. qc authorises a review through a
+project scope or a site scope as alternatives, so when `siteId` is supplied `check()` is run a
+second time with `resource = { type: 'SITE', id: siteId, siteId }` and a user is a holder if
+either call allows. Included: users with the permission and reach (global scope, the project in
+their project scope, or the submission's site in their site scope, even with no project scope).
+Without `siteId` only the project check applies. Excluded:
 deactivated users, inactive roles, expired role assignments, denied overrides. IAM does not
 reimplement permission logic.
 

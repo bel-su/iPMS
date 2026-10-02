@@ -35,7 +35,7 @@ describe('QcNotificationConsumer.onSubmitted', () => {
   it('notifies every reviewer of the project except the submitter, once each', async () => {
     const { consumer, notifications, iam } = build(['u-r1', 'u-r2', 'u-r1', SUBMITTER]);
     await consumer.onSubmitted(envelope(SUBMITTED));
-    expect(iam.holders).toHaveBeenCalledWith(REVIEW_PERMISSION, 'p-1');
+    expect(iam.holders).toHaveBeenCalledWith(REVIEW_PERMISSION, 'p-1', 'si-1');
     const rows = notifications.createMany.mock.calls[0]?.[0];
     expect(rows.map((r: { recipientId: string }) => r.recipientId)).toEqual(['u-r1', 'u-r2']);
     expect(rows[0]).toMatchObject({ eventId: 'evt-1', type: 'QC_SUBMISSION_SUBMITTED', workOrderId: 'w-1' });

@@ -3,7 +3,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 // the `output` comment in prisma/schema.prisma.
 import type { PrismaClient } from '@prisma-clients/iam';
 import {
-  check, resolvePermissions, type AuthzOverride, type AuthzScope, type AuthzUser,
+  check, resolvePermissions, type AuthzOverride, type AuthzResource, type AuthzScope, type AuthzUser,
 } from '@ipms/authz';
 import type { AccessCheckDto, AccessCheckResult, EffectivePermission } from '@ipms/contracts';
 
@@ -243,21 +243,24 @@ export class EffectiveService {
    * Loads every active user with their relations. Fine while that is tens or
    * hundreds; if it grows into the thousands, narrow the query by role first.
    */
-  async holders(permission: string, projectId: string): Promise<string[]> {
+  async holders(permission: string, projectId: string, siteId?: string): Promise<string[]> {
     const now = new Date();
     const users = (await this.prisma.user.findMany({
       where: { isActive: true },
       include: USER_INCLUDE,
     })) as unknown as LoadedUser[];
     return users
-      .filter((user) => check({
-        user: this.toAuthzUser(user, now),
-        permission,
-        resource: { type: 'PROJECT', id: projectId, projectId },
-        scope: this.toScope(user),
-        overrides: this.toOverrides(user, now),
-        now,
-      }).allowed)
+      .filter((user) => {
+        const authzUser = this.toAuthzUser(user, now);
+        const scope = this.toScope(user);
+        const overrides = this.toOverrides(user, now);
+        const allowedFor = (resource: AuthzResource) =>
+          check({ user: authzUser, permission, resource, scope, overrides, now }).allowed;
+        // qc treats a project scope and a site scope as alternatives, so a
+        // reviewer granted only the site must be found too.
+        return allowedFor({ type: 'PROJECT', id: projectId, projectId })
+          || (siteId !== undefined && allowedFor({ type: 'SITE', id: siteId, siteId }));
+      })
       .map((user) => user.id);
   }
 }
