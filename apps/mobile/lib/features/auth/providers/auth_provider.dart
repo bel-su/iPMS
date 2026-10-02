@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exceptions.dart';
@@ -53,6 +54,10 @@ class AuthNotifier extends AsyncNotifier<AuthUser?> {
             password: password,
           );
     });
+    if (state.hasError) {
+      // Shown on the sign-in screen too; logged so a device console says why.
+      debugPrint('Sign-in failed: ${state.error}');
+    }
     if (state.value != null) {
       // The main screen offers biometric sign-in once it is showing; the
       // login screen is gone by then.

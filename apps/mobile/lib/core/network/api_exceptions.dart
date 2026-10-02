@@ -12,7 +12,15 @@ class ApiException implements Exception {
   /// Maps a Dio failure to an [ApiException], reading the platform's error
   /// envelope (`{error: {code, message, details}}`) when the server sent one.
   factory ApiException.fromDio(DioException e, {String? fallbackMessage}) {
-    if (isConnectionIssue(e)) return const NetworkException();
+    if (isConnectionIssue(e)) {
+      final base = e.requestOptions.baseUrl;
+      return NetworkException(
+        message: base.isEmpty
+            ? 'No internet connection. Please check your network.'
+            : "Can't reach the iPMS server at $base. Check your connection, "
+                'or that the app was built with the right API_BASE_URL.',
+      );
+    }
     final status = e.response?.statusCode;
     if (status == 401) return const UnauthorizedException();
 
