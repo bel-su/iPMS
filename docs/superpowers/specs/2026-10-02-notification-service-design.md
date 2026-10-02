@@ -95,8 +95,12 @@ Content:
 
 Failure behaviour:
 
-- IAM unreachable, non-2xx or timeout → the handler throws; `DurableConsumer` redelivers up to
-  `MAX_DELIVERIES` (5), then terminates to the DLQ. No notification is silently dropped.
+- IAM unreachable, non-2xx or timeout → the handler throws; `DurableConsumer` naks with backoff
+  (2, 4, 8, 16 s) and terminates the message on the 5th delivery (`MAX_DELIVERIES`), about 30 s
+  after the first. Failed lookups are therefore retried for about 30 s, then the event is dropped
+  and logged. There is currently no dead-letter store (the "DLQ" is only a log line and a
+  metric), so an outage longer than that loses those notifications. Follow-up: a real DLQ, or a
+  longer backoff for this consumer.
 - IAM returns an empty reviewer list → log a warning and ack (a project with no reviewers is
   not a delivery error).
 - Payload without the enrichment fields (an event published before this change) → log a
@@ -195,6 +199,10 @@ rule regresses). The shared key is the smallest mechanism that fails closed.
 - Reviewer list is computed at consume time, not publish time: a user who gains the permission
   between submit and consume is notified. Acceptable.
 - A shared key is one more secret to rotate. Rotation is a coordinated deploy of IAM and
-  notification; documented in `docker/env/README.md`.
+  notification within seconds of each other; documented in `docker/env/README.md`. Events
+  handled during a key mismatch (IAM answers 401) are retried for about 30 s and then dropped.
+- Reviewer lookups that fail for longer than about 30 s (an IAM outage, a key mismatch) lose
+  those notifications: the consumer gives up after 5 deliveries and nothing stores terminated
+  messages. Follow-up: a real DLQ, or a longer backoff for this consumer.
 - `Notification` rows grow without bound. Retention is out of scope; a follow-up should add
   expiry of read notifications.

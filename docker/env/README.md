@@ -72,4 +72,6 @@ MinIO container.
 notification asking iam which users may review a project (`POST /api/v1/internal/authz/holders`).
 The value must be identical in `iam.env` and `notification.env`. iam refuses to start in
 `NODE_ENV=production` without it. To rotate: change both files and redeploy iam and notification
-together; until both are updated, reviewer notifications are retried by the event consumer, not lost.
+within seconds of each other. Events handled while the two differ are retried only briefly (about
+30 s of backoff) and then dropped and logged: there is no dead-letter store yet, so those reviewer
+notifications are lost.

@@ -1800,7 +1800,7 @@ describe('QcNotificationConsumer.onSubmitted', () => {
     expect(rows[0]).toMatchObject({ eventId: 'evt-1', type: 'QC_SUBMISSION_SUBMITTED', workOrderId: 'w-1' });
   });
 
-  it('throws when iam fails, so the event is redelivered and nothing is dropped', async () => {
+  it('throws when iam fails, so the event is retried', async () => {
     const { consumer, notifications } = build(new Error('iam down'));
     await expect(consumer.onSubmitted(envelope(SUBMITTED))).rejects.toThrow('iam down');
     expect(notifications.createMany).not.toHaveBeenCalled();
@@ -1936,7 +1936,7 @@ export class QcNotificationConsumer implements OnModuleInit {
       log.warn({ eventId: envelope.eventId, subject: envelope.subject }, 'event predates enriched payload, skipped');
       return;
     }
-    // Throws when iam is unreachable: the durable redelivers, so nothing is dropped.
+    // Throws when iam is unreachable: the consumer retries with backoff for about 30 s, then drops the event.
     const holders = await this.iam.holders(REVIEW_PERMISSION, p.projectId);
     const recipients = [...new Set(holders)].filter((id) => id !== p.submittedBy);
     if (recipients.length === 0) {

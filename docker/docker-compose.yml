@@ -353,8 +353,9 @@ services:
 
   # Postgres and NATS: notification consumes qc submission events. It needs no
   # Redis (idempotency is a unique key in its own database) and reaches iam
-  # directly, but does not wait on it: a lookup that fails is retried by the
-  # durable, so notification may start first.
+  # directly, but does not wait on it: a lookup that fails is retried with
+  # backoff for about 30 s, then the event is dropped (no dead-letter store yet),
+  # so start iam promptly after notification.
   notification:
     <<: *service-defaults
     build:

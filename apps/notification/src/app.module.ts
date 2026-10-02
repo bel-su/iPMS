@@ -86,7 +86,7 @@ const notificationScopeProvider: ScopeProvider = {
     {
       provide: IamDirectoryClient,
       useFactory: (): IamDirectoryClient => new IamDirectoryClient(
-        process.env['IAM_INTERNAL_URL'] ?? 'http://iam:3001',
+        requireEnv('IAM_INTERNAL_URL'),
         requireEnv('INTERNAL_SERVICE_KEY'),
       ),
     },

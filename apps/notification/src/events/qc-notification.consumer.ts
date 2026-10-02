@@ -61,8 +61,9 @@ export class QcNotificationConsumer implements OnModuleInit {
       log.warn({ eventId: envelope.eventId, subject: envelope.subject }, 'event predates enriched payload, skipped');
       return;
     }
-    // Throws when iam is unreachable: the durable redelivers, so nothing is dropped.
-    const holders = await this.iam.holders(REVIEW_PERMISSION, p.projectId);
+    // Throws when iam is unreachable: the consumer retries with backoff for about 30 s, then
+    // drops the event (logged; no dead-letter store yet), so a longer outage loses it.
+    const holders = await this.iam.holders(REVIEW_PERMISSION, p.projectId, p.siteId);
     const recipients = [...new Set(holders)].filter((id) => id !== p.submittedBy);
     if (recipients.length === 0) {
       log.warn({ eventId: envelope.eventId, projectId: p.projectId }, 'no reviewers to notify for submission');
