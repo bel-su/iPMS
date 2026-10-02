@@ -15,6 +15,7 @@ class StatusFilterBar extends StatelessWidget {
   static const List<Map<String, String>> filters = [
     {'label': 'All', 'value': 'ALL'},
     {'label': 'Ongoing', 'value': 'ONGOING'},
+    {'label': 'Rework', 'value': 'RECTIFYING'},
     {'label': 'Reviewing', 'value': 'REVIEWING'},
     {'label': 'Completed', 'value': 'COMPLETED'},
     {'label': 'Not Started', 'value': 'NOT_STARTED'},

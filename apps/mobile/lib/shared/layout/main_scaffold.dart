@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
+import '../../features/auth/presentation/widgets/biometric_enrollment_sheet.dart';
+import '../../features/auth/providers/auth_provider.dart';
+import '../../features/auth/providers/biometric_provider.dart';
 import 'floating_nav_bar.dart';
 
 /// Navigation index notifier for active tab switching across screens.
@@ -14,7 +17,7 @@ class NavigationIndexNotifier extends Notifier<int> {
 final navigationIndexProvider =
     NotifierProvider<NavigationIndexNotifier, int>(NavigationIndexNotifier.new);
 
-class MainScaffold extends ConsumerWidget {
+class MainScaffold extends ConsumerStatefulWidget {
   const MainScaffold({
     super.key,
     required this.pages,
@@ -23,7 +26,33 @@ class MainScaffold extends ConsumerWidget {
   final List<Widget> pages;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MainScaffold> createState() => _MainScaffoldState();
+}
+
+class _MainScaffoldState extends ConsumerState<MainScaffold> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _offerBiometricSignIn());
+  }
+
+  /// After a password sign-in, offers to turn on Face ID / fingerprint once,
+  /// if the device has it and it is not already on.
+  Future<void> _offerBiometricSignIn() async {
+    if (!mounted || !ref.read(biometricOfferPendingProvider)) return;
+    ref.read(biometricOfferPendingProvider.notifier).set(false);
+
+    await ref.read(biometricAuthStateProvider.notifier).checkBiometricStatus();
+    if (!mounted) return;
+    final biometric = ref.read(biometricAuthStateProvider);
+    final user = ref.read(authStateProvider).value;
+    if (user == null || !biometric.isHardwareSupported || biometric.isConfigured) return;
+    await BiometricEnrollmentSheet.show(context, user.username);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = widget.pages;
     final currentIndex = ref.watch(navigationIndexProvider);
 
     return Scaffold(

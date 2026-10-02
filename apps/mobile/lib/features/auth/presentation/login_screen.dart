@@ -4,7 +4,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../providers/auth_provider.dart';
 import '../providers/biometric_provider.dart';
-import 'widgets/biometric_enrollment_sheet.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -29,20 +28,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _submit() async {
     if (_formKey.currentState?.validate() ?? false) {
-      final email = _emailController.text.trim();
+      ref.read(biometricAuthStateProvider.notifier).clearStatus();
+      // On success the app switches to the main screen, which offers to turn
+      // on biometric sign-in.
       await ref.read(authStateProvider.notifier).login(
-            email,
+            _emailController.text.trim(),
             _passwordController.text,
           );
-
-      // Check if login succeeded
-      final authUser = ref.read(authStateProvider).value;
-      if (authUser != null && mounted) {
-        final biometricState = ref.read(biometricAuthStateProvider);
-        if (biometricState.isHardwareSupported && !biometricState.isConfigured) {
-          await BiometricEnrollmentSheet.show(context, authUser.username);
-        }
-      }
     }
   }
 
@@ -202,7 +194,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (authState.hasError) ...[
+                            if (authState.hasError || biometricState.statusMessage != null) ...[
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
@@ -219,7 +211,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
-                                        authState.error.toString().replaceAll('ApiException: ', ''),
+                                        authState.hasError
+                                            ? authState.error.toString()
+                                            : biometricState.statusMessage!,
                                         style: const TextStyle(
                                           color: AppColors.statusBlockedText,
                                           fontSize: 12,

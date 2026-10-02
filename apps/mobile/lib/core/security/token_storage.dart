@@ -32,14 +32,42 @@ class TokenStorage {
     if (userId != null) {
       await _storage.write(key: _userIdKey, value: userId);
     }
-    final bioEnabled = await isBiometricEnabled();
-    if (bioEnabled) {
-      await _storage.write(key: _biometricRefreshTokenKey, value: refreshToken);
-      if (userId != null) {
-        await _storage.write(key: _biometricUserIdKey, value: userId);
+    // Keep the biometric session current, but only for the account it was
+    // enrolled for: a refresh token must never move into another user's
+    // biometric slot. A sign-in whose user is not yet known is bound later
+    // through [bindBiometricSession].
+    final owner = userId ?? await getUserId();
+    if (owner != null && await isBiometricEnabled()) {
+      final enrolledFor = await getBiometricUserId();
+      if (enrolledFor == null || enrolledFor == owner) {
+        await _storage.write(key: _biometricRefreshTokenKey, value: refreshToken);
+        await _storage.write(key: _biometricUserIdKey, value: owner);
       }
     }
   }
+
+  /// Called once the signed-in user is known. Copies the session into the
+  /// biometric slot when biometrics are enrolled for this user; when they are
+  /// enrolled for someone else, that enrollment is removed, since a different
+  /// account now uses this device.
+  Future<void> bindBiometricSession(String userId) async {
+    if (!await isBiometricEnabled()) return;
+    final enrolledFor = await getBiometricUserId();
+    if (enrolledFor != null && enrolledFor != userId) {
+      await clearBiometric();
+      return;
+    }
+    final refresh = await getRefreshToken();
+    if (refresh != null && refresh.isNotEmpty) {
+      await _storage.write(key: _biometricRefreshTokenKey, value: refresh);
+    }
+    await _storage.write(key: _biometricUserIdKey, value: userId);
+  }
+
+  /// Forgets the stored biometric session but keeps the enrollment, so the
+  /// next password sign-in re-arms it.
+  Future<void> clearBiometricSession() =>
+      _storage.delete(key: _biometricRefreshTokenKey);
 
   Future<String?> getAccessToken() => _storage.read(key: _accessTokenKey);
 

@@ -165,7 +165,9 @@ class SiteTasksScreen extends ConsumerWidget {
                               const Icon(Icons.explore_outlined, size: 14, color: AppColors.darkSlate),
                               const SizedBox(width: 6),
                               Text(
-                                '${site.latitude?.toStringAsFixed(4) ?? "27.7172"} N, ${site.longitude?.toStringAsFixed(4) ?? "85.3240"} E',
+                                site.latitude != null && site.longitude != null
+                                    ? '${site.latitude!.toStringAsFixed(4)}, ${site.longitude!.toStringAsFixed(4)}'
+                                    : 'Coordinates not recorded',
                                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.darkSlate),
                               ),
                             ],

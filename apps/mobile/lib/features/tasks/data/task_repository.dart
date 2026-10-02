@@ -51,6 +51,14 @@ class TaskRepository {
   /// but not its coordinates, which the map and geofence need.
   final Map<String, Future<Map<String, ProjectSite>>> _sitesByProject = {};
 
+  /// User names by id, for showing who a work order is assigned to.
+  Future<Map<String, String>>? _directory;
+
+  /// Sites and names change rarely; they are re-read after this long so an
+  /// edit on the web still reaches a long-running app.
+  static const Duration _lookupTtl = Duration(minutes: 5);
+  DateTime _lookupsLoadedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
   /// Work orders. With [assignedToMe] only the signed-in user's; a site's
   /// list shows everyone's work on it.
   Future<List<TaskItem>> getAssignedTasks({
@@ -81,7 +89,7 @@ class TaskRepository {
           .map((e) => TaskItem.fromWorkOrder(e as Map<String, dynamic>))
           .where((t) => siteId == null || t.siteId == siteId)
           .toList();
-      return await _withSiteLocations(items);
+      return await _withLookups(items);
     } on DioException catch (e) {
       throw ApiException.fromDio(e, fallbackMessage: 'Failed to load work orders.');
     }
@@ -98,7 +106,7 @@ class TaskRepository {
       final response =
           await apiClient.dio.get<Map<String, dynamic>>(ApiEndpoints.workOrder(taskId));
       final task = TaskItem.fromWorkOrder(response.data ?? const {});
-      return (await _withSiteLocations([task])).first;
+      return (await _withLookups([task])).first;
     } on DioException catch (e) {
       throw ApiException.fromDio(e, fallbackMessage: 'Failed to load the work order.');
     }
@@ -112,6 +120,18 @@ class TaskRepository {
       return TaskChecklist.fromJson(response.data ?? const {});
     } on DioException catch (e) {
       throw ApiException.fromDio(e, fallbackMessage: 'Failed to load the checklist.');
+    }
+  }
+
+  /// The reviewer's feedback on a submission, for a work order sent back
+  /// for rework.
+  Future<ReviewFeedback> getReviewFeedback(String submissionId) async {
+    try {
+      final response =
+          await apiClient.dio.get<Map<String, dynamic>>(ApiEndpoints.submission(submissionId));
+      return ReviewFeedback.fromSubmission(response.data ?? const {});
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, fallbackMessage: 'Failed to load the review.');
     }
   }
 
@@ -149,10 +169,18 @@ class TaskRepository {
     }
   }
 
-  Future<List<TaskItem>> _withSiteLocations(List<TaskItem> tasks) async {
+  /// Adds what the work order does not carry: the site's coordinates and
+  /// geofence (from the project service) and the assignee's name (from the
+  /// user directory). Both are best effort.
+  Future<List<TaskItem>> _withLookups(List<TaskItem> tasks) async {
+    if (DateTime.now().difference(_lookupsLoadedAt) > _lookupTtl) {
+      _sitesByProject.clear();
+      _directory = null;
+      _lookupsLoadedAt = DateTime.now();
+    }
     final projectIds = tasks.map((t) => t.projectId).whereType<String>().toSet();
     final lookups = <String, Map<String, ProjectSite>>{};
-    for (final projectId in projectIds) {
+    await Future.wait(projectIds.map((projectId) async {
       lookups[projectId] = await _sitesByProject.putIfAbsent(projectId, () async {
         try {
           final project = await _projects.getProjectById(projectId);
@@ -164,15 +192,31 @@ class TaskRepository {
           return const <String, ProjectSite>{};
         }
       });
-    }
+    }));
+    final names = await (_directory ??= _loadDirectory());
+
     return tasks.map((task) {
       final site = lookups[task.projectId]?[task.siteId];
-      if (site == null) return task;
       return task.copyWith(
-        latitude: site.latitude,
-        longitude: site.longitude,
-        geofenceRadiusM: site.geofenceRadiusM,
+        latitude: site?.latitude,
+        longitude: site?.longitude,
+        geofenceRadiusM: site?.geofenceRadiusM,
+        assigneeName: names[task.assigneeId],
       );
     }).toList();
+  }
+
+  Future<Map<String, String>> _loadDirectory() async {
+    try {
+      final response = await apiClient.dio.get<List<dynamic>>(ApiEndpoints.userDirectory);
+      return {
+        for (final row in response.data ?? const <dynamic>[])
+          if (row is Map && row['id'] != null)
+            row['id'] as String: (row['fullName'] as String?) ?? '',
+      };
+    } catch (_) {
+      _directory = null; // try again next time
+      return const {};
+    }
   }
 }

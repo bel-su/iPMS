@@ -33,8 +33,8 @@ void main() {
     expect(find.text('Edit Profile'), findsOneWidget);
     expect(find.text('Account setting'), findsOneWidget);
     expect(find.text('Privacy & Security'), findsOneWidget);
-    expect(find.text('Notification'), findsOneWidget);
-    expect(find.text('Dark mode'), findsOneWidget);
+    // Biometric hardware is unavailable in tests, so the row explains that.
+    expect(find.text('Biometric login'), findsOneWidget);
 
     // Tap Edit Profile to verify bottom sheet opens
     await tester.tap(find.text('Edit Profile'));

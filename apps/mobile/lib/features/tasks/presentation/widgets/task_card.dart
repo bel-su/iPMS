@@ -5,11 +5,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../domain/models/task_item.dart';
 
 class TaskCard extends StatelessWidget {
-  const TaskCard({
-    super.key,
-    required this.task,
-    required this.onTap,
-  });
+  const TaskCard({super.key, required this.task, required this.onTap});
 
   final TaskItem task;
   final VoidCallback onTap;
@@ -87,7 +83,10 @@ class TaskCard extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: statusBg,
                       borderRadius: BorderRadius.circular(20),
@@ -106,14 +105,19 @@ class TaskCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Text(
                           _formatStatus(task.status),
-                          style: AppTypography.badge.copyWith(color: statusText),
+                          style: AppTypography.badge.copyWith(
+                            color: statusText,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: priorityBg,
                       borderRadius: BorderRadius.circular(20),
@@ -125,7 +129,9 @@ class TaskCard extends StatelessWidget {
                         const SizedBox(width: 4),
                         Text(
                           task.priority,
-                          style: AppTypography.badge.copyWith(color: priorityText),
+                          style: AppTypography.badge.copyWith(
+                            color: priorityText,
+                          ),
                         ),
                       ],
                     ),
@@ -155,7 +161,10 @@ class TaskCard extends StatelessWidget {
                   const Spacer(),
                   // Date Chip
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.searchFieldBackground,
                       borderRadius: BorderRadius.circular(16),
@@ -179,32 +188,37 @@ class TaskCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // Checklist Count Pill
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.searchFieldBackground,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.check_circle_outline_rounded,
-                          size: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${task.completedChecklistCount}/${task.totalChecklistCount}',
-                          style: AppTypography.badge.copyWith(
+                  if (task.hasChecklistCounts) ...[
+                    const SizedBox(width: 8),
+                    // Checklist Count Pill
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.searchFieldBackground,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.check_circle_outline_rounded,
+                            size: 13,
                             color: AppColors.textSecondary,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 4),
+                          Text(
+                            '${task.completedChecklistCount}/${task.totalChecklistCount}',
+                            style: AppTypography.badge.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ],
@@ -255,6 +269,7 @@ class TaskCard extends StatelessWidget {
       case 'COMPLETED':
         return (AppColors.statusCompletedBg, AppColors.statusCompletedText);
       case 'BLOCKED':
+      case 'RECTIFYING': // sent back for rework
         return (AppColors.statusBlockedBg, AppColors.statusBlockedText);
       default:
         return (AppColors.statusCancelledBg, AppColors.statusCancelledText);
@@ -273,9 +288,14 @@ class TaskCard extends StatelessWidget {
   }
 
   String _formatStatus(String status) {
-    return status.replaceAll('_', ' ').toLowerCase().split(' ').map((word) {
-      if (word.isEmpty) return '';
-      return word[0].toUpperCase() + word.substring(1);
-    }).join(' ');
+    return status
+        .replaceAll('_', ' ')
+        .toLowerCase()
+        .split(' ')
+        .map((word) {
+          if (word.isEmpty) return '';
+          return word[0].toUpperCase() + word.substring(1);
+        })
+        .join(' ');
   }
 }
