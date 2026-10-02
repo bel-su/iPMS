@@ -55,6 +55,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final biometricState = ref.watch(biometricAuthStateProvider);
     final isLoading = authState.isLoading || biometricState.isAuthenticating;
 
+    final errorMessage = isLoading
+        ? null
+        : authState.hasError
+            ? authState.error.toString()
+            : biometricState.statusMessage;
+
     final hasEnrolledBiometric =
         biometricState.isConfigured && biometricState.enrolledUsername != null;
 
@@ -85,6 +91,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     style: AppTypography.bodyMedium,
                   ),
                   const SizedBox(height: 32),
+
+                  // Why the last sign-in did not work, above whichever card
+                  // is showing, so a failure is never silent.
+                  if (errorMessage != null) ...[
+                    Container(
+                      key: const Key('login-error'),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.statusBlockedBg,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline, size: 18, color: AppColors.statusBlockedText),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              errorMessage,
+                              style: const TextStyle(
+                                color: AppColors.statusBlockedText,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
                   // Quick Biometric Sign In Card (If Enrolled)
                   if (hasEnrolledBiometric && !_showPasswordForm) ...[
@@ -165,18 +201,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                             const SizedBox(height: 12),
 
-                            if (biometricState.statusMessage != null) ...[
-                              Text(
-                                biometricState.statusMessage!,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.statusBlockedText,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-
                             TextButton.icon(
                               icon: const Icon(Icons.lock_outline, size: 16),
                               label: const Text('Sign in with Password instead'),
@@ -194,39 +218,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (authState.hasError || biometricState.statusMessage != null) ...[
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppColors.statusBlockedBg,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.error_outline,
-                                      size: 18,
-                                      color: AppColors.statusBlockedText,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        authState.hasError
-                                            ? authState.error.toString()
-                                            : biometricState.statusMessage!,
-                                        style: const TextStyle(
-                                          color: AppColors.statusBlockedText,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                            ],
-
                             // Email Field
                             Text(
                               'Email',
