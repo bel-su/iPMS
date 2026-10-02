@@ -70,8 +70,17 @@ export const QUEUE_FILTERS = [
 ] as const;
 export type QueueFilterKey = (typeof QUEUE_FILTERS)[number]['key'];
 
-export function queueFilter(key: string | undefined) {
-  return QUEUE_FILTERS.find((entry) => entry.key === key) ?? QUEUE_FILTERS[0];
+/**
+ * The pills a viewer is offered. Someone who sees only their own work (no
+ * `task.view_all` — a field engineer) never sees cancelled work, since qc
+ * leaves it out of their reads, so a Cancelled pill would always be empty.
+ */
+export function queueFilters(ownWorkOnly: boolean) {
+  return ownWorkOnly ? QUEUE_FILTERS.filter((entry) => entry.key !== 'cancelled') : QUEUE_FILTERS;
+}
+
+export function queueFilter(key: string | undefined, ownWorkOnly = false) {
+  return queueFilters(ownWorkOnly).find((entry) => entry.key === key) ?? QUEUE_FILTERS[0];
 }
 
 /** The count a pill shows, from the list's status counts. */

@@ -55,11 +55,15 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
 
   // Tasks
   def('task', 'view', 'View tasks'),
+  // Without it, task.view reaches only the work assigned to the caller, and
+  // never cancelled work: a field engineer's queue is their own. Anyone who
+  // dispatches or cancels work has to see all of it, hence the dependencies.
+  def('task', 'view_all', 'View every task in scope, not only those assigned to you', ['task.view']),
   def('task', 'create', 'Create tasks', ['task.view']),
   def('task', 'update', 'Update tasks', ['task.view']),
-  def('task', 'assign', 'Assign tasks to engineers', ['task.view', 'task.update']),
+  def('task', 'assign', 'Assign tasks to engineers', ['task.view', 'task.view_all', 'task.update']),
   def('task', 'generate', 'Bulk-generate tasks for a milestone scope', ['task.view', 'task.create']),
-  def('task', 'cancel', 'Cancel a task', ['task.view', 'task.update']),
+  def('task', 'cancel', 'Cancel a task', ['task.view', 'task.view_all', 'task.update']),
   def('task', 'delete', 'Delete a task', ['task.view', 'task.update']),
 
   // Quality control

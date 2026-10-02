@@ -176,4 +176,52 @@ describe('work orders against a real database', () => {
     await service.update(GLOBAL, order.id, { plannedCompletionAt: new Date('2026-10-15T18:14:59Z') }, ACTOR, 'Bearer t');
     expect(await prisma.workOrderDraft.count({ where: { workOrderId: order.id } })).toBe(1);
   });
+
+  /**
+   * A field engineer holds task.view but not task.view_all: they see the work
+   * assigned to them and nothing else, and cancelled work drops out of their
+   * queue — even when another engineer's work sits on a site they can reach.
+   */
+  describe('for a caller restricted to their own work', () => {
+    const OTHER = uuidv7();
+    const mine = (scope: AuthzScope = GLOBAL) => ({ ...scope, onlyAssignee: ENGINEER });
+
+    async function seedTwoEngineers() {
+      reach[ANTENNA] = [
+        { userId: ENGINEER, wholeProject: true, siteIds: [] },
+        { userId: OTHER, wholeProject: true, siteIds: [] },
+      ];
+      const own = (await create(ANTENNA, ANTENNA_SITE)).created[0]!;
+      const theirs = (await service.create({
+        projectId: ANTENNA, workOrderType: 'QUALITY_SELF_CHECK', templateId, siteIds: [ANTENNA_SITE], assigneeId: OTHER,
+        plannedCompletionAt: new Date('2026-09-30T18:14:59Z'),
+      }, ACTOR, 'Bearer t')).created[0]!;
+      const cancelled = (await create(ANTENNA, ANTENNA_SITE)).created[0]!;
+      await service.cancel(GLOBAL, cancelled.id, { reason: 'Site dropped' }, ACTOR);
+      return { own, theirs, cancelled };
+    }
+
+    it('lists only their open and closed work, never another engineer’s or a cancelled one', async () => {
+      const { own } = await seedTwoEngineers();
+      const page = await service.list(mine(), { page: 1, limit: 20 });
+      expect(page.items.map((item) => item.id)).toEqual([own.id]);
+      expect(page.counts).toMatchObject({ ALL: 1, NOT_STARTED: 1, CANCELLED: 0 });
+      expect((await service.list(mine(), { page: 1, limit: 20, status: 'CANCELLED' })).total).toBe(0);
+      // Asking for someone else's work by assignee finds nothing, not their work.
+      expect((await service.list(mine(), { page: 1, limit: 20, assigneeId: OTHER })).total).toBe(0);
+    });
+
+    it('keeps another engineer’s and cancelled work out of the brief and the detail read', async () => {
+      const { own, theirs, cancelled } = await seedTwoEngineers();
+      expect((await service.brief(mine(), ANTENNA)).map((row) => row.id)).toEqual([own.id]);
+      expect((await service.get(mine(), own.id)).id).toBe(own.id);
+      await expect(service.get(mine(), theirs.id)).rejects.toThrow('Work order not found');
+      await expect(service.get(mine(), cancelled.id)).rejects.toThrow('Work order not found');
+    });
+
+    it('leaves an unrestricted caller seeing everything, cancelled included', async () => {
+      await seedTwoEngineers();
+      expect((await service.list(GLOBAL, { page: 1, limit: 20 })).counts).toMatchObject({ ALL: 3, CANCELLED: 1 });
+    });
+  });
 });

@@ -1,3 +1,4 @@
+import { getCurrentUser, hasPermission } from './lib/iam-api';
 import { getProjectDashboard } from './lib/project-api';
 import { listWorkOrders } from './lib/work-order-api';
 import { STATUS_TEXT, WORK_ORDER_TYPE_LABEL, WORK_ORDERS_PATH, dueText, filterCount, workOrderPath } from './quality/work-orders/labels';
@@ -35,7 +36,9 @@ export default async function DashboardPage() {
   // Review and rework counts are QC's: it holds the work orders. The open view
   // comes back soonest-due first, and its counts ignore the view, so one call
   // fills both the metrics and the quality queue.
-  const [result, workOrders] = await Promise.all([getProjectDashboard(), listWorkOrders({ view: 'open', limit: 5 })]);
+  const [result, workOrders, viewer] = await Promise.all([getProjectDashboard(), listWorkOrders({ view: 'open', limit: 5 }), getCurrentUser()]);
+  // The same pair the work-order composer and the API require: a work order is created already assigned.
+  const mayCreateWorkOrder = viewer.state === 'ready' && hasPermission(viewer.data, 'task.create') && hasPermission(viewer.data, 'task.assign');
   const counts = workOrders.state === 'ready' ? workOrders.data.counts : null;
   const nextUp = workOrders.state === 'ready' ? workOrders.data.items : [];
   const now = new Date();
@@ -69,9 +72,11 @@ export default async function DashboardPage() {
               <a className="secondary-button" href="/projects">
                 View projects
               </a>
-              <a className="primary-button" href={`${WORK_ORDERS_PATH}/new`}>
-                <span style={{ marginRight: '6px', fontSize: '15px', fontWeight: 'bold' }}>+</span> New Work Order
-              </a>
+              {mayCreateWorkOrder ? (
+                <a className="primary-button" href={`${WORK_ORDERS_PATH}/new`}>
+                  <span style={{ marginRight: '6px', fontSize: '15px', fontWeight: 'bold' }}>+</span> New Work Order
+                </a>
+              ) : null}
             </div>
           </section>
           <section className="metrics" aria-label="Portfolio summary">
