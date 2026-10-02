@@ -87,6 +87,8 @@ class TaskRepository {
       );
       final items = (response.data?['items'] as List<dynamic>? ?? const [])
           .map((e) => TaskItem.fromWorkOrder(e as Map<String, dynamic>))
+          // Cancelled work orders are closed office-side; the field never sees them.
+          .where((t) => t.status != 'CANCELLED')
           .where((t) => siteId == null || t.siteId == siteId)
           .toList();
       return await _withLookups(items);

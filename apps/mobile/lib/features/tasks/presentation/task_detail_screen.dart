@@ -2,20 +2,18 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/config/env.dart';
 import '../../../core/network/api_exceptions.dart';
 import '../../../core/services/background_watermark_service.dart';
-import '../../../core/services/camera_service.dart';
-import '../../../core/services/watermark_service.dart';
+import '../../../core/services/geofence_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../map/presentation/site_map_screen.dart';
 import '../../media/providers/evidence_upload_provider.dart';
+import 'continuous_camera_screen.dart';
 import '../data/demo_checklists.dart';
 import '../data/task_repository.dart';
 import '../domain/models/checklist_item.dart';
@@ -41,8 +39,12 @@ class TaskDetailScreen extends ConsumerStatefulWidget {
 class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  bool _isCapturing = false;
   bool _isSubmitting = false;
+  bool _isUploading = false;
+
+  /// Set from a successful submit until the work order is re-read, so the
+  /// screen locks at once instead of waiting for the new status.
+  bool _justSubmitted = false;
   List<ChecklistItem> _checklist = [];
 
   /// The published checklist from qc; null in demo mode or until loaded.
@@ -75,6 +77,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       // closed); here only the checklist display follows.
       if (evidence.taskId == widget.task.id && mounted) {
         if (evidence.checklistItemId != null) {
+          // The evidence notifier files the photo in this same event; send it
+          // once that has happened.
+          scheduleMicrotask(() {
+            if (mounted) unawaited(ref.read(evidenceUploaderProvider).upload(evidence.taskId, evidence.id));
+          });
           final idx =
               _checklist.indexWhere((c) => c.id == evidence.checklistItemId);
           if (idx != -1 && !_checklist[idx].isCompleted) {
@@ -144,9 +151,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     }
   }
 
-  /// Evidence can be added only while the work order is waiting on the
-  /// assignee (not under review, completed or cancelled).
-  bool _canWork(TaskItem task) => AppConfig.demoMode || task.isSubmittable;
+  /// Evidence can be added or removed only while the work order is waiting on
+  /// the assignee: not yet submitted, or sent back for rework. Under review,
+  /// completed or cancelled it is view-only.
+  bool _canWork(TaskItem task) => AppConfig.demoMode || (task.isSubmittable && !_justSubmitted);
 
   void _showMessage(String message, {bool isError = false}) {
     if (!mounted) return;
@@ -160,87 +168,37 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     );
   }
 
+  /// Opens the continuous camera for [item]: photos keep being taken until
+  /// the engineer taps Done.
   Future<void> _capturePhotoForItem(TaskItem task, ChecklistItem item) async {
-    if (_isCapturing) return;
+    if (!_canWork(task)) {
+      _showMessage('This work order cannot be changed right now.', isError: true);
+      return;
+    }
     if (!item.acceptsPhotos) {
       _showMessage('${item.itemNumber} does not take photos.');
       return;
     }
-
-    setState(() => _isCapturing = true);
-
-    try {
-      final authUser = ref.read(authStateProvider).value;
-      final username = authUser?.username ?? 'engineer';
-      final fullName = authUser?.displayName;
-
-      final result = await CameraService.captureAndWatermark(
-        taskId: task.id,
-        siteCode: task.siteCode ?? '',
-        siteName: task.siteName ?? 'Site Location',
-        projectCode: task.projectCode ?? task.category,
-        username: username,
-        fullName: fullName,
-        taskTitle: task.title,
-        checklistItemId: item.id,
-        checklistItemTitle: '${item.itemNumber} ${item.title}',
-      );
-
-      if (result != null && mounted) {
-        ref.read(taskEvidenceProvider.notifier).addEvidence(result.evidence);
-        // Evidence leaves the phone as soon as it is taken, not at submit.
-        unawaited(ref.read(evidenceUploaderProvider).upload(task.id, result.evidence.id));
-
-        setState(() {
-          final idx = _checklist.indexWhere((c) => c.id == item.id);
-          if (idx != -1) {
-            _checklist[idx] = _checklist[idx].copyWith(
-              isCompleted: true,
-              verdict: 'PASS',
-            );
-          }
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppColors.darkSlate,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            content: Row(
-              children: [
-                const Icon(Icons.verified_outlined,
-                    color: Color(0xFFDDD7F7), size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Photo watermarked & saved to app gallery for ${item.itemNumber}',
-                    style: const TextStyle(fontSize: 12, color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+    final taken = await Navigator.push<int>(
+      context,
+      MaterialPageRoute<int>(
+        fullscreenDialog: true,
+        builder: (_) => ContinuousCameraScreen(task: task, item: item),
+      ),
+    );
+    if (!mounted || taken == null || taken == 0) return;
+    setState(() {
+      final idx = _checklist.indexWhere((c) => c.id == item.id);
+      if (idx != -1) {
+        _checklist[idx] = _checklist[idx].copyWith(isCompleted: true, verdict: 'PASS');
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppColors.statusBlockedText,
-            content: Text('Failed to capture evidence: $e'),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isCapturing = false);
-      }
-    }
+    });
+    _showMessage('$taken photo${taken == 1 ? '' : 's'} added to ${item.itemNumber}. Watermarking and uploading.');
   }
 
-  void _toggleItemNA(int index) {
+  void _toggleItemNA(TaskItem task, int index) {
     final item = _checklist[index];
+    if (!_canWork(task)) return;
     if (!item.allowsNa && item.verdict != 'NA') {
       _showMessage('${item.itemNumber} cannot be marked N/A.');
       return;
@@ -291,132 +249,46 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     );
   }
 
-  Future<void> _startMultiPhotoCapture(TaskItem task) async {
-    final picker = ImagePicker();
-    final authUser = ref.read(authStateProvider).value;
-    final username = authUser?.username ?? 'engineer';
-    final fullName = authUser?.displayName;
+  /// Photos on checklist items that have not reached the media bucket yet.
+  List<TaskEvidence> _unsent(List<TaskEvidence> evidence) => evidence
+      .where((e) =>
+          !e.isSubmitted &&
+          e.checklistItemId != null &&
+          e.checklistItemId!.isNotEmpty &&
+          !e.isUploaded)
+      .toList();
 
-    double latitude = 0;
-    double longitude = 0;
-    double accuracy = -1; // no fix yet; see WatermarkMetadata.accuracy
-
-    try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 4),
-        ),
-      );
-      latitude = pos.latitude;
-      longitude = pos.longitude;
-      accuracy = pos.accuracy;
-    } catch (_) {}
-
-    int snappedCount = 0;
-    bool continueSnapping = true;
-
-    while (continueSnapping && mounted) {
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 88,
-        maxWidth: 2048,
-        maxHeight: 2048,
-      );
-
-      if (pickedFile == null) {
-        break;
-      }
-
-      snappedCount++;
-      final rawBytes = await pickedFile.readAsBytes();
-      final now = DateTime.now();
-
-      final metadata = WatermarkMetadata(
-        siteCode: task.siteCode ?? '',
-        siteName: task.siteName ?? 'Site Location',
-        projectCode: task.projectCode ?? task.category,
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: accuracy,
-        timestamp: now,
-        username: username,
-        fullName: fullName,
-        taskTitle: task.title,
-      );
-
-      final job = QueuedWatermarkJob(
-        id: 'job-${now.millisecondsSinceEpoch}-$snappedCount',
-        taskId: task.id,
-        rawBytes: rawBytes,
-        rawFilePath: pickedFile.path,
-        metadata: metadata,
-        queuedAt: now,
-      );
-
-      // Enqueue for background watermarking & app private storage
-      await BackgroundWatermarkService.enqueueJob(job);
-
-      if (!mounted) break;
-
-      final shouldContinue = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              const Icon(Icons.camera_alt_outlined,
-                  color: AppColors.primaryLavenderDark),
-              const SizedBox(width: 8),
-              Text('Photo #$snappedCount Captured',
-                  style: const TextStyle(fontSize: 16)),
-            ],
-          ),
-          content: Text(
-            'Photo #$snappedCount is watermarking in background and saved exclusively to the in-app session gallery.\n\nSnap another photo for this session?',
-            style: const TextStyle(fontSize: 13),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Finish Shooting',
-                  style: TextStyle(color: AppColors.textSecondary)),
-            ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.darkSlate,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-              icon: const Icon(Icons.add_a_photo, size: 16),
-              label: const Text('Snap Next Photo'),
-              onPressed: () => Navigator.pop(ctx, true),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldContinue != true) {
-        continueSnapping = false;
-      }
+  /// Sends every photo to the bucket now, without submitting. Another user
+  /// picking the work order up finds them already uploaded.
+  Future<void> _uploadPhotos(TaskItem task, List<TaskEvidence> evidence) async {
+    if (_isUploading || _isSubmitting) return;
+    final unsent = _unsent(evidence);
+    final inTray = evidence.where((e) => !e.isSubmitted && (e.checklistItemId == null || e.checklistItemId!.isEmpty)).length;
+    final trayNote = inTray > 0
+        ? ' $inTray photo${inTray == 1 ? ' is' : 's are'} not on a checklist item and can not be uploaded until attached.'
+        : '';
+    if (unsent.isEmpty) {
+      _showMessage('Everything on checklist items is already uploaded.$trayNote');
+      return;
     }
-
-    if (snappedCount > 0 && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.darkSlate,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          content: Text(
-            '$snappedCount photo(s) captured! Background watermarking running. Tap "Browse" on any checklist item to assign.',
-            style: const TextStyle(fontSize: 12, color: Colors.white),
-          ),
-        ),
-      );
+    setState(() => _isUploading = true);
+    try {
+      final notReady = await ref
+          .read(evidenceUploaderProvider)
+          .uploadAndWait(task.id, unsent.map((e) => e.id).toSet());
+      if (notReady.isEmpty) {
+        _showMessage('${unsent.length} photo${unsent.length == 1 ? '' : 's'} uploaded.$trayNote');
+      } else {
+        final firstError = notReady.map((e) => e.uploadError).whereType<String>().firstOrNull;
+        _showMessage(
+          '${unsent.length - notReady.length} of ${unsent.length} uploaded. ${notReady.length} did not go: ${firstError ?? 'still being checked, try again shortly.'}',
+          isError: true,
+        );
+      }
+    } catch (e) {
+      _showMessage('Upload failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
     }
   }
 
@@ -445,7 +317,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       _showMessage('The checklist has not loaded yet.', isError: true);
       return;
     }
-    if (!task.isSubmittable) {
+    if (!_canWork(task)) {
       _showMessage('This work order is ${task.status.replaceAll('_', ' ').toLowerCase()} and cannot be submitted now.',
           isError: true);
       return;
@@ -465,6 +337,20 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
 
     setState(() => _isSubmitting = true);
     try {
+      // The engineer must be on site to submit. This is also the position the
+      // submission is filed from.
+      final position = await GeofenceService.currentPosition();
+      final fence = GeofenceService.evaluate(
+        siteLatitude: task.latitude,
+        siteLongitude: task.longitude,
+        radiusM: task.geofenceRadiusM,
+        position: position,
+      );
+      if (!fence.allowed) {
+        _showMessage(fence.blockedReason!, isError: true);
+        return;
+      }
+
       // Only photos on items being answered go with the submission; an N/A
       // item carries none.
       final answeredIds = _checklist.where((i) => i.verdict != 'NA').map((i) => i.id).toSet();
@@ -498,11 +384,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
         }
       }
 
-      Position? position;
-      try {
-        position = await Geolocator.getLastKnownPosition();
-      } catch (_) {}
-
       _submissionKey ??= const Uuid().v4();
       await ref.read(taskRepositoryProvider).submitChecklist(
             checklist: checklist,
@@ -515,9 +396,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       _submissionKey = null;
 
       ref.read(taskEvidenceProvider.notifier).submitEvidence(task.id);
+      if (mounted) setState(() => _justSubmitted = true);
       ref.invalidate(taskDetailProvider(task.id));
       ref.invalidate(assignedTasksProvider);
       _showSubmittedMessage();
+      // The lock hands over to the work order's own status once it is re-read.
+      try {
+        await ref.read(taskDetailProvider(task.id).future);
+        if (mounted) setState(() => _justSubmitted = false);
+      } catch (_) {}
     } on ApiException catch (e) {
       _showMessage(e.message, isError: true);
     } catch (e) {
@@ -710,6 +597,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     final taskAsync = ref.watch(taskDetailProvider(widget.task.id));
     final task = taskAsync.value ?? widget.task;
     final evidenceList = ref.watch(taskEvidenceListProvider(task.id));
+    final canWork = _canWork(task);
+    final unsentCount = _unsent(evidenceList).length;
 
     final dateStr = task.plannedCompletionAt != null
         ? DateFormat('d MMMM').format(task.plannedCompletionAt!)
@@ -775,6 +664,39 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                       ),
                     ],
                   ),
+                  if (task.note != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.searchFieldBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.subtleDivider),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.sticky_note_2_outlined, size: 16, color: AppColors.darkSlate),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text.rich(
+                              TextSpan(
+                                children: [
+                                  const TextSpan(
+                                    text: 'Notes: ',
+                                    style: TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                  TextSpan(text: task.note),
+                                ],
+                              ),
+                              style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
 
                   // Two Summary Metric Cards (Deadline & Evidence)
@@ -948,7 +870,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
               ),
             ),
 
-            // Bottom Action Bar: OSM Map, Multi-Photo Shoot, and Submit to QC
+            // Bottom Action Bar: OSM Map, Upload, and Submit to QC
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
@@ -981,7 +903,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                             initialLongitude: task.longitude,
                             siteCode: task.siteCode,
                             siteName: task.siteName,
-                            geofenceRadiusMeters: (task.geofenceRadiusM ?? 100).toDouble(),
+                            geofenceRadiusMeters: task.geofenceRadiusM?.toDouble(),
                           ),
                         ),
                       );
@@ -989,7 +911,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                   ),
                   const SizedBox(width: 8),
 
-                  // Continuous Multi-Photo Rapid Shoot Button
+                  // Upload photos to the bucket without submitting
                   Expanded(
                     flex: 5,
                     child: SizedBox(
@@ -1002,14 +924,25 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
-                        icon:
-                            const Icon(Icons.add_a_photo_outlined, size: 18),
-                        label: const Text(
-                          'Multi-Photo Shoot',
-                          style: TextStyle(
+                        icon: _isUploading
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.cloud_upload_outlined, size: 18),
+                        label: Text(
+                          _isUploading
+                              ? 'Uploading…'
+                              : unsentCount > 0
+                                  ? 'Upload ($unsentCount)'
+                                  : 'Upload',
+                          style: const TextStyle(
                               fontSize: 12, fontWeight: FontWeight.bold),
                         ),
-                        onPressed: _canWork(task) ? () => _startMultiPhotoCapture(task) : null,
+                        onPressed: canWork && !_isUploading && !_isSubmitting
+                            ? () => _uploadPhotos(task, evidenceList)
+                            : null,
                       ),
                     ),
                   ),
@@ -1040,8 +973,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                           style: const TextStyle(
                               fontSize: 12, fontWeight: FontWeight.bold),
                         ),
-                        onPressed: _isSubmitting ||
-                                (!AppConfig.demoMode && !task.isSubmittable)
+                        onPressed: _isSubmitting || _isUploading || !canWork
                             ? null
                             : () => _submitChecklistToQC(task, evidenceList),
                       ),
@@ -1091,11 +1023,12 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
             item.verdict == 'NA' ||
             evidenceList.any((e) => e.checklistItemId == item.id))
         .length;
+    final canWork = _canWork(task);
 
     return ListView(
       padding: const EdgeInsets.only(top: 8, bottom: 20),
       children: [
-        if (!_canWork(task))
+        if (!canWork)
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(12),
@@ -1110,12 +1043,14 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    switch (task.status) {
-                      'REVIEWING' => 'Submitted and waiting for QC review. Nothing to do until the reviewer responds.',
-                      'COMPLETED' => 'This work order is complete.',
-                      'CANCELLED' => 'This work order was cancelled.',
-                      _ => 'This work order cannot be changed right now.',
-                    },
+                    _justSubmitted
+                        ? 'Submitted. Photos and answers are now view-only.'
+                        : switch (task.status) {
+                            'REVIEWING' => 'Submitted and waiting for QC review. Photos and answers are view-only until the reviewer responds.',
+                            'COMPLETED' => 'Approved by QC. This work order is complete and view-only.',
+                            'CANCELLED' => 'This work order was cancelled.',
+                            _ => 'This work order cannot be changed right now.',
+                          },
                     style: AppTypography.bodySmall,
                   ),
                 ),
@@ -1452,6 +1387,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                                 ),
                               ),
                               // Detach [X] Button
+                              if (canWork)
                               Positioned(
                                 top: 3,
                                 right: 3,
@@ -1519,7 +1455,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
                             ),
-                            onPressed: () => _toggleItemNA(index),
+                            onPressed: canWork ? () => _toggleItemNA(task, index) : null,
                             child: Text(
                               isNA ? 'N/A Active' : 'N/A',
                               style: TextStyle(
@@ -1559,8 +1495,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                               style: const TextStyle(
                                   fontSize: 11, fontWeight: FontWeight.bold),
                             ),
-                            onPressed: () =>
-                                _openSessionPhotoBrowser(task, item),
+                            onPressed: canWork
+                                ? () => _openSessionPhotoBrowser(task, item)
+                                : null,
                           ),
                         ),
                       ),
@@ -1583,11 +1520,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                             icon: const Icon(Icons.camera_alt_outlined,
                                 size: 14),
                             label: const Text(
-                              'Click Image',
+                              'Take Photos',
                               style: TextStyle(
                                   fontSize: 11, fontWeight: FontWeight.bold),
                             ),
-                            onPressed: item.acceptsPhotos && _canWork(task)
+                            onPressed: item.acceptsPhotos && canWork
                                 ? () => _capturePhotoForItem(task, item)
                                 : null,
                           ),

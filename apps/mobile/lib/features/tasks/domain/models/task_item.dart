@@ -25,6 +25,7 @@ class TaskItem {
     this.siteCity,
     this.geofenceRadiusM,
     this.currentSubmissionId,
+    this.note,
   });
 
   final String id;
@@ -53,6 +54,9 @@ class TaskItem {
 
   /// The latest submission, whose review explains a rework (RECTIFYING).
   final String? currentSubmissionId;
+
+  /// What the office wrote when raising the work order, apart from [title].
+  final String? note;
 
   /// Open work whose planned completion has passed.
   bool get isOverdue =>
@@ -97,7 +101,24 @@ class TaskItem {
       siteCity: siteCity,
       geofenceRadiusM: geofenceRadiusM ?? this.geofenceRadiusM,
       currentSubmissionId: currentSubmissionId,
+      note: note,
     );
+  }
+
+  /// qc names a work order `[Type]SITECODE note`, so the note rides on the
+  /// title. Splits it off, leaving `[Type]SITECODE` as the title.
+  static ({String title, String? note}) splitTitle(String title, String? siteCode) {
+    final close = title.indexOf(']');
+    if (close < 0) return (title: title, note: null);
+    var end = -1;
+    if (siteCode != null && siteCode.isNotEmpty && title.startsWith(siteCode, close + 1)) {
+      end = close + 1 + siteCode.length;
+    } else {
+      final space = title.indexOf(' ', close + 1);
+      end = space < 0 ? title.length : space;
+    }
+    final note = title.substring(end).trim();
+    return (title: title.substring(0, end).trim(), note: note.isEmpty ? null : note);
   }
 
   static const Map<String, String> workOrderTypeLabels = {
@@ -121,11 +142,13 @@ class TaskItem {
     final overdue = planned != null &&
         planned.isBefore(DateTime.now()) &&
         _openStatuses.contains(status);
+    final named = splitTitle(json['title'] as String? ?? 'Untitled work order', site['siteCode'] as String?);
     return TaskItem(
       id: json['id'] as String? ?? '',
       siteId: json['siteId'] as String? ?? site['id'] as String? ?? '',
       taskTypeId: json['templateId'] as String? ?? '',
-      title: json['title'] as String? ?? 'Untitled work order',
+      title: named.title,
+      note: named.note,
       status: status,
       priority: overdue ? 'High' : 'Medium',
       siteCode: site['siteCode'] as String?,

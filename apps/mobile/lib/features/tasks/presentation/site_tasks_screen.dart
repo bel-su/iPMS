@@ -60,7 +60,7 @@ class SiteTasksScreen extends ConsumerWidget {
                     initialLongitude: site.longitude,
                     siteCode: site.siteCode,
                     siteName: site.name,
-                    geofenceRadiusMeters: (site.geofenceRadiusM ?? 100).toDouble(),
+                    geofenceRadiusMeters: site.geofenceRadiusM?.toDouble(),
                   ),
                 ),
               );
@@ -173,7 +173,7 @@ class SiteTasksScreen extends ConsumerWidget {
                             ],
                           ),
                           Text(
-                            'Geofence: ${site.geofenceRadiusM ?? 100}m',
+                            site.geofenceRadiusM != null ? 'Geofence: ${site.geofenceRadiusM}m' : 'No geofence',
                             style: AppTypography.caption,
                           ),
                         ],
