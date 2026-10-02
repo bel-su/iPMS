@@ -8,6 +8,7 @@ import '../../../core/config/env.dart';
 import '../../../core/network/api_exceptions.dart';
 import '../../../core/services/background_watermark_service.dart';
 import '../../../core/services/geofence_service.dart';
+import '../../../core/storage/na_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -59,6 +60,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
   /// response cannot create a second attempt; cleared once it succeeds.
   String? _submissionKey;
   StreamSubscription<TaskEvidence>? _watermarkSub;
+  final NaStore _naStore = NaStore();
 
   @override
   void initState() {
@@ -116,9 +118,16 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       await ref.read(taskEvidenceProvider.notifier).restored;
       if (!mounted) return;
       final evidence = ref.read(taskEvidenceListProvider(widget.task.id));
+      // Items marked N/A on an earlier visit stay N/A.
+      final owner = ref.read(sessionOwnerProvider);
+      final naIds = owner == null ? <String>{} : await _naStore.load(owner, widget.task.id);
+      if (!mounted) return;
       setState(() {
         _serverChecklist = checklist;
         _checklist = checklist.items.map((item) {
+          if (naIds.contains(item.id) && item.allowsNa) {
+            return item.copyWith(isCompleted: true, verdict: 'NA');
+          }
           final hasPhotos = evidence.any((e) => e.checklistItemId == item.id);
           return hasPhotos ? item.copyWith(isCompleted: true, verdict: 'PASS') : item;
         }).toList();
@@ -220,6 +229,16 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
         );
       }
     });
+    _saveNaMarks();
+  }
+
+  void _saveNaMarks() {
+    final owner = ref.read(sessionOwnerProvider);
+    if (owner == null) return;
+    unawaited(_naStore.save(owner, widget.task.id, {
+      for (final i in _checklist)
+        if (i.verdict == 'NA') i.id,
+    }));
   }
 
   void _openSessionPhotoBrowser(TaskItem task, ChecklistItem item) {
@@ -396,6 +415,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       _submissionKey = null;
 
       ref.read(taskEvidenceProvider.notifier).submitEvidence(task.id);
+      // The N/A answers are on the server now; a rework starts from what the
+      // reviewer sees, so the saved marks are no longer needed.
+      final owner = ref.read(sessionOwnerProvider);
+      if (owner != null) unawaited(_naStore.save(owner, task.id, {}));
       if (mounted) setState(() => _justSubmitted = true);
       ref.invalidate(taskDetailProvider(task.id));
       ref.invalidate(assignedTasksProvider);
