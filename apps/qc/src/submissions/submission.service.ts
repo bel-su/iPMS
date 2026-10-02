@@ -183,6 +183,7 @@ export class SubmissionService {
         }
         const fact: QcSubmissionSubmitted = {
           submissionId: submission.id, taskId: submission.taskId, projectId: submission.projectId,
+          workOrderId: task.id, workOrderTitle: task.title, siteId: task.siteId, siteCode: task.siteCode,
           attemptNo: submission.attemptNo, submittedBy: actorId, submittedAt: submission.submittedAt!.toISOString(),
         };
         await tx.outboxEvent.create({ data: buildOutboxRecord(SUBJECTS.QC_SUBMISSION_SUBMITTED, { ...fact }, getCorrelationId() ?? 'unknown', actorId) });
@@ -225,8 +226,11 @@ export class SubmissionService {
       const approved = dto.decision === 'APPROVE';
       await tx.reviewDecision.create({ data: { id: uuidv7(), submissionId: id, reviewerId: actorId, decision: dto.decision, comment: dto.comment ?? null } });
       const reviewed = await tx.submission.update({ where: { id }, data: { status: approved ? 'APPROVED' : 'REJECTED_REWORK', overallVerdict: approved ? 'PASS' : 'FAIL', reviewedBy: actorId, reviewedAt: new Date(), reviewComment: dto.comment ?? null } });
+      const order = await tx.workOrder.findUnique({ where: { id: reviewed.taskId }, select: { id: true, title: true, siteCode: true } });
       const fact: QcSubmissionReviewed = {
         submissionId: reviewed.id, taskId: reviewed.taskId, projectId: reviewed.projectId, attemptNo: reviewed.attemptNo,
+        workOrderId: reviewed.taskId, workOrderTitle: order?.title ?? '', siteId: reviewed.siteId, siteCode: order?.siteCode ?? '',
+        submittedBy: reviewed.submittedBy,
         decision: dto.decision, reviewedBy: actorId, reviewedAt: reviewed.reviewedAt!.toISOString(), comment: dto.comment ?? null,
       };
       await tx.outboxEvent.create({ data: buildOutboxRecord(SUBJECTS.QC_SUBMISSION_REVIEWED, { ...fact }, getCorrelationId() ?? 'unknown', actorId) });
@@ -242,7 +246,6 @@ export class SubmissionService {
           previousState: {}, newState: { status, submissionId: reviewed.id, attemptNo: reviewed.attemptNo },
         });
       }
-      const order = await tx.workOrder.findUnique({ where: { id: reviewed.taskId }, select: { id: true } });
       if (order) {
         await event(tx, order.id, approved ? 'APPROVED' : 'REJECTED', reviewed.reviewedAt!, actorId, {
           submissionId: reviewed.id, attemptNo: reviewed.attemptNo, comment: dto.comment ?? null,

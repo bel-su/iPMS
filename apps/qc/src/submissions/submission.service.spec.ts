@@ -134,6 +134,24 @@ describe('SubmissionService', () => {
       expect(prisma.workOrderDraft.deleteMany).toHaveBeenCalledWith({ where: { workOrderId: taskId } });
     });
 
+    it('publishes the work order and site labels the notification service needs', async () => {
+      prisma.workOrder.findUnique.mockResolvedValue({
+        id: taskId, assigneeId: actorId, status: 'ONGOING', projectId, siteId, templateId,
+        title: 'Tower foundation check', siteCode: 'KOS121',
+      });
+      prisma.submission.create.mockResolvedValue({
+        id: 'sub-1', taskId, projectId, siteId, attemptNo: 2, submittedAt: new Date('2026-10-02T08:00:00Z'),
+      });
+      prisma.itemResponse.create.mockResolvedValue({ id: 'resp-1' });
+      await service.createSubmission(dtoWith([P(1)]) as any, actorId, 'Bearer t');
+      const record = prisma.outboxEvent.create.mock.calls[0][0].data;
+      expect(record.subject).toBe('qc.submission.submitted');
+      expect(record.payload).toMatchObject({
+        submissionId: 'sub-1', workOrderId: taskId, workOrderTitle: 'Tower foundation check',
+        siteId, siteCode: 'KOS121', projectId, submittedBy: actorId, attemptNo: 2,
+      });
+    });
+
     it('refuses too few photos without attaching anything', async () => {
       kinds = { [P(1)]: 'VIDEO' };
       await expect(service.createSubmission(dtoWith([P(1)]) as any, actorId, 'b')).rejects.toThrow('Item 1.1 needs 1–5 photos; it has 0');
@@ -214,6 +232,8 @@ describe('SubmissionService', () => {
     const itemId = '0192f7a0-0000-7000-8000-000000000003';
     const taskId = '0192f7a0-0000-7000-8000-000000000004';
     const projectId = '0192f7a0-0000-7000-8000-000000000005';
+    const submitter = '0192f7a0-0000-7000-8000-000000000006';
+    const siteId = '0192f7a0-0000-7000-8000-000000000007';
     const scope: AuthzScope = { global: false, projectIds: [projectId], siteIds: [] };
 
     beforeEach(() => {
@@ -248,6 +268,22 @@ describe('SubmissionService', () => {
       expect(prisma.submission.findFirst).toHaveBeenCalledWith(expect.objectContaining({
         where: { AND: [{ id: submissionId }, scopeWhere(scope)] },
       }));
+    });
+
+    it('publishes who submitted the work and the labels the notification service needs', async () => {
+      prisma.submission.update.mockResolvedValue({
+        id: submissionId, status: 'REJECTED_REWORK', taskId, projectId, siteId, attemptNo: 2,
+        submittedBy: submitter, reviewedAt: new Date('2026-10-02T09:00:00Z'),
+      });
+      prisma.workOrder.findUnique.mockResolvedValue({ id: taskId, title: 'Tower foundation check', siteCode: 'KOS121' });
+      const dto = { decision: 'REJECT_REWORK' as const, comment: 'Photo is blurred', itemReviews: [{ itemId, result: 'REJECTED' as const }] };
+      await service.reviewSubmission(submissionId, dto as any, actorId, scope);
+      const record = prisma.outboxEvent.create.mock.calls[0][0].data;
+      expect(record.subject).toBe('qc.submission.reviewed');
+      expect(record.payload).toMatchObject({
+        submissionId, workOrderId: taskId, workOrderTitle: 'Tower foundation check', siteId, siteCode: 'KOS121',
+        submittedBy: submitter, decision: 'REJECT_REWORK', reviewedBy: actorId, comment: 'Photo is blurred',
+      });
     });
 
     it('answers 404 for a submission outside the caller’s scope, before writing anything', async () => {
