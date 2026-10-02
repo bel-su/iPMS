@@ -357,6 +357,9 @@ importers:
       '@ipms/contracts':
         specifier: workspace:*
         version: link:../../libs/contracts
+      '@ipms/events':
+        specifier: workspace:*
+        version: link:../../libs/events
       '@ipms/observability':
         specifier: workspace:*
         version: link:../../libs/observability
