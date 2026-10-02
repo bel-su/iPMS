@@ -87,7 +87,7 @@ export class ScopesController {
     @Req() req: { user: AuthzUser },
   ) {
     const scope = parseScope(body, 'PROJECT');
-    await this.scopes.grantProject(UuidSchema.parse(id), scope.projectId, req.user.id);
+    await this.scopes.grantProject(UuidSchema.parse(id), scope.projectId, req.user);
     return { status: 'ok' };
   }
 
@@ -99,7 +99,7 @@ export class ScopesController {
     @Req() req: { user: AuthzUser },
   ) {
     const scope = parseScope(body, 'PROJECT');
-    await this.scopes.revokeProject(UuidSchema.parse(id), scope.projectId, req.user.id);
+    await this.scopes.revokeProject(UuidSchema.parse(id), scope.projectId, req.user);
     return { status: 'ok' };
   }
 
@@ -111,7 +111,7 @@ export class ScopesController {
     @Req() req: { user: AuthzUser },
   ) {
     const scope = parseSiteScope(body);
-    await this.scopes.grantSite(UuidSchema.parse(id), scope.siteId, scope.projectId, req.user.id);
+    await this.scopes.grantSite(UuidSchema.parse(id), scope.siteId, scope.projectId, req.user);
     return { status: 'ok' };
   }
 
@@ -123,7 +123,7 @@ export class ScopesController {
     @Req() req: { user: AuthzUser },
   ) {
     const scope = parseSiteScope(body);
-    await this.scopes.revokeSite(UuidSchema.parse(id), scope.siteId, req.user.id);
+    await this.scopes.revokeSite(UuidSchema.parse(id), scope.siteId, req.user);
     return { status: 'ok' };
   }
 

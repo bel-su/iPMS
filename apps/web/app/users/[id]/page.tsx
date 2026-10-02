@@ -1,12 +1,13 @@
 import { getCurrentUser, hasPermission } from '../../lib/iam-api';
-import { getUser, listPermissions, listRoles } from '../../lib/user-api';
+import { listProjects } from '../../lib/project-api';
+import { getUser, getUserScopes, listPermissions, listRoles } from '../../lib/user-api';
 import { Sidebar, StatePage, TopActions } from '../../shell';
-import { AccountStatusForm, EditUserForm, ResetPasswordForm, RoleAssignmentForm } from '../forms';
+import { AccountStatusForm, EditUserForm, ProjectAccessForm, ResetPasswordForm, RoleAssignmentForm } from '../forms';
 
 export default async function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [user, roles, viewer, permissions] = await Promise.all([
-    getUser(id), listRoles(), getCurrentUser(), listPermissions(),
+  const [user, roles, viewer, permissions, scopes, projects] = await Promise.all([
+    getUser(id), listRoles(), getCurrentUser(), listPermissions(), getUserScopes(id), listProjects(),
   ]);
 
   if (user.state === 'unauthenticated') {
@@ -58,6 +59,18 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
 
   const may = (permission: string): boolean =>
     identity !== undefined && manageable && hasPermission(identity, permission);
+
+  /**
+   * Project access is readable with `scope.view` alone; changing it needs both
+   * verbs, since one save may grant and revoke. Projects come from the
+   * viewer's own list, so a project they cannot see is neither shown nor
+   * touched — a granted one is still counted, by id, in the read-only line.
+   */
+  const projectOptions = projects.state === 'ready'
+    ? projects.data.map((p) => ({ id: p.id, code: p.code, name: p.name }))
+    : [];
+  const projectName = new Map(projectOptions.map((p) => [p.id, `${p.name} (${p.code})`]));
+  const mayEditAccess = may('scope.grant') && may('scope.revoke') && projects.state === 'ready';
 
   // An actor cannot deactivate their own account; the service refuses it too.
   const mayChangeStatus = subject.isActive
@@ -121,6 +134,26 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                 roles={roles.state === 'ready' ? roles.data : []}
                 catalog={permissions.state === 'ready' ? permissions.data : []}
               />
+            </section>
+          ) : null}
+
+          {scopes.state === 'ready' ? (
+            <section className="panel">
+              <h2>Project access</h2>
+              <p className="subtle">
+                A user can be made responsible for work orders only in the projects they have access to.
+              </p>
+              {scopes.data.global ? (
+                <p>This account has access to every project.</p>
+              ) : mayEditAccess ? (
+                <ProjectAccessForm user={subject} projects={projectOptions} granted={scopes.data.projectIds} />
+              ) : (
+                <p>
+                  {scopes.data.projectIds.length === 0
+                    ? 'No projects yet.'
+                    : scopes.data.projectIds.map((pid) => projectName.get(pid) ?? 'A project you cannot see').join(', ')}
+                </p>
+              )}
             </section>
           ) : null}
 

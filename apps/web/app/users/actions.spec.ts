@@ -13,22 +13,29 @@ const setUserRoles = vi.fn().mockResolvedValue({ state: 'ready', data: { id: 'u-
 const resetUserPassword = vi.fn().mockResolvedValue({ state: 'ready', data: { id: 'u-1' } });
 const changePassword = vi.fn().mockResolvedValue({ state: 'ready', data: { status: 'ok' } });
 const updateMyProfile = vi.fn().mockResolvedValue({ state: 'ready', data: { id: 'u-1' } });
+const getUserScopes = vi.fn();
+const grantProjectAccess = vi.fn().mockResolvedValue({ state: 'ready', data: { status: 'ok' } });
+const revokeProjectAccess = vi.fn().mockResolvedValue({ state: 'ready', data: { status: 'ok' } });
 vi.mock('../lib/user-api', () => ({
   createUser, updateUser, deactivateUser, reactivateUser,
   setUserRoles, resetUserPassword, changePassword, updateMyProfile,
+  getUserScopes, grantProjectAccess, revokeProjectAccess,
   listUsers: vi.fn(), getUser: vi.fn(), listRoles: vi.fn(), getMyProfile: vi.fn(),
 }));
 
 const {
   changePasswordAction, createUserAction, deactivateUserAction,
   reactivateUserAction, resetUserPasswordAction, setUserRolesAction, updateUserAction,
-  updateMyProfileAction,
+  updateMyProfileAction, setProjectAccessAction,
 } = await import('./actions');
 
 beforeEach(() => {
   revalidatePath.mockClear();
   redirect.mockClear();
-  for (const fn of [createUser, updateUser, deactivateUser, reactivateUser, setUserRoles, resetUserPassword, changePassword, updateMyProfile]) {
+  for (const fn of [
+    createUser, updateUser, deactivateUser, reactivateUser, setUserRoles, resetUserPassword, changePassword, updateMyProfile,
+    getUserScopes, grantProjectAccess, revokeProjectAccess,
+  ]) {
     fn.mockClear();
   }
 });
@@ -237,5 +244,49 @@ describe('changePasswordAction', () => {
       confirmPassword: 'Long-enough-1',
     }))).toEqual({ error: 'The new password must be different from the current one.' });
     expect(changePassword).not.toHaveBeenCalled();
+  });
+});
+
+describe('setProjectAccessAction', () => {
+  const scopes = (projectIds: string[]) => ({ state: 'ready', data: { global: false, projectIds, siteIds: [] } });
+
+  it('grants the newly ticked projects and revokes the unticked ones', async () => {
+    getUserScopes.mockResolvedValueOnce(scopes(['p-1', 'p-2']));
+    expect(await setProjectAccessAction({}, form({
+      userId: 'u-1', offered: ['p-1', 'p-2', 'p-3'], projectIds: ['p-2', 'p-3'],
+    }))).toEqual({});
+    expect(grantProjectAccess.mock.calls).toEqual([['u-1', 'p-3']]);
+    expect(revokeProjectAccess.mock.calls).toEqual([['u-1', 'p-1']]);
+    expect(revalidatePath).toHaveBeenCalledWith('/users/u-1');
+  });
+
+  it('never revokes a project the form did not offer', async () => {
+    // The viewer could not see p-9, so it was not on the form; its absence
+    // from the ticked list is not a request to remove it.
+    getUserScopes.mockResolvedValueOnce(scopes(['p-1', 'p-9']));
+    expect(await setProjectAccessAction({}, form({ userId: 'u-1', offered: ['p-1'], projectIds: [] }))).toEqual({});
+    expect(revokeProjectAccess.mock.calls).toEqual([['u-1', 'p-1']]);
+    expect(grantProjectAccess).not.toHaveBeenCalled();
+  });
+
+  it('ignores a ticked id the form did not offer', async () => {
+    getUserScopes.mockResolvedValueOnce(scopes([]));
+    expect(await setProjectAccessAction({}, form({ userId: 'u-1', offered: ['p-1'], projectIds: ['p-1', 'p-x'] }))).toEqual({});
+    expect(grantProjectAccess.mock.calls).toEqual([['u-1', 'p-1']]);
+  });
+
+  it('stops at the first refusal and reports it', async () => {
+    getUserScopes.mockResolvedValueOnce(scopes([]));
+    grantProjectAccess.mockResolvedValueOnce({ state: 'forbidden', message: 'Missing scope.grant' });
+    expect(await setProjectAccessAction({}, form({ userId: 'u-1', offered: ['p-1', 'p-2'], projectIds: ['p-1', 'p-2'] })))
+      .toEqual({ error: 'Missing scope.grant' });
+    expect(grantProjectAccess).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a failure to read the current access', async () => {
+    getUserScopes.mockResolvedValueOnce({ state: 'forbidden', message: 'Missing scope.view' });
+    expect(await setProjectAccessAction({}, form({ userId: 'u-1', offered: ['p-1'], projectIds: ['p-1'] })))
+      .toEqual({ error: 'Missing scope.view' });
+    expect(grantProjectAccess).not.toHaveBeenCalled();
   });
 });

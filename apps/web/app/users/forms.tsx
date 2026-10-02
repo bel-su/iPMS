@@ -3,7 +3,7 @@ import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import {
   createUserAction, deactivateUserAction, reactivateUserAction,
-  resetUserPasswordAction, setUserRolesAction, updateUserAction,
+  resetUserPasswordAction, setProjectAccessAction, setUserRolesAction, updateUserAction,
 } from './actions';
 import { PasswordInput } from '../components/forms';
 import { EMPTY, type FormState } from '../lib/form-state';
@@ -213,6 +213,43 @@ export function RoleAssignmentForm({ user, grantable, roles, catalog }: {
       <FormError state={state} />
       <p className="form-note">Changing the role signs this user out of every device.</p>
       <SubmitButton>Save role</SubmitButton>
+    </form>
+  );
+}
+
+export interface ProjectOption { id: string; code: string; name: string }
+
+/**
+ * Which projects this user works on. Ticking one makes them selectable as the
+ * responsible person for work orders in that project.
+ *
+ * Each rendered project is also sent as `offered`, so the action only touches
+ * projects this form showed — see `setProjectAccessAction`.
+ */
+export function ProjectAccessForm({ user, projects, granted }: {
+  user: User; projects: ProjectOption[]; granted: string[];
+}) {
+  const [state, action] = useActionState(setProjectAccessAction, EMPTY);
+  const held = new Set(granted);
+  return (
+    <form action={action} className="panel-form">
+      <input type="hidden" name="userId" value={user.id} />
+      <fieldset className="checkbox-grid">
+        <legend>Projects</legend>
+        {projects.map((project) => (
+          <label key={project.id} className="checkbox">
+            <input type="hidden" name="offered" value={project.id} />
+            <input type="checkbox" name="projectIds" value={project.id} defaultChecked={held.has(project.id)} />
+            {project.name} <span className="subtle">({project.code})</span>
+          </label>
+        ))}
+        {projects.length === 0 ? <p className="subtle">There are no projects to grant yet.</p> : null}
+      </fieldset>
+      <FormError state={state} />
+      <p className="form-note">
+        Removing a project also removes any site access this user holds in it.
+      </p>
+      <SubmitButton>Save project access</SubmitButton>
     </form>
   );
 }

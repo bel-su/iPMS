@@ -1,8 +1,8 @@
 'use server';
 import { redirect } from 'next/navigation';
 import {
-  changePassword, createUser, deactivateUser, reactivateUser,
-  resetUserPassword, setUserRoles, updateUser, updateMyProfile,
+  changePassword, createUser, deactivateUser, getUserScopes, grantProjectAccess, reactivateUser,
+  resetUserPassword, revokeProjectAccess, setUserRoles, updateUser, updateMyProfile,
 } from '../lib/user-api';
 import { type FormState } from '../lib/form-state';
 import { clearable, optional, settle } from '../lib/settle';
@@ -121,6 +121,38 @@ export async function setUserRolesAction(_previous: FormState, form: FormData): 
   const role = readRole(form);
   if ('error' in role) return { error: role.error };
   return settle(await setUserRoles(userId, role), pages(userId));
+}
+
+/**
+ * The project checkboxes, saved as a diff against what iam holds now.
+ *
+ * Only projects listed in `offered` — the ones the form rendered — can change.
+ * A project the viewer cannot see was never on the form, so its absence from
+ * the ticked list is not a request to revoke it, and an id smuggled into the
+ * ticked list without being offered is ignored.
+ *
+ * Grants and revokes are separate calls, so a refusal part-way leaves the
+ * earlier ones applied; the page is refreshed either way so it shows the truth.
+ */
+export async function setProjectAccessAction(_previous: FormState, form: FormData): Promise<FormState> {
+  const userId = String(form.get('userId'));
+  const offered = new Set(form.getAll('offered').map(String));
+  const ticked = new Set(form.getAll('projectIds').map(String).filter((id) => offered.has(id)));
+
+  const current = await getUserScopes(userId);
+  const read = await settle(current, []);
+  if (read.error || current.state !== 'ready') return read;
+  const held = new Set(current.data.projectIds);
+
+  const changes = [
+    ...[...ticked].filter((id) => !held.has(id)).map((id) => () => grantProjectAccess(userId, id)),
+    ...[...offered].filter((id) => held.has(id) && !ticked.has(id)).map((id) => () => revokeProjectAccess(userId, id)),
+  ];
+  for (const change of changes) {
+    const state = await settle(await change(), pages(userId));
+    if (state.error) return state;
+  }
+  return settle({ state: 'ready', data: null }, pages(userId));
 }
 
 export async function deactivateUserAction(_previous: FormState, form: FormData): Promise<FormState> {
