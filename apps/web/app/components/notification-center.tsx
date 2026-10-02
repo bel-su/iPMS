@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { NotificationPage, UnreadCount } from '@ipms/contracts';
 import {
-  markEveryRead, markOneRead, toItem,
+  markEveryRead, markIdsUnread, markOneRead, toItem,
   type Category, type NotificationItem,
 } from './notification-model';
 
@@ -73,31 +73,33 @@ export function NotificationCenter() {
     void refreshCount();
   }, [open, loadList, refreshCount]);
 
-  /** Optimistic: update at once, put it back if the server refuses. */
+  /**
+   * Optimistic: update at once, and on refusal undo only this change (never restore a
+   * captured snapshot, which could clobber fresher state), then re-sync the badge.
+   */
   async function markAsRead(id: string) {
     if (!items.find((item) => item.id === id)?.unread) return;
-    const before = { items, count };
-    setItems(markOneRead(items, id));
-    setCount(Math.max(0, count - 1));
+    setItems((prev) => markOneRead(prev, id));
+    setCount((c) => Math.max(0, c - 1));
     if (!(await post(`/api/notifications/${encodeURIComponent(id)}/read`))) {
-      setItems(before.items);
-      setCount(before.count);
+      setItems((prev) => markIdsUnread(prev, new Set([id])));
+      setCount((c) => c + 1);
       setFailure('Could not mark that notification as read.');
     }
+    // The panel lists the newest 20; the server's count is the source of truth.
+    void refreshCount();
   }
 
   async function markAllAsRead() {
-    const before = { items, count };
-    setItems(markEveryRead(items));
+    const unreadIds = new Set(items.filter((item) => item.unread).map((item) => item.id));
+    setItems((prev) => markEveryRead(prev));
     setCount(0);
-    if (await post('/api/notifications/read-all')) {
-      // The panel lists the newest 20; older unread ones are still counted by the server.
-      void refreshCount();
-    } else {
-      setItems(before.items);
-      setCount(before.count);
+    if (!(await post('/api/notifications/read-all'))) {
+      setItems((prev) => markIdsUnread(prev, unreadIds));
       setFailure('Could not mark notifications as read.');
     }
+    // Restores the badge after a failure and covers unread items beyond the listed 20.
+    void refreshCount();
   }
 
   const filtered = items.filter((item) => filter === 'all' || item.category === filter);

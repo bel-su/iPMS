@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NotificationDto } from '@ipms/contracts';
-import { categoryOf, markEveryRead, markOneRead, relativeTime, toItem } from './notification-model';
+import { categoryOf, markEveryRead, markIdsUnread, markOneRead, relativeTime, toItem } from './notification-model';
 
 const NOW = new Date('2026-10-02T12:00:00Z');
 const at = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
@@ -61,5 +61,28 @@ describe('read-state helpers', () => {
 
   it('marks every one', () => {
     expect(markEveryRead(items).every((i) => !i.unread)).toBe(true);
+  });
+
+  describe('markIdsUnread', () => {
+    const read = [
+      { id: 'a', category: 'qc' as const, title: '', description: '', time: '', unread: false },
+      { id: 'b', category: 'qc' as const, title: '', description: '', time: '', unread: false },
+      { id: 'c', category: 'qc' as const, title: '', description: '', time: '', unread: false },
+    ];
+
+    it('marks only the given ids and leaves the others untouched', () => {
+      const next = markIdsUnread(read, new Set(['a', 'c']));
+      expect(next.map((i) => i.unread)).toEqual([true, false, true]);
+      expect(next[1]).toBe(read[1]);
+    });
+
+    it('does not mutate its input', () => {
+      markIdsUnread(read, new Set(['a']));
+      expect(read.every((i) => !i.unread)).toBe(true);
+    });
+
+    it('returns items unchanged for an empty set', () => {
+      expect(markIdsUnread(read, new Set())).toEqual(read);
+    });
   });
 });

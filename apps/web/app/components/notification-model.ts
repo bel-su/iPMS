@@ -47,6 +47,13 @@ export function markOneRead(items: NotificationItem[], id: string): Notification
   return items.map((item) => (item.id === id ? { ...item, unread: false } : item));
 }
 
+export function markIdsUnread(
+  items: NotificationItem[],
+  ids: ReadonlySet<string>,
+): NotificationItem[] {
+  return items.map((item) => (ids.has(item.id) ? { ...item, unread: true } : item));
+}
+
 export function markEveryRead(items: NotificationItem[]): NotificationItem[] {
   return items.map((item) => ({ ...item, unread: false }));
 }
