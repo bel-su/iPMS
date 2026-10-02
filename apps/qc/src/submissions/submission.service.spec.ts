@@ -220,6 +220,18 @@ describe('SubmissionService', () => {
       expect(prisma.submission.create).not.toHaveBeenCalled();
     });
 
+    it('asks for no photos on an item marked N/A', async () => {
+      const version = await prisma.templateVersion.findUnique();
+      prisma.templateVersion.findUnique.mockResolvedValue({
+        ...version,
+        sections: [{ id: 'sec-1', items: [{ ...version.sections[0].items[0], allowsNa: true }] }],
+      });
+      prisma.submission.create.mockResolvedValue({ id: 'sub-1', attemptNo: 1, submittedAt: new Date() });
+      prisma.itemResponse.create.mockResolvedValue({ id: 'resp-1' });
+      const dto = { ...dtoWith([]), responses: [{ itemId, selfCheckResult: 'NA' as const, mediaIds: [] }] };
+      await expect(service.createSubmission(dto as any, actorId, 'b')).resolves.toBeDefined();
+    });
+
     it('still refuses N/A where it is not allowed', async () => {
       const dto = { ...dtoWith([P(1)]), responses: [{ itemId, selfCheckResult: 'NA' as const, mediaIds: [P(1)] }] };
       await expect(service.createSubmission(dto as any, actorId, 'b')).rejects.toThrow('Item 1.1 does not allow N/A');

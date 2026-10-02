@@ -145,6 +145,8 @@ export class SubmissionService {
     for (const item of items) {
       const response = responses.get(item.id);
       if (!response) continue;
+      // An item marked N/A does not apply to this job (say, sector B when only sector A was worked), so it needs no evidence.
+      if (response.selfCheckResult === 'NA') continue;
       const photos = response.mediaIds.filter((id) => kinds.get(id) === 'PHOTO').length;
       const videos = response.mediaIds.length - photos;
       checkCount(item.number, 'photo', photos, item.minPhotos, item.maxPhotos);
