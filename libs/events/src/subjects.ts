@@ -1,6 +1,7 @@
 export const SUBJECTS = {
   IAM_SCOPE_GRANTED: 'iam.scope.granted',
   IAM_SCOPE_REVOKED: 'iam.scope.revoked',
+  IAM_SCOPE_EXPIRING: 'iam.scope.expiring',
   IAM_ROLE_ASSIGNED: 'iam.role.assigned',
   IAM_ROLE_REMOVED: 'iam.role.removed',
   IAM_USER_DEACTIVATED: 'iam.user.deactivated',
@@ -37,6 +38,7 @@ export const STREAMS: Record<'IAM' | 'AUDIT' | 'QC', StreamDefinition> = {
      */
     durableConsumers: [
       'project-scope-granted', 'project-scope-revoked', 'project-scope-deactivated',
+      'notification-scope-expiring',
     ],
   },
   AUDIT: {

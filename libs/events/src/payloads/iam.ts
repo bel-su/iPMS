@@ -38,3 +38,16 @@ export interface IamUserUpdated {
   employeeCode?: string | null;
   phone?: string | null;
 }
+
+/**
+ * A user's project access is about to lapse. `managerIds` are the people who may
+ * renew it; iam works them out because it owns the grants and the permissions.
+ */
+export interface IamScopeExpiring {
+  userId: string;
+  userName: string;
+  /** Whole days until the earliest of `grants` lapses. */
+  daysLeft: number;
+  grants: Array<{ projectId: string; expiresAt: string }>;
+  managerIds: string[];
+}

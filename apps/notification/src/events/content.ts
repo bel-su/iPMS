@@ -1,4 +1,4 @@
-import type { QcSubmissionReviewed, QcSubmissionSubmitted } from '@ipms/events';
+import type { IamScopeExpiring, QcSubmissionReviewed, QcSubmissionSubmitted } from '@ipms/events';
 import type { NewNotification } from '../notifications/notification.service.js';
 
 export type NotificationDraft = Omit<NewNotification, 'recipientId' | 'eventId'>;
@@ -28,5 +28,31 @@ export function reviewedContent(p: QcSubmissionReviewed): NotificationDraft {
     body: approved ? `${label(p)} was approved.` : `${label(p)} needs rework${reason}`,
     actionUrl: urlFor(p.workOrderId),
     workOrderId: p.workOrderId,
+  };
+}
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+function whenText(p: IamScopeExpiring): string {
+  return p.daysLeft <= 0 ? 'today' : `in ${plural(p.daysLeft, 'day')}`;
+}
+
+export function accessExpiringForEngineer(p: IamScopeExpiring): NotificationDraft {
+  return {
+    type: 'PROJECT_ACCESS_EXPIRING',
+    title: 'Your project access is ending',
+    body: `Your access to ${plural(p.grants.length, 'project')} ends ${whenText(p)}. Ask your project manager to renew it; work orders in those projects will no longer be visible to you after that.`,
+    actionUrl: null,
+    workOrderId: null,
+  };
+}
+
+export function accessExpiringForManager(p: IamScopeExpiring): NotificationDraft {
+  return {
+    type: 'PROJECT_ACCESS_EXPIRING',
+    title: `${p.userName}’s project access is ending`,
+    body: `${p.userName}’s access to ${plural(p.grants.length, 'project')} ends ${whenText(p)}. Renew it on their user page if they still need it.`,
+    actionUrl: `/users/${p.userId}`,
+    workOrderId: null,
   };
 }

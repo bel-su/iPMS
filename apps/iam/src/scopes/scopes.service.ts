@@ -16,6 +16,8 @@ const EXPIRING_ROLES: readonly string[] = ['FIELD_ENGINEER'];
 /** Recorded as the actor when the expiry sweep, not a person, removes access. */
 export const SYSTEM_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
 
+const DAY_MS = 86_400_000;
+
 export function oneYearFrom(from: Date): Date {
   const next = new Date(from);
   next.setUTCFullYear(next.getUTCFullYear() + 1);
@@ -141,7 +143,7 @@ export class ScopesService {
       if (existing) {
         // A lapsed grant the sweep has not reached yet: granting again is a renewal.
         if (existing.expiresAt && existing.expiresAt <= now && expiresAt) {
-          await tx.userProjectScope.update({ where: { id: existing.id }, data: { expiresAt } });
+          await tx.userProjectScope.update({ where: { id: existing.id }, data: { expiresAt, warnedStage: 0 } });
           await this.audit(tx, actorId, 'scope.project_renewed', 'User', userId, {}, { projectId, expiresAt: expiresAt.toISOString() });
         }
         return;   // idempotent: no duplicate row, no duplicate event
@@ -169,7 +171,7 @@ export class ScopesService {
       if (!existing.expiresAt) throw new BadRequestException('This access does not expire');
 
       const expiresAt = oneYearFrom(new Date());
-      await tx.userProjectScope.update({ where: { id: existing.id }, data: { expiresAt } });
+      await tx.userProjectScope.update({ where: { id: existing.id }, data: { expiresAt, warnedStage: 0 } });
       await this.audit(tx, actor.id, 'scope.project_renewed', 'User', userId,
         { projectId, expiresAt: existing.expiresAt.toISOString() }, { projectId, expiresAt: expiresAt.toISOString() });
       return { expiresAt: expiresAt.toISOString() };
@@ -200,6 +202,47 @@ export class ScopesService {
       });
     }
     return removed;
+  }
+
+  /**
+   * Warns ahead of a lapse: once at 30 days and again at 7. Grants entering a
+   * stage are grouped by user, so someone with three projects ending the same
+   * week gets one notice. `managersOf` names who may renew a project; the
+   * engineer is told too, by `notification`, which gets the user id in the event.
+   * Returns how many events were raised.
+   */
+  async warnExpiring(managersOf: (projectId: string) => Promise<string[]>, now: Date = new Date()): Promise<number> {
+    const horizon = new Date(now.getTime() + 30 * DAY_MS);
+    const rows = await this.prisma.userProjectScope.findMany({
+      where: { expiresAt: { gt: now, lte: horizon }, warnedStage: { lt: 2 } },
+      select: { id: true, userId: true, projectId: true, expiresAt: true, warnedStage: true },
+    });
+    const byUser = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const stage = row.expiresAt!.getTime() - now.getTime() <= 7 * DAY_MS ? 2 : 1;
+      if (row.warnedStage >= stage) continue;
+      byUser.set(row.userId, [...(byUser.get(row.userId) ?? []), { ...row, warnedStage: stage }]);
+    }
+
+    let raised = 0;
+    for (const [userId, grants] of byUser) {
+      const managers = new Set<string>();
+      for (const grant of grants) for (const id of await managersOf(grant.projectId)) managers.add(id);
+      managers.delete(userId);
+      await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({ where: { id: userId }, select: { fullName: true, isActive: true } });
+        if (!user?.isActive) return;
+        const soonest = Math.min(...grants.map((g) => g.expiresAt!.getTime()));
+        await this.emit(tx, SUBJECTS.IAM_SCOPE_EXPIRING, {
+          userId, userName: user.fullName, daysLeft: Math.max(0, Math.ceil((soonest - now.getTime()) / DAY_MS)),
+          grants: grants.map((g) => ({ projectId: g.projectId, expiresAt: g.expiresAt!.toISOString() })),
+          managerIds: [...managers],
+        }, SYSTEM_ACTOR_ID);
+        for (const grant of grants) await tx.userProjectScope.update({ where: { id: grant.id }, data: { warnedStage: grant.warnedStage } });
+        raised += 1;
+      });
+    }
+    return raised;
   }
 
   private async removeProject(tx: Tx, userId: string, projectId: string, actorId: string, action: string): Promise<boolean> {

@@ -9,8 +9,8 @@ export interface NewNotification {
   type: string;
   title: string;
   body: string;
-  actionUrl: string;
-  workOrderId: string;
+  actionUrl: string | null;
+  workOrderId: string | null;
 }
 
 export interface ListQuery {

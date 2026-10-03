@@ -750,3 +750,46 @@ describe('project access expiry', () => {
     expect(payloadsOf(tx, 'audit.event.recorded')[0]).toMatchObject({ action: 'scope.project_expired', actorId: SYSTEM_ACTOR_ID });
   });
 });
+
+describe('project access expiry warnings', () => {
+  const ENGINEER = { id: USER, fullName: 'Jane Doe', isActive: true, roles: [] };
+  const grantEnding = (days: number, warnedStage = 0) => ({
+    id: uuidv7(), userId: USER, projectId: PROJECT, expiresAt: new Date(Date.now() + days * DAY + 3_600_000), warnedStage,
+  });
+  const MANAGER = uuidv7();
+
+  it('warns once at 30 days, naming the engineer and who can renew', async () => {
+    const { service, tx } = build({ user: ENGINEER, dueRows: [grantEnding(25)] });
+    expect(await service.warnExpiring(async () => [MANAGER, USER])).toBe(1);
+    expect(payloadsOf(tx, 'iam.scope.expiring')).toEqual([expect.objectContaining({
+      userId: USER, userName: 'Jane Doe', daysLeft: 26, managerIds: [MANAGER],
+      grants: [expect.objectContaining({ projectId: PROJECT })],
+    })]);
+    expect(tx.userProjectScope.update).toHaveBeenCalledWith(expect.objectContaining({ data: { warnedStage: 1 } }));
+  });
+
+  it('warns again inside 7 days', async () => {
+    const { service, tx } = build({ user: ENGINEER, dueRows: [grantEnding(5, 1)] });
+    expect(await service.warnExpiring(async () => [MANAGER])).toBe(1);
+    expect(tx.userProjectScope.update).toHaveBeenCalledWith(expect.objectContaining({ data: { warnedStage: 2 } }));
+  });
+
+  it('does not repeat a warning it already sent', async () => {
+    const { service, tx } = build({ user: ENGINEER, dueRows: [grantEnding(25, 1)] });
+    expect(await service.warnExpiring(async () => [MANAGER])).toBe(0);
+    expect(subjectsOf(tx)).toEqual([]);
+  });
+
+  it('groups a user’s grants into one warning', async () => {
+    const { service, tx } = build({ user: ENGINEER, dueRows: [grantEnding(20), { ...grantEnding(10), projectId: uuidv7() }] });
+    expect(await service.warnExpiring(async () => [MANAGER])).toBe(1);
+    expect(payloadsOf(tx, 'iam.scope.expiring')[0]).toMatchObject({ daysLeft: 11 });
+    expect((payloadsOf(tx, 'iam.scope.expiring')[0]!.grants as unknown[]).length).toBe(2);
+  });
+
+  it('starts the warnings over when access is renewed', async () => {
+    const { service, tx } = build({ user: FIELD_ENGINEER, existingScope: { id: uuidv7(), expiresAt: new Date(Date.now() + 5 * DAY) } });
+    await service.renewProject(USER, PROJECT, ADMIN);
+    expect(tx.userProjectScope.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ warnedStage: 0 }) }));
+  });
+});

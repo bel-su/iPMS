@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { useActionStateWithToast } from '../components/toast';
 import { useFormStatus } from 'react-dom';
 import {
@@ -211,7 +211,16 @@ export function ProjectAccessForm({ user, projects, granted, expiries }: {
   user: User; projects: ProjectOption[]; granted: string[]; expiries: Record<string, AccessExpiry>;
 }) {
   const [state, action] = useActionStateWithToast(setProjectAccessAction, EMPTY, 'Project access saved');
-  const [renewState, renew] = useActionStateWithToast(renewProjectAccessAction, EMPTY, 'Access renewed for another year');
+  const [renewState, renew, renewing] = useActionStateWithToast(renewProjectAccessAction, EMPTY, 'Access renewed for another year');
+  const [, startRenew] = useTransition();
+  // Called directly rather than through a submit button's `formAction`: React
+  // overwrites that button's `name` on the server, so the project id would not arrive.
+  const renewProject = (projectId: string): void => {
+    const data = new FormData();
+    data.set('userId', user.id);
+    data.set('renewProjectId', projectId);
+    startRenew(() => renew(data));
+  };
   const [selected, setSelected] = useState<Set<string>>(() => new Set(granted));
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
@@ -250,11 +259,11 @@ export function ProjectAccessForm({ user, projects, granted, expiries }: {
             <code className="access-code">{project.code}</code>
             {expiries[project.id] ? (
               <button
-                type="submit" formAction={renew} name="renewProjectId" value={project.id}
+                type="button" disabled={renewing}
                 className={expiries[project.id]!.daysLeft <= RENEW_SOON_DAYS ? 'access-renew soon' : 'access-renew'}
-                formNoValidate
+                onClick={() => renewProject(project.id)}
               >
-                Renew
+                {renewing ? 'Renewing…' : 'Renew'}
               </button>
             ) : null}
           </label>

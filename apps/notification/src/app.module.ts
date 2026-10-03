@@ -8,6 +8,7 @@ import {
 import { EventBus } from '@ipms/events';
 import { HealthController, MetricsController, registerReadinessCheck } from '@ipms/observability';
 import { IamDirectoryClient } from './directory/iam-directory.client.js';
+import { IamNotificationConsumer } from './events/iam-notification.consumer.js';
 import { QcNotificationConsumer } from './events/qc-notification.consumer.js';
 import { NotificationController } from './notifications/notification.controller.js';
 import { NotificationService } from './notifications/notification.service.js';
@@ -95,6 +96,12 @@ const notificationScopeProvider: ScopeProvider = {
       useFactory: (notifications: NotificationService, iam: IamDirectoryClient, bus: EventBus): QcNotificationConsumer =>
         new QcNotificationConsumer(notifications, iam, bus),
       inject: [NotificationService, IamDirectoryClient, EventBus],
+    },
+    {
+      provide: IamNotificationConsumer,
+      useFactory: (notifications: NotificationService, bus: EventBus): IamNotificationConsumer =>
+        new IamNotificationConsumer(notifications, bus),
+      inject: [NotificationService, EventBus],
     },
   ],
 })

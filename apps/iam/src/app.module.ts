@@ -211,8 +211,9 @@ function iamOverrideProvider(prisma: PrismaService): OverrideProvider {
     },
     {
       provide: ProjectAccessExpirer,
-      useFactory: (scopes: ScopesService) => new ProjectAccessExpirer(scopes),
-      inject: [ScopesService],
+      useFactory: (scopes: ScopesService, effective: EffectiveService) =>
+        new ProjectAccessExpirer(scopes, (projectId) => effective.holders('scope.grant', projectId)),
+      inject: [ScopesService, EffectiveService],
     },
     {
       provide: OutboxDrainer,
