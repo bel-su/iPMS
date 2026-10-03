@@ -1,5 +1,6 @@
 'use client';
-import { useActionState, useState } from 'react';
+import { useState } from 'react';
+import { useActionStateWithToast } from '../components/toast';
 import { useFormStatus } from 'react-dom';
 import { updateMyProfileAction } from '../users/actions';
 import { EMPTY, type FormState } from '../lib/form-state';
@@ -42,7 +43,7 @@ function FormStatusMessage({ state }: { state: FormState }) {
 
 export function ProfileManager({ user }: { user: User }) {
   const [activeTab, setActiveTab] = useState<'details' | 'security' | 'roles'>('details');
-  const [state, action] = useActionState(updateMyProfileAction, EMPTY);
+  const [state, action] = useActionStateWithToast(updateMyProfileAction, EMPTY, 'Profile saved');
 
   return (
     <div className="profile-container">

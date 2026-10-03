@@ -1,5 +1,6 @@
 'use client';
-import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useActionStateWithToast } from '../../../components/toast';
 import { useFormStatus } from 'react-dom';
 import { EMPTY } from '../../../lib/form-state';
 import type { DirectoryUser } from '../../../lib/user-api';
@@ -43,7 +44,7 @@ export function Composer({ projects, templates, directory, initialProjectId, ini
   initialProjectId: string;
   initialContext: ProjectContext | null;
 }) {
-  const [state, action] = useActionState(createWorkOrdersAction, EMPTY);
+  const [state, action] = useActionStateWithToast(createWorkOrdersAction, EMPTY, 'Work orders created');
   const [type, setType] = useState<WorkOrderType>('QUALITY_SELF_CHECK');
   const [templateId, setTemplateId] = useState('');
   const [templateQuery, setTemplateQuery] = useState('');

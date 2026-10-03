@@ -117,7 +117,7 @@
 .ov-chips a { padding: 6px 13px; border-radius: 999px; border: 1px solid var(--ov-line); background: #fff; color: #334155; font-size: 12.5px; font-weight: 600; }
 .ov-chips a:hover { background: #f8fafc; }
 .ov-chips a.on { background: #eaf1ff; border-color: #bcd2ff; color: #1d4ed8; }
-.ov-chips a:focus-visible, .ov-link:focus-visible, .ov-search input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.ov-chips a:focus-visible, .ov-link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .ov-note { margin: -4px 0 12px; padding: 9px 12px; border-radius: 8px; background: #f8fafc; color: var(--ov-text); font-size: 12.5px; }
 .ov-log { list-style: none; margin: 0 -24px; padding: 0; }
 .ov-log li { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; grid-template-areas: 'when what by' 'when what ref'; column-gap: 14px; row-gap: 4px; align-items: start; padding: 14px 24px; border-top: 1px solid #f1f4f9; }
@@ -140,12 +140,6 @@
 .ov-empty strong { color: var(--ov-ink); }
 .ov-empty p { margin: 6px 0 0; font-size: 13px; }
 
-/* Search in the topbar */
-.ov-search { position: relative; display: flex; align-items: center; }
-.ov-search svg { position: absolute; left: 11px; color: var(--ov-faint); pointer-events: none; }
-.ov-search input { width: clamp(180px, 22vw, 280px); height: 36px; padding: 0 12px 0 33px; border: 1px solid var(--ov-line); border-radius: 10px; background: #f8fafc; color: var(--ov-ink); font: inherit; font-size: 13px; }
-.ov-search input::placeholder { color: var(--ov-faint); }
-
 @media (max-width: 1100px) {
   .ov-pair { grid-template-columns: minmax(0, 1fr); }
 }
@@ -160,7 +154,6 @@
   .ov-log code { justify-self: start; }
   .ov-ageing li { grid-template-columns: 76px minmax(0, 1fr) 92px; }
   .ov-ageing em { display: none; }
-  .ov-search { display: none; }
   .ov-queue li { grid-template-columns: 34px minmax(0, 1fr); }
   .ov-queue-end { grid-column: 2; text-align: left; }
   .ov-queue-end .ov-meter { margin-left: 0; max-width: none; }

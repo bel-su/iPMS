@@ -1,9 +1,10 @@
 'use client';
-import { useActionState, useState } from 'react';
+import { useState } from 'react';
+import { useActionStateWithToast } from '../components/toast';
 import { useFormStatus } from 'react-dom';
 import {
   createUserAction, deactivateUserAction, reactivateUserAction,
-  resetUserPasswordAction, setProjectAccessAction, setUserRolesAction, updateUserAction,
+  renewProjectAccessAction, resetUserPasswordAction, setProjectAccessAction, setUserRolesAction, updateUserAction,
 } from './actions';
 import { PasswordInput } from '../components/forms';
 import { EMPTY, type FormState } from '../lib/form-state';
@@ -23,32 +24,6 @@ function FormError({ state }: { state: FormState }) {
       {state.error}
       {state.correlationId ? <> <span className="subtle">({state.correlationId})</span></> : null}
     </p>
-  );
-}
-
-/**
- * A GET form, not a Server Action.
- *
- * The filters belong in the URL: that makes a filtered view shareable, keeps it
- * across a refresh, and needs no client state or JavaScript at all.
- */
-export function UserFilterBar({ search, status }: { search: string; status: string }) {
-  return (
-    <form className="filter-bar" action="/users" method="get">
-      <label className="field">
-        Search
-        <input name="search" defaultValue={search} placeholder="Name or email" maxLength={150} />
-      </label>
-      <label className="field">
-        Status
-        <select name="status" defaultValue={status}>
-          <option value="ALL">All</option>
-          <option value="ACTIVE">Active</option>
-          <option value="INACTIVE">Inactive</option>
-        </select>
-      </label>
-      <button className="ghost-button" type="submit">Apply</button>
-    </form>
   );
 }
 
@@ -142,7 +117,7 @@ function RolePicker({ grantable, held, locked, roles, catalog }: {
 }
 
 export function CreateUserForm({ grantable, catalog }: { grantable: Role[]; catalog: Permission[] }) {
-  const [state, action] = useActionState(createUserAction, EMPTY);
+  const [state, action] = useActionStateWithToast(createUserAction, EMPTY, 'User created');
   return (
     <form action={action} className="panel-form">
       <div className="form-grid">
@@ -175,7 +150,7 @@ export function CreateUserForm({ grantable, catalog }: { grantable: Role[]; cata
 }
 
 export function EditUserForm({ user }: { user: User }) {
-  const [state, action] = useActionState(updateUserAction, EMPTY);
+  const [state, action] = useActionStateWithToast(updateUserAction, EMPTY, 'Profile saved');
   return (
     <form action={action} className="panel-form">
       <input type="hidden" name="userId" value={user.id} />
@@ -200,7 +175,7 @@ export function EditUserForm({ user }: { user: User }) {
 export function RoleAssignmentForm({ user, grantable, roles, catalog }: {
   user: User; grantable: Role[]; roles: Role[]; catalog: Permission[];
 }) {
-  const [state, action] = useActionState(setUserRolesAction, EMPTY);
+  const [state, action] = useActionStateWithToast(setUserRolesAction, EMPTY, 'Role updated');
   const grantableCodes = new Set(grantable.map((role) => role.code));
   const locked = user.roles.filter((role) => !grantableCodes.has(role.code));
   return (
@@ -226,32 +201,88 @@ export interface ProjectOption { id: string; code: string; name: string }
  * Each rendered project is also sent as `offered`, so the action only touches
  * projects this form showed — see `setProjectAccessAction`.
  */
-export function ProjectAccessForm({ user, projects, granted }: {
-  user: User; projects: ProjectOption[]; granted: string[];
+/** When a grant lapses, worked out on the server so the page and its hydration agree. */
+export interface AccessExpiry { date: string; daysLeft: number }
+
+/** Inside this many days the expiry is flagged and Renew is the main action. */
+const RENEW_SOON_DAYS = 30;
+
+export function ProjectAccessForm({ user, projects, granted, expiries }: {
+  user: User; projects: ProjectOption[]; granted: string[]; expiries: Record<string, AccessExpiry>;
 }) {
-  const [state, action] = useActionState(setProjectAccessAction, EMPTY);
-  const held = new Set(granted);
+  const [state, action] = useActionStateWithToast(setProjectAccessAction, EMPTY, 'Project access saved');
+  const [renewState, renew] = useActionStateWithToast(renewProjectAccessAction, EMPTY, 'Access renewed for another year');
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(granted));
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase();
+  const matches = (project: ProjectOption): boolean =>
+    needle === '' || project.name.toLowerCase().includes(needle) || project.code.toLowerCase().includes(needle);
+  const toggle = (id: string, on: boolean): void =>
+    setSelected((prev) => { const next = new Set(prev); if (on) next.add(id); else next.delete(id); return next; });
+  const visible = projects.filter(matches);
+  const setVisible = (on: boolean): void =>
+    setSelected((prev) => { const next = new Set(prev); for (const p of visible) { if (on) next.add(p.id); else next.delete(p.id); } return next; });
+
   return (
     <form action={action} className="panel-form">
       <input type="hidden" name="userId" value={user.id} />
-      <fieldset className="checkbox-grid">
-        <legend>Projects</legend>
+      <div className="access-bar">
+        <input
+          type="search" className="access-search" value={query} onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter projects" aria-label="Filter projects"
+        />
+        <span className="access-count" aria-live="polite">{selected.size} of {projects.length} selected</span>
+        <button type="button" className="link-button" onClick={() => setVisible(true)}>Select all</button>
+        <button type="button" className="link-button" onClick={() => setVisible(false)}>Clear</button>
+      </div>
+      <fieldset className="access-list">
+        <legend className="visually-hidden">Projects</legend>
         {projects.map((project) => (
-          <label key={project.id} className="checkbox">
+          <label key={project.id} className={selected.has(project.id) ? 'access-item on' : 'access-item'} hidden={!matches(project)}>
             <input type="hidden" name="offered" value={project.id} />
-            <input type="checkbox" name="projectIds" value={project.id} defaultChecked={held.has(project.id)} />
-            {project.name} <span className="subtle">({project.code})</span>
+            <input
+              type="checkbox" name="projectIds" value={project.id}
+              checked={selected.has(project.id)} onChange={(e) => toggle(project.id, e.target.checked)}
+            />
+            <span className="access-box" aria-hidden="true" />
+            <span className="access-name">{project.name}</span>
+            {expiries[project.id] ? <AccessExpiryNote expiry={expiries[project.id]!} /> : null}
+            <code className="access-code">{project.code}</code>
+            {expiries[project.id] ? (
+              <button
+                type="submit" formAction={renew} name="renewProjectId" value={project.id}
+                className={expiries[project.id]!.daysLeft <= RENEW_SOON_DAYS ? 'access-renew soon' : 'access-renew'}
+                formNoValidate
+              >
+                Renew
+              </button>
+            ) : null}
           </label>
         ))}
         {projects.length === 0 ? <p className="subtle">There are no projects to grant yet.</p> : null}
+        {projects.length > 0 && visible.length === 0 ? <p className="subtle">No projects match “{query}”.</p> : null}
       </fieldset>
       <FormError state={state} />
+      <FormError state={renewState} />
+      {Object.keys(expiries).length > 0 ? (
+        <p className="form-note">
+          This user’s project access lasts a year. Renew it before it lapses, or it is removed automatically.
+        </p>
+      ) : null}
       <p className="form-note">
         Removing a project also removes any site access this user holds in it.
       </p>
       <SubmitButton>Save project access</SubmitButton>
     </form>
   );
+}
+
+function AccessExpiryNote({ expiry }: { expiry: AccessExpiry }) {
+  const soon = expiry.daysLeft <= RENEW_SOON_DAYS;
+  const text = expiry.daysLeft <= 0 ? 'Expires today'
+    : soon ? `Expires in ${expiry.daysLeft} day${expiry.daysLeft === 1 ? '' : 's'}`
+    : `Until ${expiry.date}`;
+  return <span className={soon ? 'access-expiry soon' : 'access-expiry'} title={`Access ends ${expiry.date}`}>{text}</span>;
 }
 
 /**
@@ -261,9 +292,10 @@ export function ProjectAccessForm({ user, projects, granted }: {
  * to revoke someone's sessions.
  */
 export function AccountStatusForm({ user }: { user: User }) {
-  const [state, action] = useActionState(
+  const [state, action] = useActionStateWithToast(
     user.isActive ? deactivateUserAction : reactivateUserAction,
     EMPTY,
+    user.isActive ? 'Account deactivated' : 'Account reactivated',
   );
   return (
     <form
@@ -284,7 +316,7 @@ export function AccountStatusForm({ user }: { user: User }) {
 }
 
 export function ResetPasswordForm({ user }: { user: User }) {
-  const [state, action] = useActionState(resetUserPasswordAction, EMPTY);
+  const [state, action] = useActionStateWithToast(resetUserPasswordAction, EMPTY, 'Password reset');
   return (
     <form action={action} className="panel-form">
       <input type="hidden" name="userId" value={user.id} />

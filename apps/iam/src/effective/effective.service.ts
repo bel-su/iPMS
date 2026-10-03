@@ -25,7 +25,7 @@ interface LoadedUser {
     validFrom: Date | null; validUntil: Date | null;
   }>;
   globalScopes: Array<{ id: string }>;
-  projectScopes: Array<{ projectId: string }>;
+  projectScopes: Array<{ projectId: string; expiresAt?: Date | null }>;
   siteScopes: Array<{ siteId: string }>;
   overrides: Array<{
     permission: { code: string }; effect: string;
@@ -64,14 +64,14 @@ export class EffectiveService {
     };
   }
 
-  private toScope(user: LoadedUser): AuthzScope {
+  private toScope(user: LoadedUser, now: Date = new Date()): AuthzScope {
     return {
       // Was hardcoded `false`, which meant nothing in the platform ever had
       // global reach. No service noticed because none enforced scope at query
       // level; `project` is the first, and a hardcoded false locks the
       // SUPER_ADMIN out of the system it administers.
       global: user.globalScopes.length > 0,
-      projectIds: user.projectScopes.map((s) => s.projectId),
+      projectIds: user.projectScopes.filter((s) => !s.expiresAt || s.expiresAt > now).map((s) => s.projectId),
       siteIds: user.siteScopes.map((s) => s.siteId),
     };
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { ScopesService } from './scopes.service.js';
+import { ScopesService, SYSTEM_ACTOR_ID, oneYearFrom } from './scopes.service.js';
 import { uuidv7 } from '@ipms/contracts';
 
 const ACTOR = uuidv7();
@@ -28,6 +28,8 @@ interface BuildOptions {
   globalScopeRow?: unknown;
   cascadedSites?: unknown[];
   overrides?: unknown[];
+  projectRows?: unknown[];
+  dueRows?: unknown[];
 }
 
 function build(opts: BuildOptions = {}) {
@@ -42,6 +44,7 @@ function build(opts: BuildOptions = {}) {
         opts.projectScope === undefined ? (opts.existingScope ?? null) : opts.projectScope,
       ),
       create: vi.fn().mockImplementation(({ data }) => Promise.resolve(data)),
+      update: vi.fn().mockResolvedValue({}),
       delete: vi.fn().mockResolvedValue({}),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
@@ -69,7 +72,7 @@ function build(opts: BuildOptions = {}) {
   const prisma = {
     $transaction: vi.fn().mockImplementation((fn) => fn(tx)),
     userGlobalScope: { findUnique: vi.fn().mockResolvedValue(opts.globalScopeRow ?? null) },
-    userProjectScope: { findMany: vi.fn().mockResolvedValue([{ projectId: PROJECT }]) },
+    userProjectScope: { findMany: vi.fn().mockResolvedValue(opts.dueRows ?? opts.projectRows ?? [{ projectId: PROJECT }]) },
     userSiteScope: { findMany: vi.fn().mockResolvedValue([{ siteId: SITE }]) },
     userPermissionOverride: { findMany: vi.fn().mockResolvedValue(opts.overrides ?? []) },
   };
@@ -487,7 +490,9 @@ describe('ScopesService.revokeOverride', () => {
 describe('ScopesService.listForUser', () => {
   it('returns the project and site ids the user holds', async () => {
     const { service } = build();
-    await expect(service.listForUser(USER)).resolves.toEqual({ global: false, projectIds: [PROJECT], siteIds: [SITE] });
+    await expect(service.listForUser(USER)).resolves.toEqual({
+      global: false, projectIds: [PROJECT], siteIds: [SITE], projects: [{ projectId: PROJECT, expiresAt: null }],
+    });
   });
 
   /**
@@ -622,7 +627,7 @@ describe('ScopesService.listForUser', () => {
     // would tell an operator the reverse of the truth.
     const { service } = build({ globalScopeRow: { id: uuidv7() } });
     expect(await service.listForUser(USER)).toEqual({
-      global: true, projectIds: [PROJECT], siteIds: [SITE],
+      global: true, projectIds: [PROJECT], siteIds: [SITE], projects: [{ projectId: PROJECT, expiresAt: null }],
     });
   });
 
@@ -694,5 +699,54 @@ describe('ScopesService project access for a project manager', () => {
     revoke.tx.userSiteScope.findUnique.mockResolvedValue({ id: uuidv7(), userId: USER, siteId: SITE, projectId: PROJECT });
     await expect(revoke.service.revokeSite(USER, SITE, PM)).rejects.toBeInstanceOf(ForbiddenException);
     expect(revoke.tx.userSiteScope.delete).not.toHaveBeenCalled();
+  });
+});
+
+const FIELD_ENGINEER = { id: USER, isActive: true, roles: [{ role: { code: 'FIELD_ENGINEER' } }] };
+const DAY = 86_400_000;
+
+describe('project access expiry', () => {
+  it('gives a field engineer a grant that lapses a year from now', async () => {
+    const { service, tx } = build({ user: FIELD_ENGINEER });
+    await service.grantProject(USER, PROJECT, ADMIN);
+    const { expiresAt } = tx.userProjectScope.create.mock.calls[0]![0].data as { expiresAt: Date };
+    expect(Math.abs(expiresAt.getTime() - oneYearFrom(new Date()).getTime())).toBeLessThan(5_000);
+  });
+
+  it('gives every other role a grant that does not lapse', async () => {
+    const { service, tx } = build();
+    await service.grantProject(USER, PROJECT, ADMIN);
+    expect(tx.userProjectScope.create.mock.calls[0]![0].data.expiresAt).toBeNull();
+  });
+
+  it('renews an expiring grant for another year', async () => {
+    const { service, tx } = build({ user: FIELD_ENGINEER, existingScope: { id: uuidv7(), expiresAt: new Date(Date.now() + 5 * DAY) } });
+    const { expiresAt } = await service.renewProject(USER, PROJECT, ADMIN);
+    expect(new Date(expiresAt).getTime()).toBeGreaterThan(Date.now() + 360 * DAY);
+    expect(tx.userProjectScope.update).toHaveBeenCalled();
+    expect(payloadsOf(tx, 'audit.event.recorded')[0]).toMatchObject({ action: 'scope.project_renewed' });
+  });
+
+  it('refuses to renew access that does not expire, or that is already gone', async () => {
+    await expect(build({ existingScope: { id: uuidv7(), expiresAt: null } }).service.renewProject(USER, PROJECT, ADMIN))
+      .rejects.toBeInstanceOf(BadRequestException);
+    await expect(build().service.renewProject(USER, PROJECT, ADMIN)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('treats a lapsed grant as gone when listing, before the sweep reaches it', async () => {
+    const { service } = build({ projectRows: [
+      { projectId: PROJECT, expiresAt: new Date(Date.now() - DAY) },
+      { projectId: uuidv7(), expiresAt: new Date(Date.now() + DAY) },
+    ] });
+    const result = await service.listForUser(USER);
+    expect(result.projectIds).toHaveLength(1);
+    expect(result.projectIds).not.toContain(PROJECT);
+  });
+
+  it('revokes lapsed grants as the system, through the normal revoke events', async () => {
+    const { service, tx } = build({ dueRows: [{ userId: USER, projectId: PROJECT }] });
+    expect(await service.expireDue()).toBe(1);
+    expect(payloadsOf(tx, 'iam.scope.revoked')).toEqual([{ userId: USER, level: 'PROJECT', projectId: PROJECT, siteId: null }]);
+    expect(payloadsOf(tx, 'audit.event.recorded')[0]).toMatchObject({ action: 'scope.project_expired', actorId: SYSTEM_ACTOR_ID });
   });
 });

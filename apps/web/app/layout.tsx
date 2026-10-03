@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './styles.css';
+import { ToastProvider } from './components/toast';
 
 export const metadata: Metadata = {
   title: 'Axiom | Project delivery',
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><ToastProvider>{children}</ToastProvider></body>
     </html>
   );
 }

@@ -45,13 +45,13 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
             </div>
             <div className="toolbar-actions">
               {draft && may('qc_template.update') ? <a className="primary-button" href={`/quality/templates/${id}/draft`}>Continue draft v{draft.version}</a> : null}
-              {!draft && published && may('qc_template.update') ? <RowAction action={startDraftAction} hidden={hidden} label="New version" className="primary-button" /> : null}
+              {!draft && published && may('qc_template.update') ? <RowAction action={startDraftAction} hidden={hidden} label="New version" success="New draft started" className="primary-button" /> : null}
               {published ? <a className="ghost-button" href={`/api/qc/templates/${id}/versions/${published.version}/export`}>Export v{published.version}</a> : null}
               {may('qc_template.update') ? <RenameTemplateForm templateId={id} name={template.name} category={template.category} /> : null}
               {may('qc_template.publish') && published && !template.disabledAt ? (
-                <RowAction action={disableTemplateAction} hidden={hidden} label="Disable" confirm="Disabled templates refuse new submissions. Existing submissions stay reviewable. Disable?" />
+                <RowAction action={disableTemplateAction} hidden={hidden} label="Disable" success="Checklist disabled" confirm="Disabled templates refuse new submissions. Existing submissions stay reviewable. Disable?" />
               ) : null}
-              {may('qc_template.publish') && template.disabledAt ? <RowAction action={enableTemplateAction} hidden={hidden} label="Enable" className="ghost-button" /> : null}
+              {may('qc_template.publish') && template.disabledAt ? <RowAction action={enableTemplateAction} hidden={hidden} label="Enable" success="Checklist enabled" className="ghost-button" /> : null}
             </div>
           </div>
 

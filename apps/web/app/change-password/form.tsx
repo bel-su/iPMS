@@ -1,5 +1,6 @@
 'use client';
-import { useActionState } from 'react';
+import {  } from 'react';
+import { useActionStateWithToast } from '../components/toast';
 import { useFormStatus } from 'react-dom';
 import { changePasswordAction } from '../users/actions';
 import { EMPTY } from '../lib/form-state';
@@ -24,7 +25,7 @@ function SubmitButton() {
  * revoked this browser's session, and that route is what clears its cookies.
  */
 export function ChangePasswordCard() {
-  const [state, action] = useActionState(changePasswordAction, EMPTY);
+  const [state, action] = useActionStateWithToast(changePasswordAction, EMPTY, null);
 
   if (state.done) {
     return (

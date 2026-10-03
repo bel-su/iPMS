@@ -1,13 +1,14 @@
 'use client';
-import { useActionState } from 'react';
+import {  } from 'react';
+import { useActionStateWithToast } from '../../../../components/toast';
 import { SubmitButton } from '../../../../components/forms';
 import { commitImportAction, previewImportAction, type ImportState } from './actions';
 
 const EMPTY: ImportState = {};
 
 export function SiteImportForm({ projectId }: { projectId: string }) {
-  const [preview, runPreview] = useActionState(previewImportAction, EMPTY);
-  const [commit, runCommit] = useActionState(commitImportAction, EMPTY);
+  const [preview, runPreview] = useActionStateWithToast(previewImportAction, EMPTY, null);
+  const [commit, runCommit] = useActionStateWithToast(commitImportAction, EMPTY, 'Sites imported');
 
   if (commit.committed) {
     return (

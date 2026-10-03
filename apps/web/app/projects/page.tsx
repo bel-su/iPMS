@@ -2,7 +2,8 @@ import { getCurrentUser, hasPermission } from '../lib/iam-api';
 import { listProjects } from '../lib/project-api';
 import { Sidebar, StatePage, TopActions } from '../shell';
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const q = (await searchParams).q?.trim() ?? '';
   const [projects, user] = await Promise.all([listProjects(), getCurrentUser()]);
 
   if (projects.state === 'unauthenticated') {
@@ -16,6 +17,10 @@ export default async function ProjectsPage() {
   }
 
   // For clarity only — the gateway is what enforces this.
+  const needle = q.toLowerCase();
+  const shown = needle
+    ? projects.data.filter((project) => [project.code, project.name, project.clientName ?? ''].some((field) => field.toLowerCase().includes(needle)))
+    : projects.data;
   const mayCreate = user.state === 'ready' && hasPermission(user.data, 'project.create');
 
   return (
@@ -29,12 +34,14 @@ export default async function ProjectsPage() {
             {mayCreate ? <a className="primary-button" href="/projects/new">New project</a> : null}
           </div>
           <section className="panel">
-            {projects.data.length === 0
-              ? <div className="empty-list"><strong>No projects yet</strong><p>Create one to get started.</p></div>
+            {shown.length === 0
+              ? q
+                ? <div className="empty-list"><strong>No projects match “{q}”</strong><p><a href="/projects">Show all projects</a></p></div>
+                : <div className="empty-list"><strong>No projects yet</strong><p>Create one to get started.</p></div>
               : <table className="data-table">
                   <thead><tr><th>Code</th><th>Name</th><th>Client</th><th>Status</th><th>Sites</th><th>Tasks</th><th></th></tr></thead>
                   <tbody>
-                    {projects.data.map((project) => (
+                    {shown.map((project) => (
                       <tr key={project.id}>
                         <td><code>{project.code}</code></td>
                         <td><a href={`/projects/${project.id}`}>{project.name}</a></td>

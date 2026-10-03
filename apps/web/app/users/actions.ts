@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation';
 import {
   changePassword, createUser, deactivateUser, getUserScopes, grantProjectAccess, reactivateUser,
-  resetUserPassword, revokeProjectAccess, setUserRoles, updateUser, updateMyProfile,
+  resetUserPassword, revokeProjectAccess, renewProjectAccess, setUserRoles, updateUser, updateMyProfile,
 } from '../lib/user-api';
 import { type FormState } from '../lib/form-state';
 import { clearable, optional, settle } from '../lib/settle';
@@ -153,6 +153,13 @@ export async function setProjectAccessAction(_previous: FormState, form: FormDat
     if (state.error) return state;
   }
   return settle({ state: 'ready', data: null }, pages(userId));
+}
+
+/** Renews one project's access for another year; the project id rides on the button that was pressed. */
+export async function renewProjectAccessAction(_previous: FormState, form: FormData): Promise<FormState> {
+  const userId = String(form.get('userId'));
+  const projectId = String(form.get('renewProjectId'));
+  return settle(await renewProjectAccess(userId, projectId), pages(userId));
 }
 
 export async function deactivateUserAction(_previous: FormState, form: FormData): Promise<FormState> {

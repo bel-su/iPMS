@@ -149,7 +149,14 @@ describe('TopActions', () => {
     const tree = TopActions({ children: <button type="button">Custom Action</button> });
     expect(tree.props.className).toBe('top-actions');
     expect(JSON.stringify(tree)).toContain('Custom Action');
-    expect(tree.props.children[1].type.name).toBe('NotificationCenter');
+    const types = (tree.props.children as { type?: { name?: string } }[]).map((child) => child.type?.name);
+    expect(types).toContain('NotificationCenter');
+  });
+
+  it('offers the section search on every page', () => {
+    const tree = TopActions({});
+    const [search] = tree.props.children as { props: { children: { type: { name: string } } } }[];
+    expect(search.props.children.type.name).toBe('TopSearch');
   });
 });
 

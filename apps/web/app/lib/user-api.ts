@@ -113,7 +113,11 @@ export async function resetUserPassword(id: string, input: ResetPasswordDto): Pr
  * is reported on its own: empty lists mean "granted nothing", the opposite of
  * global reach. Needs `scope.view`.
  */
-export interface UserScopes { global: boolean; projectIds: string[]; siteIds: string[] }
+export interface UserScopes {
+  global: boolean; projectIds: string[]; siteIds: string[];
+  /** The same projects with when each lapses; `expiresAt` is null for access that does not. */
+  projects: Array<{ projectId: string; expiresAt: string | null }>;
+}
 
 export async function getUserScopes(id: string): Promise<ApiResult<UserScopes>> {
   return authFetch<UserScopes>(`/api/v1/users/${id}/scopes`);
@@ -127,6 +131,11 @@ export async function getUserScopes(id: string): Promise<ApiResult<UserScopes>> 
  */
 export async function grantProjectAccess(id: string, projectId: string): Promise<ApiResult<{ status: string }>> {
   return authFetch<{ status: string }>(`/api/v1/users/${id}/projects`, { method: 'POST', json: { level: 'PROJECT', projectId } });
+}
+
+/** Another year of access, for a grant that expires. */
+export async function renewProjectAccess(id: string, projectId: string): Promise<ApiResult<{ expiresAt: string }>> {
+  return authFetch<{ expiresAt: string }>(`/api/v1/users/${id}/projects/renew`, { method: 'POST', json: { level: 'PROJECT', projectId } });
 }
 
 export async function revokeProjectAccess(id: string, projectId: string): Promise<ApiResult<{ status: string }>> {

@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useState } from 'react';
+import { useActionStateWithToast } from '../../../components/toast';
 import type { ReviewResult, SubmissionDetail } from '../../../lib/qc-api';
 import { reviewSubmissionAction } from '../actions';
 import { Evidence } from './evidence';
@@ -29,7 +30,7 @@ export function ReviewConsole({
   canReject,
   evidence,
 }: ReviewConsoleProps) {
-  const [state, formAction, isPending] = useActionState(reviewSubmissionAction, {});
+  const [state, formAction, isPending] = useActionStateWithToast(reviewSubmissionAction, {}, 'Review submitted');
 
   // Initialize each item review with default APPROVED or matching existing verdict
   const [reviews, setReviews] = useState<Record<string, ItemReviewState>>(() => {

@@ -1,5 +1,6 @@
 'use client';
-import { useActionState } from 'react';
+import {  } from 'react';
+import { useActionStateWithToast } from '../components/toast';
 import {
   archiveProjectAction, createMilestoneAction, createProjectAction, createSiteAction,
   createTaskTypeAction, deleteProjectAction, updateProjectAction, updateSiteAction,
@@ -9,7 +10,7 @@ import { FormError, SubmitButton } from '../components/forms';
 import type { ProjectDetail } from '../lib/project-api';
 
 export function CreateProjectForm() {
-  const [state, action] = useActionState(createProjectAction, EMPTY);
+  const [state, action] = useActionStateWithToast(createProjectAction, EMPTY, 'Project created');
   return (
     <form action={action} className="panel-form">
       <div className="form-grid">
@@ -38,7 +39,7 @@ export function CreateProjectForm() {
 
 
 export function CreateSiteForm({ projectId }: { projectId: string }) {
-  const [state, action] = useActionState(createSiteAction, EMPTY);
+  const [state, action] = useActionStateWithToast(createSiteAction, EMPTY, 'Site added');
   return (
     <form action={action} className="inline-form">
       <input type="hidden" name="projectId" value={projectId} />
@@ -63,7 +64,7 @@ export function CreateSiteForm({ projectId }: { projectId: string }) {
 }
 
 export function CreateTaskTypeForm({ projectId }: { projectId: string }) {
-  const [state, action] = useActionState(createTaskTypeAction, EMPTY);
+  const [state, action] = useActionStateWithToast(createTaskTypeAction, EMPTY, 'Task type added');
   return (
     <form action={action} className="inline-form">
       <input type="hidden" name="projectId" value={projectId} />
@@ -82,7 +83,7 @@ export function CreateMilestoneForm({
   projectId: string;
   taskTypes: { id: string; code: string; name: string }[];
 }) {
-  const [state, action] = useActionState(createMilestoneAction, EMPTY);
+  const [state, action] = useActionStateWithToast(createMilestoneAction, EMPTY, 'Milestone added');
   return (
     <form action={action} className="inline-form">
       <input type="hidden" name="projectId" value={projectId} />
@@ -107,7 +108,7 @@ export function CreateMilestoneForm({
 const STATUSES = ['DRAFT', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED'] as const;
 
 export function EditProjectForm({ project }: { project: ProjectDetail }) {
-  const [state, action] = useActionState(updateProjectAction, EMPTY);
+  const [state, action] = useActionStateWithToast(updateProjectAction, EMPTY, 'Project saved');
   return (
     <form action={action} className="panel-form">
       <input type="hidden" name="projectId" value={project.id} />
@@ -129,7 +130,7 @@ export function EditProjectForm({ project }: { project: ProjectDetail }) {
 }
 
 export function ArchiveForm({ projectId }: { projectId: string }) {
-  const [state, action] = useActionState(archiveProjectAction, EMPTY);
+  const [state, action] = useActionStateWithToast(archiveProjectAction, EMPTY, 'Project archived');
   return (
     <form action={action} className="panel-form">
       <input type="hidden" name="projectId" value={projectId} />
@@ -140,7 +141,7 @@ export function ArchiveForm({ projectId }: { projectId: string }) {
 }
 
 export function DeleteProjectForm({ projectId, code }: { projectId: string; code: string }) {
-  const [state, action] = useActionState(deleteProjectAction, EMPTY);
+  const [state, action] = useActionStateWithToast(deleteProjectAction, EMPTY, 'Project deleted');
   return (
     <form action={action}>
       <input type="hidden" name="projectId" value={projectId} />
@@ -170,7 +171,7 @@ export function EditSiteForm({
   site: ProjectDetail['sites'][number];
   projectDefaultRadiusM: number | null;
 }) {
-  const [state, action] = useActionState(updateSiteAction, EMPTY);
+  const [state, action] = useActionStateWithToast(updateSiteAction, EMPTY, 'Site saved');
   const inherited = projectDefaultRadiusM === null
     ? 'Use the project default (no check)'
     : `Use the project default (${projectDefaultRadiusM} m)`;

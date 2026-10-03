@@ -150,10 +150,15 @@ model UserProjectScope {
   projectId String   @db.Uuid
   createdBy String   @db.Uuid
   createdAt DateTime @default(now()) @db.Timestamptz(6)
+  /// Null means the grant does not lapse. Set for field engineers, whose project
+  /// access runs for a year and must be renewed; `ScopesService.expireDue`
+  /// revokes it once this passes.
+  expiresAt DateTime? @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
+  @@index([expiresAt])
   @@map("user_project_scope")
 }
 

@@ -1,5 +1,6 @@
 'use client';
-import { useActionState, useState } from 'react';
+import { useState } from 'react';
+import { useActionStateWithToast } from '../../../components/toast';
 import { EMPTY } from '../../../lib/form-state';
 import { FormError, SubmitButton } from '../../../components/forms';
 import { cancelWorkOrderAction, updateWorkOrderAction } from '../actions';
@@ -19,9 +20,9 @@ export function ManageWorkOrder({ id, projectId, assigneeId, plannedDay, people,
   canAssign: boolean;
   canCancel: boolean;
 }) {
-  const [reassignState, reassign] = useActionState(updateWorkOrderAction, EMPTY);
-  const [rescheduleState, reschedule] = useActionState(updateWorkOrderAction, EMPTY);
-  const [cancelState, cancel] = useActionState(cancelWorkOrderAction, EMPTY);
+  const [reassignState, reassign] = useActionStateWithToast(updateWorkOrderAction, EMPTY, 'Work order updated');
+  const [rescheduleState, reschedule] = useActionStateWithToast(updateWorkOrderAction, EMPTY, 'Work order updated');
+  const [cancelState, cancel] = useActionStateWithToast(cancelWorkOrderAction, EMPTY, 'Work order cancelled');
   const [day, setDay] = useState(plannedDay);
   const [confirming, setConfirming] = useState(false);
   const others = people.filter((p) => p.id !== assigneeId);

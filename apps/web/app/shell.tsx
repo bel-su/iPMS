@@ -4,11 +4,13 @@
  * is laid out against an empty gutter.
  */
 
+import { Suspense } from 'react';
 import { cookies } from 'next/headers';
 import { BrandMark } from './components/brand';
 import { SIDEBAR_COLLAPSED, SIDEBAR_COOKIE } from './components/sidebar-state';
 import { NotificationCenter } from './components/notification-center';
 import { SidebarToggle } from './components/sidebar-toggle';
+import { TopSearch } from './components/top-search';
 import { getCurrentUser, hasPermission, mayReadDocs } from './lib/iam-api';
 import { getMyProfile } from './lib/user-api';
 
@@ -250,12 +252,13 @@ export function initialsOf(fullName: string): string {
 }
 
 /**
- * The right-hand end of the topbar. Houses active action buttons passed in
- * and the interactive NotificationCenter bell and flyout panel.
+ * The right-hand end of the topbar. Houses the section search, any action
+ * buttons passed in, and the interactive NotificationCenter bell and flyout panel.
  */
 export function TopActions({ children }: { children?: React.ReactNode }) {
   return (
     <div className="top-actions">
+      <Suspense fallback={null}><TopSearch /></Suspense>
       {children}
       <NotificationCenter />
     </div>

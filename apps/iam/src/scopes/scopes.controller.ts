@@ -91,6 +91,18 @@ export class ScopesController {
     return { status: 'ok' };
   }
 
+  /** Another year of access, for a grant that expires. Same gate as granting it. */
+  @Post('users/:id/projects/renew')
+  @RequirePermission('scope.grant')
+  async renewProject(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() req: { user: AuthzUser },
+  ) {
+    const scope = parseScope(body, 'PROJECT');
+    return this.scopes.renewProject(UuidSchema.parse(id), scope.projectId, req.user);
+  }
+
   @Delete('users/:id/projects')
   @RequirePermission('scope.revoke')
   async revokeProject(

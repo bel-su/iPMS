@@ -1,7 +1,6 @@
 import { getCurrentUser, hasPermission } from '../lib/iam-api';
 import { listUsers } from '../lib/user-api';
 import { Sidebar, StatePage, TopActions } from '../shell';
-import { UserFilterBar } from './forms';
 
 /**
  * Declared here rather than imported: `UserStatusFilter` in `@ipms/contracts`
@@ -10,6 +9,15 @@ import { UserFilterBar } from './forms';
  * Keep the two in step.
  */
 type UserStatusFilterValue = 'ACTIVE' | 'INACTIVE' | 'ALL';
+
+const STATUS_TABS: { value: UserStatusFilterValue; label: string }[] = [
+  { value: 'ALL', label: 'All' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'INACTIVE', label: 'Inactive' },
+];
+
+const initials = (name: string): string =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]!.toUpperCase()).join('') || '?';
 
 export default async function UsersPage({
   searchParams,
@@ -65,6 +73,16 @@ export default async function UsersPage({
     return `/users?${query.toString()}`;
   };
 
+  /** A status tab keeps the search and role, but starts again at page 1. */
+  const tabHref = (value: UserStatusFilterValue, withSearch = true): string => {
+    const query = new URLSearchParams();
+    if (withSearch && params.search) query.set('search', params.search);
+    if (value !== 'ALL') query.set('status', value);
+    if (params.role) query.set('role', params.role);
+    const qs = query.toString();
+    return qs ? `/users?${qs}` : '/users';
+  };
+
   return (
     <main className="app-shell">
       <Sidebar active="users" />
@@ -79,27 +97,47 @@ export default async function UsersPage({
             {mayCreate ? <a className="primary-button" href="/users/new">New user</a> : null}
           </div>
 
-          <UserFilterBar search={params.search ?? ''} status={status} />
+          <div className="users-controls">
+            <nav className="seg" aria-label="Filter by status">
+              {STATUS_TABS.map((tab) => (
+                <a key={tab.value} href={tabHref(tab.value)} className={tab.value === status ? 'seg-item on' : 'seg-item'} aria-current={tab.value === status ? 'page' : undefined}>
+                  {tab.label}
+                </a>
+              ))}
+            </nav>
+            {params.search ? (
+              <a className="chip chip-clear" href={tabHref(status, false)} aria-label={`Clear search for ${params.search}`}>
+                “{params.search}” <span aria-hidden="true">×</span>
+              </a>
+            ) : null}
+            <span className="users-count">{total} {total === 1 ? 'user' : 'users'}</span>
+          </div>
 
-          <section className="panel">
+          <section className="panel users-panel">
             {items.length === 0
-              ? <div className="empty-list"><strong>No users match</strong><p>Try a different search or status.</p></div>
-              : <table className="data-table">
+              ? <div className="empty-list"><strong>No users match</strong><p>Try a different name or status, or <a href="/users">show everyone</a>.</p></div>
+              : <table className="data-table users-table">
                   <thead>
-                    <tr><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th>Last sign-in</th><th></th></tr>
+                    <tr><th>User</th><th>Roles</th><th>Status</th><th>Last sign-in</th><th></th></tr>
                   </thead>
                   <tbody>
                     {items.map((user) => (
                       <tr key={user.id}>
-                        <td><a href={`/users/${user.id}`}>{user.fullName}</a></td>
-                        <td>{user.email}</td>
-                        <td>{user.roles.length === 0 ? '—' : user.roles.map((role) => role.name).join(', ')}</td>
                         <td>
-                          <span className={user.isActive ? 'badge green' : 'badge'}>
-                            {user.isActive ? 'Active' : 'Inactive'}
-                          </span>
+                          <a className="user-cell" href={`/users/${user.id}`}>
+                            <span className={user.isActive ? 'user-avatar' : 'user-avatar off'} aria-hidden="true">{initials(user.fullName)}</span>
+                            <span className="user-id"><b>{user.fullName}</b><span>{user.email}</span></span>
+                          </a>
                         </td>
-                        <td>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : 'Never'}</td>
+                        <td>
+                          {user.roles.length === 0
+                            ? <span className="subtle-dash">—</span>
+                            : <span className="role-pills">{user.roles.map((role) => <span key={role.name} className="role-pill">{role.name}</span>)}</span>}
+                        </td>
+                        <td>
+                          <span className={user.isActive ? 'status-dot on' : 'status-dot'}>{user.isActive ? 'Active' : 'Inactive'}</span>
+                        </td>
+                        <td className="muted-cell">{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : 'Never'}</td>
                         <td className="row-actions"><a className="ghost-button" href={`/users/${user.id}`}>Open</a></td>
                       </tr>
                     ))}
