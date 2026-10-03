@@ -68,6 +68,8 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
     const before = previous ? new Set(previous.responses.find((r) => r.itemId === response.itemId)?.media.map((m) => m.mediaId) ?? []) : null;
     evidence.set(response.id, buildEvidence(response, facts, before));
   }
+  const photoCount = [...evidence.values()].reduce((sum, files) => sum + files.filter((f) => f.kind === 'PHOTO').length, 0);
+  const canDownloadPhotos = photoCount > 0 && (wo.status === 'COMPLETED' || submission?.status === 'APPROVED');
   const candidates = assignable?.state === 'ready' ? eligiblePeople(assignable.data, directory, [wo.site.id]).people : [];
   const info = wo.workOrderType ? typeInfo(wo.workOrderType) : null;
   const status = STATUS_TEXT[wo.status];
@@ -151,6 +153,12 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                 ? <section className="panel">
                     <h2 className="panel-title">Checklist</h2>
                     <ChecklistOutline sections={sections} />
+                  </section>
+                : null}
+              {canDownloadPhotos
+                ? <section className="panel">
+                    <h2 className="panel-title">Photos</h2>
+                    <a className="soft-button" href={`/api/work-orders/${wo.id}/photo-package`} download>Download Photo Package</a>
                   </section>
                 : null}
               <section className="panel">

@@ -1586,3 +1586,7 @@ button:focus-visible,
 .lib-clear { font-size: 13px; font-weight: 600; color: var(--muted); padding: 0 4px; }
 .lib-clear:hover { color: var(--ink); }
 @media (max-width: 700px) { .lib-select, .lib-filter-btn { flex: 1 1 auto; } }
+
+/* A quiet action: tinted, not filled, so it does not compete with the page's primary action. */
+.soft-button { display:flex; align-items:center; justify-content:center; width:100%; margin-top:12px; padding:9px 14px; border:1px solid #d6e2fd; border-radius:var(--radius-btn, 4px); background:#eef3fe; color:#2f5fd0; font-weight:600; text-decoration:none; transition:background .15s ease, border-color .15s ease; }
+.soft-button:hover { background:#e1eafd; border-color:#c3d4fb; }
