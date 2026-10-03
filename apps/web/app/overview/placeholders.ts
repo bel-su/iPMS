@@ -39,3 +39,28 @@ export const FINANCE_AUDIT_SAMPLES: readonly SampleFinanceEntry[] = [
   { minutesAgo: 1_700, tag: 'Advance approved', tone: 'purple', text: 'NPR 26,000 approved for Prakash Magar', actor: 'Anil Shrestha', actorRole: 'Project manager', ref: 'ADV-201' },
   { minutesAgo: 2_300, tag: 'Rejected', tone: 'red', text: 'Lodging advance rejected: previous advance unsettled', actor: 'Kiran Adhikari', actorRole: 'Project manager', ref: 'ADV-196' },
 ];
+
+/** Cash advance requests waiting on the project manager — sample until Finance exists. */
+export interface SampleAdvanceRequest {
+  ref: string;
+  title: string;
+  who: string;
+  where: string;
+  context: string;
+  amount: number;
+  requested: string;
+}
+
+export const ADVANCE_REQUESTS: readonly SampleAdvanceRequest[] = [
+  { ref: 'ADV-207', title: 'Cash advance · Crane hire', who: 'Ramesh Thapa', where: 'KOS001 · Ncell Phase 13', context: 'Linked to WO-1042 · 2 previous advances settled', amount: 85_000, requested: 'Requested 3h ago' },
+  { ref: 'ADV-208', title: 'Cash advance · Generator fuel', who: 'Sita Gurung', where: 'BRT014 · Ncell Phase 13', context: 'NPR 12,000 from ADV-191 not yet settled', amount: 48_000, requested: 'Requested 6h ago' },
+  { ref: 'ADV-205', title: 'Cash advance · Rigger labour, 3 × 5 days', who: 'Bikash Rai', where: 'ITH007 · NTC 4G Expansion', context: 'Linked to WO-1036 · no open advances', amount: 32_500, requested: 'Requested yesterday' },
+  { ref: 'ADV-203', title: 'Cash advance · Lodging', who: 'Prakash Magar', where: 'DHN003 · NTC 4G Expansion', context: 'No open advances', amount: 21_000, requested: 'Requested 2 days ago' },
+];
+
+export const ADVANCE_PIPELINE = [
+  { stage: 'Awaiting your approval', owner: 'Project manager', amount: 186_500, count: 4, tone: 'purple' },
+  { stage: 'Approved, with Finance', owner: 'Finance team', amount: 72_000, count: 2, tone: 'blue' },
+  { stage: 'Paid out', owner: 'Disbursed to engineer', amount: 214_000, count: 9, tone: 'green' },
+  { stage: 'Settled with receipts', owner: 'Closed', amount: 158_000, count: 6, tone: 'slate' },
+] as const;

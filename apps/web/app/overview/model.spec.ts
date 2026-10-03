@@ -80,3 +80,43 @@ describe('log filters', () => {
     expect(parseLogFilter(undefined)).toBe('all');
   });
 });
+
+import { dayLabel, firstName, greeting, workOrderRef } from './model';
+
+describe('manager home helpers', () => {
+  it('greets by the hour', () => {
+    expect(greeting(new Date(2026, 9, 2, 8))).toBe('Good morning');
+    expect(greeting(new Date(2026, 9, 2, 14))).toBe('Good afternoon');
+    expect(greeting(new Date(2026, 9, 2, 20))).toBe('Good evening');
+  });
+
+  it('uses the first name only, and copes with no name', () => {
+    expect(firstName('Anil Shrestha')).toBe('Anil');
+    expect(firstName(undefined)).toBe('');
+  });
+
+  it('writes the day the way the design does', () => {
+    expect(dayLabel(new Date(2026, 9, 2))).toBe('Friday, 2 October');
+  });
+
+  it('shortens a work order id to a readable reference', () => {
+    expect(workOrderRef('3f2a91c0-1111-2222-3333-444455556666')).toBe('WO-3F2A91');
+  });
+});
+
+import { homeFor } from './model';
+
+describe('homeFor', () => {
+  it.each([
+    [['SUPER_ADMIN'], 'admin'],
+    [['PROJECT_MANAGER'], 'manager'],
+    [['QC_MANAGER'], 'qc'],
+    [['FIELD_ENGINEER'], 'engineer'],
+    [['PROJECT_MANAGER', 'SUPER_ADMIN'], 'admin'],
+    [['QC_MANAGER', 'FIELD_ENGINEER'], 'qc'],
+    [['SOME_CUSTOM_ROLE'], 'admin'],
+    [[], 'admin'],
+  ])('%j lands on the %s home', (roles, expected) => {
+    expect(homeFor(roles)).toBe(expected);
+  });
+});

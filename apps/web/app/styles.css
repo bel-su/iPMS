@@ -537,6 +537,8 @@ a.link { color: var(--blue); }
 
 .nav-item.active { background: #eaf1ff; color: #1d4ed8; font-weight: 650; }
 .nav-item.active .icon { color: #1d4ed8; }
+.nav-badge { flex-shrink: 0; min-width: 22px; padding: 1px 7px; border-radius: 999px; background: #f59e0b; color: #fff; font-size: 11px; font-weight: 700; text-align: center; line-height: 1.5; }
+.sidebar.collapsed .nav-badge { position: absolute; top: 4px; right: 4px; min-width: 16px; padding: 0 4px; font-size: 10px; }
 
 .sidebar-bottom {
   margin-top: auto;
@@ -1568,3 +1570,19 @@ button:focus-visible,
 .toast-close:hover { color: #fff; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* Checklist library: search + filter bar */
+.lib-filter { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 16px; }
+.lib-search { position: relative; flex: 1 1 280px; min-width: 0; display: flex; align-items: center; }
+.lib-search svg { position: absolute; left: 12px; color: #94a3b8; pointer-events: none; }
+.lib-search input, .lib-select { height: 38px; border: 1px solid #dde3eb; border-radius: 8px; background: #fff; color: var(--ink); font: inherit; font-size: 13px; }
+.lib-search input { width: 100%; padding: 0 12px 0 36px; }
+.lib-search input::placeholder { color: #94a3b8; }
+.lib-select { flex: 0 0 auto; min-width: 170px; padding: 0 12px; cursor: pointer; }
+.lib-search input:focus-visible, .lib-select:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
+.lib-filter-btn { height: 38px; display: inline-flex; align-items: center; gap: 7px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--blue); color: #fff; font: inherit; font-size: 13px; font-weight: 600; box-shadow: 0 2px 6px rgba(53, 109, 241, .25); }
+.lib-filter-btn:hover { background: #2756d1; }
+.lib-filter-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.lib-clear { font-size: 13px; font-weight: 600; color: var(--muted); padding: 0 4px; }
+.lib-clear:hover { color: var(--ink); }
+@media (max-width: 700px) { .lib-select, .lib-filter-btn { flex: 1 1 auto; } }

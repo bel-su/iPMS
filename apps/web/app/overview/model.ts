@@ -106,3 +106,39 @@ export function auditRow(event: AuditEvent, actorName: string, actorRole: string
 export function filterLog(rows: readonly LogRow[], filter: LogFilter): LogRow[] {
   return filter === 'all' ? [...rows] : rows.filter((row) => row.group === filter);
 }
+
+export function greeting(now: Date): string {
+  const hour = now.getHours();
+  return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+}
+
+export function firstName(fullName: string | undefined): string {
+  return fullName?.trim().split(/\s+/)[0] ?? '';
+}
+
+/** "Friday, 2 October" */
+export function dayLabel(now: Date): string {
+  const weekday = now.toLocaleDateString('en-GB', { weekday: 'long' });
+  const month = now.toLocaleDateString('en-GB', { month: 'long' });
+  return `${weekday}, ${now.getDate()} ${month}`;
+}
+
+/** The short reference a work order goes by on screen, e.g. WO-3F2A91. */
+export function workOrderRef(id: string): string {
+  return `WO-${id.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+}
+
+export type HomeView = 'admin' | 'manager' | 'qc' | 'engineer';
+
+/**
+ * Which home a signed-in person lands on. The most senior role wins, and
+ * anyone without a role of their own (a custom role, say) gets the
+ * organisation view, which only shows what their permissions already allow.
+ */
+export function homeFor(roles: readonly string[]): HomeView {
+  if (roles.includes('SUPER_ADMIN')) return 'admin';
+  if (roles.includes('PROJECT_MANAGER')) return 'manager';
+  if (roles.includes('QC_MANAGER')) return 'qc';
+  if (roles.includes('FIELD_ENGINEER')) return 'engineer';
+  return 'admin';
+}

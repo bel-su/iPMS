@@ -12,6 +12,9 @@ vi.mock('next/headers', () => ({ cookies: () => Promise.resolve(cookieStore) }))
 const getMyProfile = vi.fn();
 vi.mock('./lib/user-api', () => ({ getMyProfile }));
 
+const listWorkOrders = vi.fn();
+vi.mock('./lib/work-order-api', () => ({ listWorkOrders }));
+
 const { Sidebar, TopActions, initialsOf } = await import('./shell');
 
 function user(permissions: string[]) {
@@ -30,6 +33,7 @@ function hrefs(node: unknown): string[] {
 
 beforeEach(() => {
   getCurrentUser.mockReset();
+  listWorkOrders.mockReset();
   cookieStore.get.mockReset();
 });
 
@@ -103,6 +107,51 @@ describe('Sidebar', () => {
   });
 });
 
+describe('Sidebar for a project manager', () => {
+  const manager = { state: 'ready', data: { id: 'u-1', roles: ['PROJECT_MANAGER'], permissions: ['task.view', 'qc_template.view'], tokenVersion: 0, isActive: true } };
+
+  it('groups Quality & EHS and Finance, and counts what is waiting for review', async () => {
+    getCurrentUser.mockResolvedValue(manager);
+    listWorkOrders.mockResolvedValue({ state: 'ready', data: { counts: { REVIEWING: 3 } } });
+    const text = JSON.stringify(await Sidebar({ active: 'overview' }));
+    expect(text).toContain('Quality');
+    expect(text).toContain('Finance');
+    expect(text).toContain('"badge":3');
+  });
+
+  it('shows no badge when nothing is waiting, or the count is unavailable', async () => {
+    getCurrentUser.mockResolvedValue(manager);
+    listWorkOrders.mockResolvedValue({ state: 'unavailable', status: 503, message: 'down' });
+    expect(JSON.stringify(await Sidebar({ active: 'overview' }))).toContain('"badge":0');
+  });
+
+  it('leaves administrators on the Records grouping', async () => {
+    getCurrentUser.mockResolvedValue({ state: 'ready', data: { id: 'u-1', roles: ['SUPER_ADMIN'], permissions: ['task.view'], tokenVersion: 0, isActive: true } });
+    const text = JSON.stringify(await Sidebar({ active: 'overview' }));
+    expect(text).toContain('Records');
+    expect(listWorkOrders).not.toHaveBeenCalled();
+  });
+});
+
+describe('Sidebar for QC and field engineers', () => {
+  const as = (role: string) => ({ state: 'ready', data: { id: 'u-1', roles: [role], permissions: ['task.view', 'qc_template.view', 'audit.view'], tokenVersion: 0, isActive: true } });
+
+  it.each(['QC_MANAGER', 'FIELD_ENGINEER'])('%s may request an advance but sees no cash advances or audit log', async (role) => {
+    getCurrentUser.mockResolvedValue(as(role));
+    listWorkOrders.mockResolvedValue({ state: 'ready', data: { counts: { REVIEWING: 2 } } });
+    const links = hrefs(await Sidebar({ active: 'overview' }));
+    expect(links).toContain('/#request-advance');
+    expect(links).not.toContain('/#cash-advances');
+    expect(links).not.toContain('/#audit-log');
+  });
+
+  it('counts reviews for QC but does not look them up for an engineer', async () => {
+    getCurrentUser.mockResolvedValue(as('FIELD_ENGINEER'));
+    await Sidebar({ active: 'overview' });
+    expect(listWorkOrders).not.toHaveBeenCalled();
+  });
+});
+
 describe('Sidebar collapse', () => {
   it('renders expanded by default', async () => {
     getCurrentUser.mockResolvedValue(user(['project.view']));
@@ -156,7 +205,7 @@ describe('TopActions', () => {
   it('offers the section search on every page', () => {
     const tree = TopActions({});
     const [search] = tree.props.children as { props: { children: { type: { name: string } } } }[];
-    expect(search.props.children.type.name).toBe('TopSearch');
+    expect(search?.props.children.type.name).toBe('TopSearch');
   });
 });
 

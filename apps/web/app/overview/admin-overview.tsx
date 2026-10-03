@@ -1,17 +1,17 @@
-import './overview/overview.css';
-import { getCurrentUser, hasPermission } from './lib/iam-api';
-import { listAuditEvents } from './lib/audit-api';
-import { getProjectDashboard } from './lib/project-api';
-import { listUsers } from './lib/user-api';
-import { listWorkOrders } from './lib/work-order-api';
-import { WORK_ORDERS_PATH } from './quality/work-orders/labels';
+import './overview.css';
+import { getCurrentUser, hasPermission } from '../lib/iam-api';
+import { listAuditEvents } from '../lib/audit-api';
+import { getProjectDashboard } from '../lib/project-api';
+import { listUsers } from '../lib/user-api';
+import { listWorkOrders } from '../lib/work-order-api';
+import { WORK_ORDERS_PATH } from '../quality/work-orders/labels';
 import {
   FINANCE_AUDIT_SAMPLES, OVERDUE_ADVANCE_NOTE, ADVANCES_OUT_BY_ROW, ADVANCES_PAID_OUT, ADVANCES_UNSETTLED, UNSETTLED_AGEING,
-} from './overview/placeholders';
+} from './placeholders';
 import {
   LOG_FILTERS, auditRow, filterLog, formatNpr, parseLogFilter, percent, statusBreakdown, whenLabel, type LogRow,
-} from './overview/model';
-import { Sidebar, StatePage, TopActions, initialsOf } from './shell';
+} from './model';
+import { Sidebar, StatePage, TopActions, initialsOf } from '../shell';
 
 function SampleTag() {
   return <span className="ov-sample" title="Placeholder figures. The Finance service is not connected yet.">Sample data</span>;
@@ -22,14 +22,15 @@ function Kpi({ label, value, unit, note, tone = 'muted', sample = false, money =
 }) {
   return (
     <article className="ov-card ov-kpi">
-      <p className="ov-kpi-label">{label}{sample ? <SampleTag /> : null}</p>
+      <p className="ov-kpi-label">{label}</p>
+      {sample ? <SampleTag /> : null}
       <p className={money ? 'ov-kpi-value money' : 'ov-kpi-value'}><strong>{value}</strong>{unit ? <span>{unit}</span> : null}</p>
       <p className={`ov-kpi-note ${tone}`}>{note}</p>
     </article>
   );
 }
 
-export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ log?: string }> }) {
+export async function AdminOverview({ searchParams }: { searchParams: Promise<{ log?: string }> }) {
   const logFilter = parseLogFilter((await searchParams).log);
   const [result, org, viewer, audit, users] = await Promise.all([
     getProjectDashboard(),
@@ -169,6 +170,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
           </section>
 
           <div className="ov-pair">
+            <div className="ov-col">
             <section className="ov-card ov-panel" id="work-order-status">
               <header className="ov-panel-head"><div><h2>Work order status</h2><p>{breakdown ? `${breakdown.total} work orders, cancelled excluded` : 'The QC service did not answer'}</p></div></header>
               {breakdown && breakdown.total > 0 ? (
@@ -210,9 +212,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                 </ul>
               )}
             </section>
-          </div>
-
-          <div className="ov-pair">
+            </div>
             <section className="ov-card ov-panel" id="cash-advances">
               <header className="ov-panel-head">
                 <div><h2>Unsettled cash advances <SampleTag /></h2><p>Paid out, receipts not yet submitted</p></div>
@@ -231,7 +231,9 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
               <p className="ov-alert">{OVERDUE_ADVANCE_NOTE}</p>
             </section>
 
-            <section className="ov-card ov-panel" id="audit-log">
+          </div>
+
+          <section className="ov-card ov-panel" id="audit-log">
               <header className="ov-panel-head">
                 <div><h2>Audit log</h2><p>Every decision on work orders and advances, with who made it</p></div>
                 <nav className="ov-chips" aria-label="Filter the audit log">
@@ -256,7 +258,6 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                 </ol>
               )}
             </section>
-          </div>
         </div>
       </section>
     </main>
