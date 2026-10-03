@@ -5,8 +5,17 @@ RUN npm install -g pnpm@10.15.0
 WORKDIR /app
 
 FROM base AS build-deps
+# Build-only network settings: prefer IPv4 (a VPS with a broken IPv6 route
+# resets connections) and retry harder. The pnpm store is a BuildKit cache
+# mount, so a package is downloaded once and reused by every service's build.
+ENV NODE_OPTIONS=--dns-result-order=ipv4first \
+    npm_config_store_dir=/pnpm-store \
+    npm_config_fetch_retries=6 \
+    npm_config_fetch_retry_mintimeout=20000 \
+    npm_config_network_concurrency=8
 COPY . .
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store,sharing=locked \
+    pnpm install --frozen-lockfile
 RUN pnpm -r --filter "./libs/*" build
 
 FROM build-deps AS build
@@ -22,7 +31,8 @@ RUN pnpm --filter "$SERVICE" build
 # `deploy` resolves this service's production dependency graph — including the
 # workspace libraries, copied in with their built output — into one
 # self-contained tree with a plain node_modules and no symlinks out of it.
-RUN pnpm --filter "$SERVICE" deploy --prod --legacy /deploy
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store,sharing=locked \
+    pnpm --filter "$SERVICE" deploy --prod --legacy /deploy
 
 # `deploy` builds node_modules from the lockfile, which does not describe the
 # generated Prisma client, so it is carried over separately.
