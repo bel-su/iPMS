@@ -493,7 +493,7 @@ class ProfileScreen extends ConsumerWidget {
                             color: AppColors.darkSlate,
                           ),
                           title: Text(
-                            '${biometricState.biometricName} Login',
+                            '${biometricState.biometricLabel} login',
                             style: AppTypography.titleMedium,
                           ),
                           subtitle: Text(
@@ -513,7 +513,7 @@ class ProfileScreen extends ConsumerWidget {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                        '${biometricState.biometricName} enrollment was cancelled or failed.'),
+                                        '${biometricState.biometricLabel} enrollment was cancelled or failed.'),
                                   ),
                                 );
                               }

@@ -42,6 +42,7 @@ class _BiometricEnrollmentSheetState
     final success = await ref
         .read(biometricAuthStateProvider.notifier)
         .enrollBiometric(widget.username);
+    final label = ref.read(biometricAuthStateProvider).biometricLabel;
 
     if (mounted) {
       if (success) {
@@ -59,7 +60,7 @@ class _BiometricEnrollmentSheetState
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '$bioName login enabled for this device.',
+                    '$label login enabled for this device.',
                     style: const TextStyle(fontSize: 12, color: Colors.white),
                   ),
                 ),
@@ -79,6 +80,7 @@ class _BiometricEnrollmentSheetState
   @override
   Widget build(BuildContext context) {
     final biometricState = ref.watch(biometricAuthStateProvider);
+    final label = biometricState.biometricLabel;
 
     return SafeArea(
       child: Padding(
@@ -119,14 +121,14 @@ class _BiometricEnrollmentSheetState
             const SizedBox(height: 16),
 
             Text(
-              'Enable ${biometricState.biometricName} Sign In?',
+              'Enable $label Sign In?',
               style: AppTypography.headingMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
 
             Text(
-              'Sign in instantly next time with your ${biometricState.biometricName}. Your tokens remain securely stored inside your device hardware enclave.',
+              'Sign in instantly next time with $label. Your tokens remain securely stored inside your device hardware enclave.',
               style: AppTypography.bodySmall,
               textAlign: TextAlign.center,
             ),
@@ -195,7 +197,7 @@ class _BiometricEnrollmentSheetState
                       )
                     : Icon(biometricState.biometricIcon, size: 20),
                 label: Text(
-                  _isProcessing ? 'Verifying...' : 'Enable ${biometricState.biometricName}',
+                  _isProcessing ? 'Verifying $label...' : 'Enable $label',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,

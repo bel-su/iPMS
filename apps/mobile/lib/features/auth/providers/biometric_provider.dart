@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 import '../../../core/security/biometric_auth_service.dart';
@@ -27,10 +28,19 @@ class BiometricAuthState {
       availableBiometrics.contains(BiometricType.fingerprint) ||
       availableBiometrics.contains(BiometricType.strong);
 
-  String get biometricName => hasFaceId ? 'Face ID' : 'Fingerprint';
+  bool get hasFace => availableBiometrics.contains(BiometricType.face);
+
+  /// User-facing name of the device's biometric method, e.g. "Face ID" on
+  /// iPhone X and later, "Touch ID" on older iPhones, "Fingerprint" on Android.
+  String get biometricLabel {
+    final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
+    if (hasFace) return isIOS ? 'Face ID' : 'Face Unlock';
+    if (isIOS && hasFingerprint) return 'Touch ID';
+    return 'Fingerprint';
+  }
 
   IconData get biometricIcon =>
-      hasFaceId ? Icons.face_rounded : Icons.fingerprint_rounded;
+      hasFace ? Icons.face_rounded : Icons.fingerprint_rounded;
 
   BiometricAuthState copyWith({
     bool? isHardwareSupported,
@@ -91,7 +101,8 @@ class BiometricAuthNotifier extends Notifier<BiometricAuthState> {
           : 'Scan fingerprint to access iPMS Field App as @$enrolledUser';
 
       final success = await service.authenticate(
-        localizedReason: reason,
+        localizedReason:
+            'Use ${state.biometricLabel} to access iPMS Field App as @$enrolledUser',
       );
 
       if (success) {
@@ -126,7 +137,8 @@ class BiometricAuthNotifier extends Notifier<BiometricAuthState> {
           : 'Scan fingerprint to confirm biometric login enrollment';
 
       final verified = await service.authenticate(
-        localizedReason: reason,
+        localizedReason:
+            'Use ${state.biometricLabel} to confirm biometric login enrollment',
       );
 
       if (verified) {
