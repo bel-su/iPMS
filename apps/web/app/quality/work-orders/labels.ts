@@ -246,3 +246,21 @@ export function previewTitle(type: WorkOrderType, siteCode: string, note?: strin
   const extra = note?.trim();
   return `[${WORK_ORDER_TYPE_LABEL[type]}]${siteCode}${extra ? ` ${extra}` : ''}`.slice(0, 250);
 }
+
+/**
+ * qc names a work order `[Type]SITECODE note`, so the note rides on the
+ * title. Splits it off, leaving `[Type]SITECODE` as the title.
+ */
+export function splitTitle(title: string, siteCode?: string | null): { title: string; note: string | null } {
+  const close = title.indexOf(']');
+  if (close < 0) return { title, note: null };
+  let end: number;
+  if (siteCode && title.startsWith(siteCode, close + 1)) {
+    end = close + 1 + siteCode.length;
+  } else {
+    const space = title.indexOf(' ', close + 1);
+    end = space < 0 ? title.length : space;
+  }
+  const note = title.slice(end).trim();
+  return { title: title.slice(0, end).trim(), note: note || null };
+}

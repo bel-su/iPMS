@@ -6,7 +6,7 @@ import { getSubmission, getTemplate, getVersion, type ChecklistSection } from '.
 import { listUserDirectory } from '../../../lib/user-api';
 import { Sidebar, StatePage, TopActions } from '../../../shell';
 import { ChecklistOutline } from '../checklist-outline';
-import { STATUS_TEXT, WORK_ORDERS_PATH, projectWorkOrdersPath, dueText, eligiblePeople, formatDateTime, formatDay, isOpen, isoDay, personLabel, typeInfo } from '../labels';
+import { STATUS_TEXT, WORK_ORDERS_PATH, projectWorkOrdersPath, dueText, eligiblePeople, formatDateTime, formatDay, isOpen, isoDay, personLabel, splitTitle, typeInfo } from '../labels';
 import { buildEvidence, type EvidenceFile } from './evidence-model';
 import { FilledChecklist } from './filled-checklist';
 import { ManageWorkOrder } from './manage';
@@ -72,6 +72,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
   const canDownloadPhotos = photoCount > 0 && (wo.status === 'COMPLETED' || submission?.status === 'APPROVED');
   const candidates = assignable?.state === 'ready' ? eligiblePeople(assignable.data, directory, [wo.site.id]).people : [];
   const info = wo.workOrderType ? typeInfo(wo.workOrderType) : null;
+  const named = splitTitle(wo.title, wo.site.siteCode);
   const status = STATUS_TEXT[wo.status];
   const now = new Date();
   const due = dueText(wo, now);
@@ -92,7 +93,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
             <span className="kind big" aria-hidden="true">{info?.category === 'EHS' ? 'EHS' : 'Q'}<small>{info?.selfCheck ? 'self' : 'spot'}</small></span>
             <div>
               <p className="eyebrow">{info?.label ?? 'Work order'}</p>
-              <h1>{wo.title}</h1>
+              <h1>{named.title}</h1>
               <p className="hero-meta">
                 <span className={`state ${status.tone}`}>{status.label}</span>
                 <span className={`due ${due.tone}`}>{due.text}</span>
@@ -106,6 +107,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
               <section className="panel">
                 <h2 className="panel-title">Details</h2>
                 <dl className="facts">
+                  {named.note ? <div><dt>Note</dt><dd>{named.note}</dd></div> : null}
                   <div><dt>Project ID (DU)</dt><dd><a href={projectWorkOrdersPath(wo.project.id)}><code>{wo.project.code}</code></a> {wo.project.name}</dd></div>
                   <div><dt>Site</dt><dd><b>{wo.site.siteCode}</b> {wo.site.name !== wo.site.siteCode ? wo.site.name : ''}<small>{[wo.site.city, wo.site.area].filter(Boolean).join(' · ')}</small></dd></div>
                   <div><dt>Checklist</dt><dd>{wo.templateId && may('qc_template.view') ? <a className="link" href={`/quality/templates/${wo.templateId}`}>{wo.templateName}</a> : wo.templateName ?? '—'}</dd></div>

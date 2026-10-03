@@ -73,8 +73,9 @@ export function FilledChecklist({ submission, sections, name, evidence }: {
           {group.title ? <h3>{group.title}</h3> : null}
           <ol className="filled-items">
             {group.responses.map((response) => {
-              const verdict = VERDICT[response.selfCheckResult];
               const review = REVIEW[response.reviewResult];
+              // QC's rejection overrides the engineer's self-check on the badge.
+              const verdict = VERDICT[response.reviewResult === 'REJECTED' ? 'FAIL' : response.selfCheckResult];
               const entered = value(response);
               return (
                 <li key={response.id} className={response.item.severity === 'CRITICAL' ? 'critical' : undefined}>
