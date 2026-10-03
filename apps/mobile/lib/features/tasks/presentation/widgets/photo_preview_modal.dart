@@ -109,7 +109,7 @@ class PhotoPreviewModal extends StatelessWidget {
                         const Icon(Icons.verified_outlined, size: 16, color: Color(0xFFDDD7F7)),
                         const SizedBox(width: 8),
                         Text(
-                          'iPMS VERIFIED FIELD EVIDENCE',
+                          'Axiom VERIFIED FIELD EVIDENCE',
                           style: AppTypography.caption.copyWith(
                             color: const Color(0xFFDDD7F7),
                             fontWeight: FontWeight.bold,

@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'iPMS | Project delivery',
-    short_name: 'iPMS',
+    name: 'Axiom | Project delivery',
+    short_name: 'Axiom',
     description: 'Integrated project management and quality operations.',
     start_url: '/',
     display: 'standalone',

@@ -18,7 +18,7 @@ export async function proxyDownload(path: string, fallbackFilename: string, forb
   try {
     upstream = await fetch(`${apiBaseUrl()}${path}`, { headers: { authorization: `Bearer ${token}` }, cache: 'no-store' });
   } catch {
-    return NextResponse.json({ message: 'The iPMS API could not be reached.' }, { status: 503 });
+    return NextResponse.json({ message: 'The Axiom API could not be reached.' }, { status: 503 });
   }
   if (!upstream.ok) {
     return NextResponse.json(

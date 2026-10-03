@@ -543,7 +543,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             Center(
               child: Text(
-                'iPMS Mobile v1.0.0 • Pure Stateless Client',
+                'Axiom Mobile v1.0.0 • Pure Stateless Client',
                 style: AppTypography.caption,
               ),
             ),

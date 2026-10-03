@@ -1,4 +1,4 @@
-/// Model representing a project in the iPMS system.
+/// Model representing a project in the Axiom system.
 class ProjectItem {
   const ProjectItem({
     required this.id,

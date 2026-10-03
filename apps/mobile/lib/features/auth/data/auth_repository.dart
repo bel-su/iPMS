@@ -165,7 +165,7 @@ class AuthRepository {
   }
 
   static const String mustChangePasswordMessage =
-      'You need to set a new password before using the app. Change it on the iPMS web portal, then sign in here.';
+      'You need to set a new password before using the app. Change it on the Axiom web portal, then sign in here.';
 
   static const String biometricSessionExpired =
       'Your biometric sign-in has expired. Sign in with your password once to turn it back on.';

@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Official iPMS Brand Artwork, matching apps/mobile/assets/icons/app_logo.svg.
+ * Official Axiom brand artwork, matching apps/mobile/assets/icons/app_logo.svg.
  *
  * Implemented as self-contained inline vector SVG to guarantee instantaneous rendering
  * on both light surfaces (login card, change password) and dark surfaces (capsule sidebar).
@@ -22,7 +22,7 @@ export function BrandMark({ size = 32 }: { size?: number }) {
         strokeMiterlimit: 2,
         display: 'block',
       }}
-      aria-label="iPMS Official Logo"
+      aria-label="Axiom logo"
     >
       <g>
         <path
@@ -48,74 +48,13 @@ export function BrandMark({ size = 32 }: { size?: number }) {
 
 export function BrandLogo({ width = 300 }: { width?: number }) {
   return (
-    <div
-      className="brand-logo-container"
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '14px',
-        maxWidth: '100%',
-      }}
-    >
-      <div
-        style={{
-          width: '50px',
-          height: '50px',
-          borderRadius: '14px',
-          background: '#ffffff',
-          boxShadow: '0 4px 18px rgba(9, 142, 219, 0.18)',
-          border: '1px solid rgba(9, 142, 219, 0.18)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '6px',
-          flexShrink: 0,
-        }}
-      >
-        <BrandMark size={36} />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-          <span
-            style={{
-              fontSize: '26px',
-              fontWeight: 800,
-              letterSpacing: '-0.03em',
-              background: 'linear-gradient(135deg, #04274c 0%, #0b63b8 60%, #098edb 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              lineHeight: 1.1,
-            }}
-          >
-            iPMS
-          </span>
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              color: '#098edb',
-              letterSpacing: '0.04em',
-              padding: '1px 7px',
-              background: 'rgba(9, 142, 219, 0.1)',
-              borderRadius: '999px',
-            }}
-          >
-            PLATFORM
-          </span>
-        </div>
-        <span
-          style={{
-            fontSize: '10.5px',
-            fontWeight: 600,
-            color: '#64748b',
-            letterSpacing: '0.05em',
-            marginTop: '2px',
-            textTransform: 'uppercase',
-          }}
-        >
-          Intelligent Project Assurance
-        </span>
-      </div>
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className="brand-logo"
+      src="/brand/axiom-logo-horizontal.svg"
+      alt="Axiom"
+      width={width}
+      style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
+    />
   );
 }

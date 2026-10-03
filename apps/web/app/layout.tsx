@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './styles.css';
 
 export const metadata: Metadata = {
-  title: 'iPMS | Project delivery',
+  title: 'Axiom | Project delivery',
   description: 'Integrated project management and quality operations.',
 };
 

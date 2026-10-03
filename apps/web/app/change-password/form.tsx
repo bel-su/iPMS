@@ -30,7 +30,7 @@ export function ChangePasswordCard() {
     return (
       <main className="state-page">
         <section className="state-card" role="status">
-          <a className="brand" href="/" aria-label="iPMS home"><BrandMark /></a>
+          <a className="brand" href="/" aria-label="Axiom home"><BrandMark /></a>
           <p className="eyebrow">YOUR ACCOUNT</p>
           <h1>Password changed</h1>
           <p>Your password was changed successfully. For your security you have been signed out on every device.</p>
@@ -46,7 +46,7 @@ export function ChangePasswordCard() {
   return (
     <main className="state-page">
       <section className="state-card">
-        <a className="brand" href="/" aria-label="iPMS home"><BrandMark /></a>
+        <a className="brand" href="/" aria-label="Axiom home"><BrandMark /></a>
         <p className="eyebrow">YOUR ACCOUNT</p>
         <h1>Choose a new password</h1>
         <p className="subtle">

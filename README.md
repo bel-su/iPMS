@@ -1,4 +1,4 @@
-# Integrated Project Management System (iPMS)
+# Axiom — Integrated Project Management System
 
 Enterprise-grade, distributed microservices platform for project delivery tracking, site milestones, and quality control (QC) inspections with mobile offline-first capabilities.
 

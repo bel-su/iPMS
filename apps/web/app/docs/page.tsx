@@ -98,7 +98,7 @@ export default async function DocsPage() {
           <div className="toolbar">
             <div>
               <p className="eyebrow">DOCUMENTATION</p><h1>User manual</h1>
-              <p className="subtle">How staff use iPMS. Visible to managers and administrators only.</p>
+              <p className="subtle">How staff use Axiom. Visible to managers and administrators only.</p>
             </div>
             <span className="badge">Sample</span>
           </div>

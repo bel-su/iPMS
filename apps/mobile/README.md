@@ -1,6 +1,6 @@
-# iPMS Field App (Flutter)
+# Axiom Field App (Flutter)
 
-The field client for iPMS. Everything it shows comes live from the API gateway;
+The field client for Axiom. Everything it shows comes live from the API gateway;
 photos go straight from the phone to the media bucket through presigned URLs.
 
 ## Running against the stack
@@ -35,7 +35,7 @@ Tap **Server: …** under the sign-in form, enter the gateway address (e.g.
 `192.168.1.20:3000`), **Test connection**, then **Save**. The choice is kept
 on the phone; **Use built-in address** goes back to `API_BASE_URL`.
 
-### "Can't reach the iPMS server" on a phone
+### "Can't reach the Axiom server" on a phone
 
 The phone never got an answer from the gateway. Check, in order:
 
@@ -43,7 +43,7 @@ The phone never got an answer from the gateway. Check, in order:
    fails too, it is the network, not the app: same Wi-Fi (not a guest network
    with client isolation), the stack is up (`docker compose ps`), and the Mac
    firewall allows incoming connections to Docker.
-2. iOS Settings → iPMS (the app) → **Local Network** must be on. iOS asks the
+2. iOS Settings → Axiom (the app) → **Local Network** must be on. iOS asks the
    first time the app contacts the LAN; if it was denied, nothing on the LAN
    is reachable.
 3. The Mac's IP changes between networks; check it with

@@ -17,7 +17,7 @@ class ApiException implements Exception {
       return NetworkException(
         message: base.isEmpty
             ? 'No internet connection. Please check your network.'
-            : "Can't reach the iPMS server at $base. Check your connection, "
+            : "Can't reach the Axiom server at $base. Check your connection, "
                 'or that the app was built with the right API_BASE_URL.',
       );
     }

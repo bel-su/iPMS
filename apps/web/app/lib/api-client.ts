@@ -43,8 +43,8 @@ export interface ApiRequest {
   body?: BodyInit;
 }
 
-const UNREACHABLE = 'The iPMS API could not be reached.';
-const UNEXPECTED = 'The iPMS API returned an unexpected error.';
+const UNREACHABLE = 'The Axiom API could not be reached.';
+const UNEXPECTED = 'The Axiom API returned an unexpected error.';
 
 function buildQuery(query: ApiRequest['query']): string {
   if (!query) return '';

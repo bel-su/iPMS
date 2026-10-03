@@ -71,7 +71,7 @@ class _ServerSettingsSheetState extends ConsumerState<ServerSettingsSheet> {
     } on DioException catch (e) {
       _ok = false;
       _result = e.response != null
-          ? 'Reached $url, but it answered ${e.response!.statusCode}. Is this the iPMS gateway?'
+          ? 'Reached $url, but it answered ${e.response!.statusCode}. Is this the Axiom gateway?'
           : "Can't reach $url from this phone. Check that the phone and the server are on the "
               'same network, the server is running, its firewall allows port '
               '${Uri.parse(url).hasPort ? Uri.parse(url).port : 80}, and that Local Network '
@@ -111,7 +111,7 @@ class _ServerSettingsSheetState extends ConsumerState<ServerSettingsSheet> {
               Text('Server', style: AppTypography.headingSmall),
               const SizedBox(height: 6),
               Text(
-                'The iPMS gateway this app talks to. Built-in: ${AppConfig.builtInApiBaseUrl}',
+                'The Axiom gateway this app talks to. Built-in: ${AppConfig.builtInApiBaseUrl}',
                 style: AppTypography.caption,
               ),
               const SizedBox(height: 16),

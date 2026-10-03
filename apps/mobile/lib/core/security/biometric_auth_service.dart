@@ -59,8 +59,8 @@ class BiometricAuthService {
       final isFace = await hasFaceIdSensor();
       final reason = localizedReason ??
           (isFace
-              ? 'Authenticate with Face ID to access iPMS Field App'
-              : 'Scan fingerprint to authenticate to iPMS Field App');
+              ? 'Authenticate with Face ID to access Axiom Field App'
+              : 'Scan fingerprint to authenticate to Axiom Field App');
 
       final ok = await _localAuth.authenticate(
         localizedReason: reason,

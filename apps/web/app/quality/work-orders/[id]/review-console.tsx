@@ -161,6 +161,10 @@ export function ReviewConsole({
                       required
                     />
                   ) : null}
+
+                  {current === 'APPROVED' ? (
+                    <p className="review-approved-note">✓ Approved — no remarks needed</p>
+                  ) : null}
                 </div>
               </div>
             );

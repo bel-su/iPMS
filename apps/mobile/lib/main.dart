@@ -54,7 +54,7 @@ class IpmsApp extends ConsumerWidget {
     }
 
     return MaterialApp(
-      title: 'iPMS Field App',
+      title: 'Axiom Field App',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: home,

@@ -61,7 +61,7 @@ describe('Sidebar', () => {
     expect(hrefs(await Sidebar({ active: 'projects' }))).not.toContain('/users');
   });
 
-  it('groups the checklist library and work orders under Quality & EHS', async () => {
+  it('lists the checklist library and work orders under Records', async () => {
     getCurrentUser.mockResolvedValue(user(['qc_template.view', 'task.view']));
     const links = hrefs(await Sidebar({ active: 'work-orders' }));
     expect(links).toEqual(expect.arrayContaining(['/quality/templates', '/quality/work-orders']));
@@ -75,6 +75,13 @@ describe('Sidebar', () => {
     const links = hrefs(await Sidebar({ active: 'projects' }));
     expect(links).toContain('/quality/templates');
     expect(links).not.toContain('/quality/work-orders');
+  });
+
+  it('shows the audit log only to a viewer who may read the ledger', async () => {
+    getCurrentUser.mockResolvedValue(user(['project.view']));
+    expect(hrefs(await Sidebar({ active: 'overview' }))).not.toContain('/#audit-log');
+    getCurrentUser.mockResolvedValue(user(['audit.view']));
+    expect(hrefs(await Sidebar({ active: 'overview' }))).toContain('/#audit-log');
   });
 
   it('hides the whole group from a viewer who may see neither', async () => {
@@ -116,10 +123,24 @@ describe('Sidebar collapse', () => {
 describe('Sidebar user actions', () => {
   it('offers Profile and a POST sign-out in the sidebar footer', async () => {
     getCurrentUser.mockResolvedValue(user(['project.view']));
-    getMyProfile.mockResolvedValue({ state: 'ready', data: { fullName: 'Jane Doe' } });
+    getMyProfile.mockResolvedValue({ state: 'ready', data: { fullName: 'Jane Doe', roles: [{ code: 'SUPER_ADMIN', name: 'Administrator' }] } });
     const tree = await Sidebar({ active: 'overview' });
     expect(hrefs(tree)).toContain('/profile');
     expect(JSON.stringify(tree)).toContain('/api/auth/logout');
+  });
+
+  it('names the signed-in person and their role', async () => {
+    getCurrentUser.mockResolvedValue(user(['project.view']));
+    getMyProfile.mockResolvedValue({ state: 'ready', data: { fullName: 'Jane Doe', roles: [{ code: 'SUPER_ADMIN', name: 'Administrator' }] } });
+    const text = JSON.stringify(await Sidebar({ active: 'overview' }));
+    expect(text).toContain('Jane Doe');
+    expect(text).toContain('Administrator');
+  });
+
+  it('still renders when the profile call fails', async () => {
+    getCurrentUser.mockResolvedValue(user(['project.view']));
+    getMyProfile.mockResolvedValue({ state: 'unavailable', status: 503, message: 'down' });
+    expect(hrefs(await Sidebar({ active: 'overview' }))).toContain('/profile');
   });
 });
 

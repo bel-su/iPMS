@@ -108,7 +108,7 @@ class BiometricAuthNotifier extends Notifier<BiometricAuthState> {
     try {
       final check = await service.authenticate(
         localizedReason:
-            'Use ${state.biometricLabel} to access iPMS Field App as @$enrolledUser',
+            'Use ${state.biometricLabel} to access Axiom Field App as @$enrolledUser',
       );
       if (!check.success) {
         state = state.copyWith(
