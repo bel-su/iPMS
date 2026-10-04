@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import '../../features/tasks/domain/models/task_evidence.dart';
 import 'watermark_service.dart';

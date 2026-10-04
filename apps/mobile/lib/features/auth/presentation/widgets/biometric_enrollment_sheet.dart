@@ -46,7 +46,6 @@ class _BiometricEnrollmentSheetState
 
     if (mounted) {
       if (success) {
-        final bioName = ref.read(biometricAuthStateProvider).biometricName;
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

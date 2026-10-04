@@ -39,6 +39,8 @@ class BiometricAuthState {
     return 'Fingerprint';
   }
 
+  String get biometricName => hasFaceId ? 'Face ID' : 'Fingerprint';
+
   IconData get biometricIcon =>
       hasFace ? Icons.face_rounded : Icons.fingerprint_rounded;
 
@@ -101,8 +103,7 @@ class BiometricAuthNotifier extends Notifier<BiometricAuthState> {
           : 'Scan fingerprint to access iPMS Field App as @$enrolledUser';
 
       final success = await service.authenticate(
-        localizedReason:
-            'Use ${state.biometricLabel} to access iPMS Field App as @$enrolledUser',
+        localizedReason: reason,
       );
 
       if (success) {
@@ -137,8 +138,7 @@ class BiometricAuthNotifier extends Notifier<BiometricAuthState> {
           : 'Scan fingerprint to confirm biometric login enrollment';
 
       final verified = await service.authenticate(
-        localizedReason:
-            'Use ${state.biometricLabel} to confirm biometric login enrollment',
+        localizedReason: reason,
       );
 
       if (verified) {
