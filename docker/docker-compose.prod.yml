@@ -31,14 +31,23 @@ services:
     <<: *pg
   iam:
     <<: *node
+    mem_limit: 320m
+    environment:
+      NODE_OPTIONS: --max-old-space-size=256
   audit:
     <<: *node
   project:
     <<: *node
   qc:
     <<: *node
+    mem_limit: 256m
+    environment:
+      NODE_OPTIONS: --max-old-space-size=192
   media:
     <<: *node
+    mem_limit: 256m
+    environment:
+      NODE_OPTIONS: --max-old-space-size=192
   notification:
     <<: *node
   docs:

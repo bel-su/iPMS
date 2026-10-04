@@ -79,6 +79,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
   const isUnderReview = submission?.status === 'SUBMITTED' || submission?.status === 'UNDER_REVIEW';
   const canApprove = Boolean(isUnderReview && may('qc_review.approve'));
   const canReject = Boolean(isUnderReview && (may('qc_review.reject') || may('qc_review.approve')));
+  const showReviewConsole = Boolean(submission && (canApprove || canReject));
 
   return (
     <main className="app-shell">
@@ -119,7 +120,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                 </dl>
               </section>
 
-              {may('qc_submission.view')
+              {may('qc_submission.view') && !showReviewConsole
                 ? <section className="panel">
                     <h2 className="panel-title">Filled checklist</h2>
                     {submission
@@ -128,7 +129,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                   </section>
                 : null}
 
-              {submission && (canApprove || canReject) ? (
+              {submission && showReviewConsole ? (
                 <ReviewConsole
                   submission={submission}
                   projectId={wo.projectId}
@@ -136,6 +137,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                   canApprove={canApprove}
                   canReject={canReject}
                   evidence={evidence}
+                  sections={submissionSections}
                 />
               ) : null}
             </div>

@@ -1,1 +1,4 @@
 #include "Generated.xcconfig"
+
+// Local signing team (free Apple ID). Not for commit.
+DEVELOPMENT_TEAM=SXK3KD4K82
