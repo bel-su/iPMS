@@ -88,8 +88,11 @@ class TaskCard extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // Badges Row (Status + Priority)
-              Row(
+              // Badges Row (Status + Priority) wrapped to prevent overflow
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -121,7 +124,6 @@ class TaskCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -166,13 +168,18 @@ class TaskCard extends StatelessWidget {
               // Bottom Row: Assignee Badge, Date Pill, Checklist Count
               Row(
                 children: [
-                  _buildAssigneeBadge(task.assigneeName),
-                  const Spacer(),
+                  if (task.assigneeName != null && task.assigneeName!.isNotEmpty)
+                    Expanded(
+                      child: _buildAssigneeBadge(task.assigneeName!),
+                    )
+                  else
+                    const Spacer(),
+                  const SizedBox(width: 8),
                   // Date Chip
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+                      horizontal: 9,
+                      vertical: 5,
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.searchFieldBackground,
@@ -183,10 +190,10 @@ class TaskCard extends StatelessWidget {
                       children: [
                         const Icon(
                           Icons.calendar_today_rounded,
-                          size: 13,
+                          size: 12,
                           color: AppColors.textSecondary,
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                         Text(
                           dateStr,
                           style: AppTypography.badge.copyWith(
@@ -198,12 +205,12 @@ class TaskCard extends StatelessWidget {
                     ),
                   ),
                   if (task.hasChecklistCounts) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     // Checklist Count Pill
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
-                        vertical: 6,
+                        vertical: 5,
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.searchFieldBackground,
@@ -214,7 +221,7 @@ class TaskCard extends StatelessWidget {
                         children: [
                           const Icon(
                             Icons.check_circle_outline_rounded,
-                            size: 13,
+                            size: 12,
                             color: AppColors.textSecondary,
                           ),
                           const SizedBox(width: 4),
@@ -237,10 +244,7 @@ class TaskCard extends StatelessWidget {
     );
   }
 
-  Widget _buildAssigneeBadge(String? assignee) {
-    if (assignee == null || assignee.isEmpty) {
-      return const SizedBox.shrink();
-    }
+  Widget _buildAssigneeBadge(String assignee) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -248,7 +252,7 @@ class TaskCard extends StatelessWidget {
           radius: 12,
           backgroundColor: AppColors.primaryLavender,
           child: Text(
-            assignee[0].toUpperCase(),
+            assignee.isNotEmpty ? assignee[0].toUpperCase() : 'U',
             style: const TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.bold,
@@ -257,12 +261,16 @@ class TaskCard extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        Text(
-          assignee,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.darkSlate,
+        Flexible(
+          child: Text(
+            assignee,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.darkSlate,
+            ),
           ),
         ),
       ],

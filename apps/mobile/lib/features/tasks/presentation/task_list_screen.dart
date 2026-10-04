@@ -8,6 +8,7 @@ import '../providers/task_providers.dart';
 import 'task_detail_screen.dart';
 import 'widgets/status_filter_bar.dart';
 import 'widgets/task_card.dart';
+import '../../../shared/layout/main_scaffold.dart';
 
 class TaskListScreen extends ConsumerStatefulWidget {
   const TaskListScreen({super.key});
@@ -19,6 +20,7 @@ class TaskListScreen extends ConsumerStatefulWidget {
 class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   final _searchController = TextEditingController();
   Timer? _debounceTimer;
+  bool _isSearching = false;
 
   @override
   void dispose() {
@@ -55,108 +57,154 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
           onRefresh: () => ref.refresh(assignedTasksProvider.future).then((_) {}, onError: (_) {}),
           child: CustomScrollView(
             slivers: [
-              // Top Header (User Avatar, Greeting, Live Connection Status)
+              // Top Header: Profile on Left, Search Functionality on Right
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                 sliver: SliverToBoxAdapter(
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 22,
-                        backgroundColor: AppColors.primaryLavender,
-                        child: Text(
-                          user?.displayName?.isNotEmpty == true
-                              ? user!.displayName![0].toUpperCase()
-                              : 'E',
-                          style: const TextStyle(
+                  child: AnimatedCrossFade(
+                    duration: const Duration(milliseconds: 200),
+                    crossFadeState: (_isSearching || currentQuery.isNotEmpty)
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
+                    // State 1: Profile Info + Search Action Icon at Right
+                    firstChild: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              ref.read(navigationIndexProvider.notifier).setIndex(3);
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 22,
+                                    backgroundColor: AppColors.primaryLavender,
+                                    child: Text(
+                                      user?.displayName?.isNotEmpty == true
+                                          ? user!.displayName![0].toUpperCase()
+                                          : 'E',
+                                      style: const TextStyle(
+                                        color: AppColors.darkSlate,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          user?.displayName ?? 'Field Engineer',
+                                          style: AppTypography.titleLarge
+                                              .copyWith(fontWeight: FontWeight.bold),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          user?.roleLabel != null
+                                              ? '${user!.roleLabel} • Field Ops'
+                                              : 'Field Operations',
+                                          style: AppTypography.caption,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Search Button on Right Side of Profile (Borderless)
+                        IconButton.filledTonal(
+                          style: IconButton.styleFrom(
+                            backgroundColor: AppColors.searchFieldBackground,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.all(12),
+                          ),
+                          icon: const Icon(
+                            Icons.search_rounded,
+                            size: 22,
                             color: AppColors.darkSlate,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
                           ),
+                          tooltip: 'Search tasks',
+                          onPressed: () {
+                            setState(() => _isSearching = true);
+                          },
                         ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              user?.displayName ?? 'Field Engineer',
-                              style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              user?.roleLabel != null ? '${user!.roleLabel} • Field Ops' : 'Field Operations',
-                              style: AppTypography.caption,
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Connection Indicator & Manual Refresh
-                      InkWell(
-                        onTap: () => ref.invalidate(assignedTasksProvider),
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.searchFieldBackground,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.subtleDivider),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF2E7D32),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              const Text(
-                                'Sync',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.darkSlate,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Instant Search Bar
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
-                sliver: SliverToBoxAdapter(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.searchFieldBackground,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.subtleDivider),
+                      ],
                     ),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: _onSearchChanged,
-                      decoration: InputDecoration(
-                        hintText: 'Search tasks, site code, civil/telecom...',
-                        hintStyle: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
-                        prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textSecondary),
-                        suffixIcon: currentQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear_rounded, size: 18),
-                                onPressed: _clearSearch,
-                              )
-                            : null,
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    // State 2: Inline Active Search Bar in Header (Borderless)
+                    secondChild: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.searchFieldBackground,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(left: 14, right: 6),
+                            child: Icon(
+                              Icons.search_rounded,
+                              size: 20,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              onChanged: _onSearchChanged,
+                              autofocus: _isSearching,
+                              decoration: InputDecoration(
+                                filled: false,
+                                fillColor: Colors.transparent,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                errorBorder: InputBorder.none,
+                                disabledBorder: InputBorder.none,
+                                focusedErrorBorder: InputBorder.none,
+                                hintText: 'Search tasks, site code, civil...',
+                                hintStyle: AppTypography.bodySmall
+                                    .copyWith(color: AppColors.textSecondary),
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Single dedicated action button (clear if text present, otherwise close)
+                          IconButton(
+                            icon: Icon(
+                              currentQuery.isNotEmpty
+                                  ? Icons.clear_rounded
+                                  : Icons.close_rounded,
+                              size: 20,
+                              color: AppColors.darkSlate,
+                            ),
+                            tooltip: currentQuery.isNotEmpty
+                                ? 'Clear search text'
+                                : 'Close search',
+                            onPressed: () {
+                              if (currentQuery.isNotEmpty) {
+                                _clearSearch();
+                              } else {
+                                setState(() => _isSearching = false);
+                              }
+                            },
+                          ),
+                        ],
                       ),
                     ),
                   ),

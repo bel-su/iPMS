@@ -42,7 +42,7 @@ class EvidenceStore {
           var ev = TaskEvidence.fromJson(entry as Map<String, dynamic>);
           // iOS moves the app container on every update, so paths are
           // re-rooted on the current photo directory.
-          final name = ev.filePath.split(Platform.pathSeparator).last;
+          final name = ev.filePath.split(RegExp(r'[/\\]')).last;
           final path = '$dir/$name';
           if (!File(path).existsSync()) continue;
           // An upload cut off by the app closing has to be sent again; the

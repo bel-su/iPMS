@@ -13,4 +13,6 @@ apps/web/.next
 .github
 e2e
 docs
+apps/mobile
+.nx
 **/*.log

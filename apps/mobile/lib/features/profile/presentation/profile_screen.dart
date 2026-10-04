@@ -399,8 +399,9 @@ class ProfileScreen extends ConsumerWidget {
                       _buildSettingsTile(
                         icon: Icons.shield_outlined,
                         title: 'Privacy & Security',
-                        trailingText: 'Verified',
-                        onTap: () => _showPrivacySecuritySheet(context),
+                        trailingText: 'Disabled',
+                        enabled: false,
+                        onTap: null,
                       ),
                     ],
                   ),
@@ -559,31 +560,38 @@ class ProfileScreen extends ConsumerWidget {
     required String title,
     Color? titleColor,
     String? trailingText,
-    required VoidCallback onTap,
+    bool enabled = true,
+    VoidCallback? onTap,
   }) {
     return ListTile(
-      leading: Icon(icon, color: iconColor ?? AppColors.darkSlate, size: 22),
+      enabled: enabled,
+      leading: Icon(icon, color: enabled ? (iconColor ?? AppColors.darkSlate) : AppColors.textTertiary, size: 22),
       title: Text(
         title,
         style: AppTypography.titleMedium.copyWith(
-          color: titleColor ?? AppColors.textPrimary,
+          color: enabled ? (titleColor ?? AppColors.textPrimary) : AppColors.textTertiary,
         ),
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (trailingText != null) ...[
-            Text(trailingText, style: AppTypography.bodySmall),
+            Text(
+              trailingText,
+              style: AppTypography.bodySmall.copyWith(
+                color: enabled ? AppColors.textSecondary : AppColors.textTertiary,
+              ),
+            ),
             const SizedBox(width: 6),
           ],
-          const Icon(
+          Icon(
             Icons.chevron_right_rounded,
             size: 20,
-            color: AppColors.textTertiary,
+            color: enabled ? AppColors.textTertiary : AppColors.subtleDivider,
           ),
         ],
       ),
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
     );
   }
 }
