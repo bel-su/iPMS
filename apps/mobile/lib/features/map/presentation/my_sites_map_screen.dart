@@ -25,6 +25,12 @@ class _MySitesMapScreenState extends ConsumerState<MySitesMapScreen> {
   /// Shown when there is nothing to fit the camera to.
   static const LatLng _countryCenter = LatLng(28.3949, 84.1240);
 
+  /// Nepal geographical bounding box: restricts viewing and panning strictly to Nepal territory.
+  static final LatLngBounds nepalBounds = LatLngBounds(
+    const LatLng(26.347, 80.058), // South-West (Kanchanpur / Dhangadhi)
+    const LatLng(30.447, 88.201), // North-East (Humla / Taplejung)
+  );
+
   @override
   void dispose() {
     _mapController.dispose();
@@ -80,7 +86,7 @@ class _MySitesMapScreenState extends ConsumerState<MySitesMapScreen> {
           onRetry: () => ref.invalidate(mySitesProvider),
         ),
         data: (sites) {
-          final located = sites.where((s) => s.hasLocation).toList();
+          final located = sites.where((s) => s.hasLocation && nepalBounds.contains(s.point!)).toList();
           final unlocated = sites.length - located.length;
           final points = located.map((s) => s.point!).toList();
 
@@ -89,12 +95,17 @@ class _MySitesMapScreenState extends ConsumerState<MySitesMapScreen> {
               FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
+                  cameraConstraint: CameraConstraint.containCenter(
+                    bounds: nepalBounds,
+                  ),
                   initialCenter: points.isEmpty
-                      ? (userPosition != null
+                      ? (userPosition != null &&
+                              nepalBounds.contains(LatLng(
+                                  userPosition.latitude, userPosition.longitude))
                           ? LatLng(userPosition.latitude, userPosition.longitude)
                           : _countryCenter)
                       : points.first,
-                  initialZoom: points.isEmpty && userPosition == null ? 6 : 13,
+                  initialZoom: points.isEmpty && userPosition == null ? 7 : 13,
                   initialCameraFit: points.length > 1
                       ? CameraFit.coordinates(
                           coordinates: points,
@@ -102,7 +113,7 @@ class _MySitesMapScreenState extends ConsumerState<MySitesMapScreen> {
                           maxZoom: 15,
                         )
                       : null,
-                  minZoom: 3,
+                  minZoom: 6.5,
                   maxZoom: 18,
                   onTap: (_, _) => setState(() => _selected = null),
                 ),

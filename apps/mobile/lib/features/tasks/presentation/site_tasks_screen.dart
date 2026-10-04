@@ -160,18 +160,25 @@ class SiteTasksScreen extends ConsumerWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.explore_outlined, size: 14, color: AppColors.darkSlate),
-                              const SizedBox(width: 6),
-                              Text(
-                                site.latitude != null && site.longitude != null
-                                    ? '${site.latitude!.toStringAsFixed(4)}, ${site.longitude!.toStringAsFixed(4)}'
-                                    : 'Coordinates not recorded',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.darkSlate),
-                              ),
-                            ],
+                          Expanded(
+                            child: Row(
+                              children: [
+                                const Icon(Icons.explore_outlined, size: 14, color: AppColors.darkSlate),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    site.latitude != null && site.longitude != null
+                                        ? '${site.latitude!.toStringAsFixed(4)}, ${site.longitude!.toStringAsFixed(4)}'
+                                        : 'Coordinates not recorded',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.darkSlate),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
+                          const SizedBox(width: 8),
                           Text(
                             site.geofenceRadiusM != null ? 'Geofence: ${site.geofenceRadiusM}m' : 'No geofence',
                             style: AppTypography.caption,

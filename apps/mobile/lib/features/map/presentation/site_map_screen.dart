@@ -54,6 +54,12 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
     if (site != null) _mapController.move(site, 16.0);
   }
 
+  /// Nepal geographical bounding box: restricts viewing and panning strictly to Nepal territory.
+  static final LatLngBounds nepalBounds = LatLngBounds(
+    const LatLng(26.347, 80.058), // South-West (Kanchanpur / Dhangadhi)
+    const LatLng(30.447, 88.201), // North-East (Humla / Taplejung)
+  );
+
   @override
   Widget build(BuildContext context) {
     final userPositionAsync = ref.watch(userLocationProvider);
@@ -129,18 +135,22 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
       ),
       body: Stack(
         children: [
-          // OpenStreetMap Vector Engine
+          // OpenStreetMap Vector Engine restricted strictly to Nepal
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              // Without site coordinates, start on the phone (or a country view).
-              initialCenter:
-                  site ??
-                  (userPosition != null
+              cameraConstraint: CameraConstraint.containCenter(
+                bounds: nepalBounds,
+              ),
+              initialCenter: site != null && nepalBounds.contains(site)
+                  ? site
+                  : (userPosition != null &&
+                          nepalBounds.contains(LatLng(
+                              userPosition.latitude, userPosition.longitude))
                       ? LatLng(userPosition.latitude, userPosition.longitude)
                       : const LatLng(28.3949, 84.1240)),
-              initialZoom: site != null || userPosition != null ? 15.0 : 6.0,
-              minZoom: 4.0,
+              initialZoom: site != null ? 15.0 : 7.0,
+              minZoom: 6.5,
               maxZoom: 18.0,
             ),
             children: [

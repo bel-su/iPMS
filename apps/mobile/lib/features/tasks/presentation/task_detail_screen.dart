@@ -908,32 +908,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
               ),
               child: Row(
                 children: [
-                  // Map Button
-                  IconButton.filledTonal(
-                    style: IconButton.styleFrom(
-                      padding: const EdgeInsets.all(12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(Icons.map_outlined, size: 22),
-                    tooltip: 'View on Map',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => SiteMapScreen(
-                            initialLatitude: task.latitude,
-                            initialLongitude: task.longitude,
-                            siteCode: task.siteCode,
-                            siteName: task.siteName,
-                            geofenceRadiusMeters: task.geofenceRadiusM?.toDouble(),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 8),
-
                   // Upload photos to the bucket without submitting
                   Expanded(
                     child: SizedBox(
@@ -1472,17 +1446,20 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                                     : AppColors.subtleDivider,
                               ),
                               padding:
-                                  const EdgeInsets.symmetric(horizontal: 4),
+                                  const EdgeInsets.symmetric(horizontal: 2),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
                             ),
                             onPressed: canWork ? () => _toggleItemNA(task, index) : null,
-                            child: Text(
-                              isNA ? 'N/A Active' : 'N/A',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight:
-                                    isNA ? FontWeight.bold : FontWeight.w600,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                isNA ? 'N/A Active' : 'N/A',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight:
+                                      isNA ? FontWeight.bold : FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
@@ -1503,18 +1480,21 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                               foregroundColor: AppColors.primaryLavenderDark,
                               side: const BorderSide(color: Color(0xFFDDD7F7)),
                               padding:
-                                  const EdgeInsets.symmetric(horizontal: 6),
+                                  const EdgeInsets.symmetric(horizontal: 4),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
                             ),
                             icon: const Icon(Icons.photo_library_outlined,
                                 size: 14),
-                            label: Text(
-                              unassignedPhotos.isNotEmpty
-                                  ? 'Browse (${unassignedPhotos.length})'
-                                  : 'Browse',
-                              style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold),
+                            label: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                unassignedPhotos.isNotEmpty
+                                    ? 'Browse (${unassignedPhotos.length})'
+                                    : 'Browse',
+                                style: const TextStyle(
+                                    fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
                             ),
                             onPressed: canWork
                                 ? () => _openSessionPhotoBrowser(task, item)
@@ -1534,16 +1514,19 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                               backgroundColor: AppColors.darkSlate,
                               foregroundColor: Colors.white,
                               padding:
-                                  const EdgeInsets.symmetric(horizontal: 6),
+                                  const EdgeInsets.symmetric(horizontal: 4),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
                             ),
                             icon: const Icon(Icons.camera_alt_outlined,
                                 size: 14),
-                            label: const Text(
-                              'Take Photos',
-                              style: TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold),
+                            label: const FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'Take Photos',
+                                style: TextStyle(
+                                    fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
                             ),
                             onPressed: item.acceptsPhotos && canWork
                                 ? () => _capturePhotoForItem(task, item)
