@@ -11,14 +11,21 @@ datasource db {
 model Notification {
   id String @id @db.Uuid
   recipientId String @db.Uuid
+  // The envelope eventId that produced this row. Nullable because seeded rows
+  // have none; Postgres treats NULLs as distinct in a unique index, so they never
+  // collide. For real rows the unique key below is what makes a redelivered event
+  // a no-op rather than a duplicate notification.
+  eventId String? @db.Uuid
   type String @db.VarChar(50)
   title String @db.VarChar(250)
   body String
   actionUrl String? @db.VarChar(500)
+  workOrderId String? @db.Uuid
   isRead Boolean @default(false)
   readAt DateTime? @db.Timestamptz(6)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
+  @@unique([recipientId, eventId])
   // The only query the in-app notification list will ever issue.
   @@index([recipientId, isRead, createdAt])
   @@map("notification")

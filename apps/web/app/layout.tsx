@@ -1,15 +1,16 @@
 import type { Metadata } from 'next';
 import './styles.css';
+import { ToastProvider } from './components/toast';
 
 export const metadata: Metadata = {
-  title: 'iPMS | Project delivery',
+  title: 'Axiom | Project delivery',
   description: 'Integrated project management and quality operations.',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><ToastProvider>{children}</ToastProvider></body>
     </html>
   );
 }

@@ -1,5 +1,7 @@
 import type { ChecklistSection, ItemResponse, ReviewResult, SubmissionDetail, Verdict } from '../../../lib/qc-api';
 import { formatDateTime } from '../labels';
+import { Evidence } from './evidence';
+import type { EvidenceFile } from './evidence-model';
 
 type Response = SubmissionDetail['responses'][number];
 
@@ -33,14 +35,16 @@ function value(response: ItemResponse): string | null {
 
 /**
  * The checklist as the engineer filled it in for the current attempt: every
- * answer, its value, the engineer's remark, QC's call on it, and its photos.
+ * answer, its value, the engineer's remark, QC's call on it, and its photos and videos.
  * Grouped by the sections of the version the submission was made against;
  * without them (no template access) the answers are listed in item order.
  */
-export function FilledChecklist({ submission, sections, name }: {
+export function FilledChecklist({ submission, sections, name, evidence }: {
   submission: SubmissionDetail;
   sections: ChecklistSection[] | null;
   name: (id: string | null | undefined) => string;
+  /** Files per response id. */
+  evidence: Map<string, EvidenceFile[]>;
 }) {
   const status = SUBMISSION_STATUS[submission.status];
   const byItem = new Map(submission.responses.map((response) => [response.itemId, response]));
@@ -69,10 +73,10 @@ export function FilledChecklist({ submission, sections, name }: {
           {group.title ? <h3>{group.title}</h3> : null}
           <ol className="filled-items">
             {group.responses.map((response) => {
-              const verdict = VERDICT[response.selfCheckResult];
               const review = REVIEW[response.reviewResult];
+              // QC's rejection overrides the engineer's self-check on the badge.
+              const verdict = VERDICT[response.reviewResult === 'REJECTED' ? 'FAIL' : response.selfCheckResult];
               const entered = value(response);
-              const photos = [...response.photos].sort((a, b) => a.sequence - b.sequence);
               return (
                 <li key={response.id} className={response.item.severity === 'CRITICAL' ? 'critical' : undefined}>
                   <span className="outline-num">{response.item.number}</span>
@@ -84,18 +88,7 @@ export function FilledChecklist({ submission, sections, name }: {
                     {entered ? <p className="filled-value"><b>Answer:</b> {entered}</p> : null}
                     {response.selfCheckDescription ? <p className="filled-note">{response.selfCheckDescription}</p> : null}
                     {review ? <p className="filled-review"><span className={`state ${review.tone}`}>{review.label}</span>{response.reviewDescription ? ` — ${response.reviewDescription}` : ''}</p> : null}
-                    {photos.length > 0
-                      ? <ul className="filled-photos" aria-label="Photos">
-                          {photos.map((photo) => (
-                            // Photo storage is not wired yet (media has no endpoints), so a
-                            // slot stands in for each photo until there is a URL to show.
-                            <li key={photo.id} title={`Photo ${photo.sequence + 1} · ${photo.mediaId}`}>
-                              <span aria-hidden="true">▣</span>
-                              <small>Photo {photo.sequence + 1}</small>
-                            </li>
-                          ))}
-                        </ul>
-                      : null}
+                    <Evidence files={evidence.get(response.id) ?? []} />
                   </div>
                 </li>
               );

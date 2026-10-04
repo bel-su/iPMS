@@ -1,7 +1,7 @@
 import type { WorkOrderPage, WorkOrderStatusCounts } from '@ipms/contracts';
 import type { WorkOrder } from '../../lib/work-order-api';
 import {
-  DUE_BUCKETS, QUEUE_FILTERS, STATUS_TEXT, dueBucket, dueText, filterCount, initials, pageWindow, typeInfo, workOrderPath,
+  DUE_BUCKETS, STATUS_TEXT, dueBucket, dueText, filterCount, initials, pageWindow, queueFilters, splitTitle, typeInfo, workOrderPath,
   type QueueFilterKey, type WorkOrderType,
 } from './labels';
 
@@ -27,7 +27,7 @@ export const QUEUE_PAGE_SIZE = 25;
  * Every control is a link or a GET form, so the queue works without
  * JavaScript and every view has a URL that can be shared.
  */
-export function WorkOrderQueue({ data, params, basePath, projects, names, now, created }: {
+export function WorkOrderQueue({ data, params, basePath, projects, names, now, created, ownWorkOnly = false }: {
   data: WorkOrderPage<WorkOrder>;
   params: QueueParams;
   basePath: string;
@@ -36,6 +36,8 @@ export function WorkOrderQueue({ data, params, basePath, projects, names, now, c
   names: ReadonlyMap<string, string>;
   now: Date;
   created?: number | undefined;
+  /** Everything listed is already theirs: no Cancelled pill, no "Assigned to me" toggle. */
+  ownWorkOnly?: boolean;
 }) {
   const href = (changes: Partial<QueueParams>) => {
     const next = { ...params, page: 1, ...changes };
@@ -62,7 +64,7 @@ export function WorkOrderQueue({ data, params, basePath, projects, names, now, c
       <StatusBar counts={data.counts} />
 
       <nav className="pills" aria-label="Filter by state">
-        {QUEUE_FILTERS.map((entry) => (
+        {queueFilters(ownWorkOnly).map((entry) => (
           <a key={entry.key} href={href({ filter: entry.key })} aria-current={entry.key === params.filter ? 'page' : undefined} className={entry.key === 'overdue' && data.counts.OVERDUE > 0 ? 'alert' : undefined}>
             {entry.label}<b>{filterCount(entry.key, data.counts)}</b>
           </a>
@@ -83,7 +85,7 @@ export function WorkOrderQueue({ data, params, basePath, projects, names, now, c
           <option value="EHS_SELF_CHECK">EHS Self-check</option>
           <option value="EHS_SPOT_CHECK">EHS Spot Check</option>
         </select>
-        <label className="toggle"><input type="checkbox" name="mine" value="1" defaultChecked={params.mine} /> Assigned to me</label>
+        {ownWorkOnly ? null : <label className="toggle"><input type="checkbox" name="mine" value="1" defaultChecked={params.mine} /> Assigned to me</label>}
         <button className="ghost-button" type="submit">Apply</button>
       </form>
 
@@ -126,7 +128,7 @@ function QueueRow({ order, names, now }: { order: WorkOrder; names: ReadonlyMap<
         {info?.category === 'EHS' ? 'EHS' : 'Q'}<small>{info?.selfCheck ? 'self' : 'spot'}</small>
       </span>
       <div className="queue-main">
-        <a className="queue-title" href={workOrderPath(order.id)}>{order.title}</a>
+        <a className="queue-title" href={workOrderPath(order.id)}>{splitTitle(order.title, order.site.siteCode).title}</a>
         <div className="queue-meta">
           <span className="du" title={`Project ID (DU): ${order.project.name}`}>{order.project.code}</span>
           <span className="site"><b>{order.site.name !== order.site.siteCode ? ` ${order.site.name}` : ''}</b></span>

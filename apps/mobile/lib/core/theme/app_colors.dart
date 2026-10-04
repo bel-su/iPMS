@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Central color palette matching the iPMS mobile design specifications.
+/// Central color palette matching the Axiom mobile design specifications.
 class AppColors {
   AppColors._();
 

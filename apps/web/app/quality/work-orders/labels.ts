@@ -70,8 +70,17 @@ export const QUEUE_FILTERS = [
 ] as const;
 export type QueueFilterKey = (typeof QUEUE_FILTERS)[number]['key'];
 
-export function queueFilter(key: string | undefined) {
-  return QUEUE_FILTERS.find((entry) => entry.key === key) ?? QUEUE_FILTERS[0];
+/**
+ * The pills a viewer is offered. Someone who sees only their own work (no
+ * `task.view_all` — a field engineer) never sees cancelled work, since qc
+ * leaves it out of their reads, so a Cancelled pill would always be empty.
+ */
+export function queueFilters(ownWorkOnly: boolean) {
+  return ownWorkOnly ? QUEUE_FILTERS.filter((entry) => entry.key !== 'cancelled') : QUEUE_FILTERS;
+}
+
+export function queueFilter(key: string | undefined, ownWorkOnly = false) {
+  return queueFilters(ownWorkOnly).find((entry) => entry.key === key) ?? QUEUE_FILTERS[0];
 }
 
 /** The count a pill shows, from the list's status counts. */
@@ -236,4 +245,22 @@ export function pageWindow(page: number, pages: number, radius = 2): (number | n
 export function previewTitle(type: WorkOrderType, siteCode: string, note?: string): string {
   const extra = note?.trim();
   return `[${WORK_ORDER_TYPE_LABEL[type]}]${siteCode}${extra ? ` ${extra}` : ''}`.slice(0, 250);
+}
+
+/**
+ * qc names a work order `[Type]SITECODE note`, so the note rides on the
+ * title. Splits it off, leaving `[Type]SITECODE` as the title.
+ */
+export function splitTitle(title: string, siteCode?: string | null): { title: string; note: string | null } {
+  const close = title.indexOf(']');
+  if (close < 0) return { title, note: null };
+  let end: number;
+  if (siteCode && title.startsWith(siteCode, close + 1)) {
+    end = close + 1 + siteCode.length;
+  } else {
+    const space = title.indexOf(' ', close + 1);
+    end = space < 0 ? title.length : space;
+  }
+  const note = title.slice(end).trim();
+  return { title: title.slice(0, end).trim(), note: note || null };
 }

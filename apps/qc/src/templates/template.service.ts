@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { PrismaClient, TemplateVersion } from '@prisma-clients/qc';
 import {
-  PublishableDocumentSchema, uuidv7, type CreateTemplateDto, type SaveDraftDto, type TemplateDocument,
+  PublishableDocumentSchema, uuidv7, type CreateTemplateDto, type SaveTemplateDraftDto, type TemplateDocument,
   type TemplateMetadata, type UpdateTemplateDto,
 } from '@ipms/contracts';
 import type { JsonObject } from '@ipms/persistence';
@@ -67,7 +67,7 @@ export class TemplateService {
     }
   }
 
-  async saveDraft(id: string, dto: SaveDraftDto): Promise<DraftSummary> {
+  async saveDraft(id: string, dto: SaveTemplateDraftDto): Promise<DraftSummary> {
     try {
       return await this.prisma.$transaction(async (tx) => {
         await this.lockTemplate(tx, id);

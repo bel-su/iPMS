@@ -1,11 +1,13 @@
 import { getCurrentUser, hasPermission } from '../../../lib/iam-api';
 import { listAssignable } from '../../../lib/project-api';
 import { getWorkOrder, type WorkOrderEvent } from '../../../lib/work-order-api';
+import { listWorkOrderMedia } from '../../../lib/media-api';
 import { getSubmission, getTemplate, getVersion, type ChecklistSection } from '../../../lib/qc-api';
 import { listUserDirectory } from '../../../lib/user-api';
 import { Sidebar, StatePage, TopActions } from '../../../shell';
 import { ChecklistOutline } from '../checklist-outline';
-import { STATUS_TEXT, WORK_ORDERS_PATH, projectWorkOrdersPath, dueText, eligiblePeople, formatDateTime, formatDay, isOpen, isoDay, personLabel, typeInfo } from '../labels';
+import { STATUS_TEXT, WORK_ORDERS_PATH, projectWorkOrdersPath, dueText, eligiblePeople, formatDateTime, formatDay, isOpen, isoDay, personLabel, splitTitle, typeInfo } from '../labels';
+import { buildEvidence, type EvidenceFile } from './evidence-model';
 import { FilledChecklist } from './filled-checklist';
 import { ManageWorkOrder } from './manage';
 import { ReviewConsole } from './review-console';
@@ -51,14 +53,33 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
   ]);
   const submission = submitted?.state === 'ready' ? submitted.data : null;
   const submissionSections = submission && may('qc_template.view') ? await versionSections(submission.templateId, submission.templateVersion) : null;
+  // Evidence facts and the previous attempt (for the New badge) come in parallel.
+  const previousId = submission && submission.attemptNo > 1
+    ? wo.events.filter((e) => e.kind === 'SUBMITTED' && e.detail['attemptNo'] === submission.attemptNo - 1).map((e) => e.detail['submissionId']).find((v): v is string => typeof v === 'string')
+    : undefined;
+  const [mediaFacts, previousResult] = await Promise.all([
+    submission ? listWorkOrderMedia(wo.id) : Promise.resolve(null),
+    previousId ? getSubmission(previousId) : Promise.resolve(null),
+  ]);
+  const facts = new Map((mediaFacts?.state === 'ready' ? mediaFacts.data : []).map((m) => [m.id, m]));
+  const previous = previousResult?.state === 'ready' ? previousResult.data : null;
+  const evidence = new Map<string, EvidenceFile[]>();
+  for (const response of submission?.responses ?? []) {
+    const before = previous ? new Set(previous.responses.find((r) => r.itemId === response.itemId)?.media.map((m) => m.mediaId) ?? []) : null;
+    evidence.set(response.id, buildEvidence(response, facts, before));
+  }
+  const photoCount = [...evidence.values()].reduce((sum, files) => sum + files.filter((f) => f.kind === 'PHOTO').length, 0);
+  const canDownloadPhotos = photoCount > 0 && (wo.status === 'COMPLETED' || submission?.status === 'APPROVED');
   const candidates = assignable?.state === 'ready' ? eligiblePeople(assignable.data, directory, [wo.site.id]).people : [];
   const info = wo.workOrderType ? typeInfo(wo.workOrderType) : null;
+  const named = splitTitle(wo.title, wo.site.siteCode);
   const status = STATUS_TEXT[wo.status];
   const now = new Date();
   const due = dueText(wo, now);
   const isUnderReview = submission?.status === 'SUBMITTED' || submission?.status === 'UNDER_REVIEW';
   const canApprove = Boolean(isUnderReview && may('qc_review.approve'));
   const canReject = Boolean(isUnderReview && (may('qc_review.reject') || may('qc_review.approve')));
+  const showReviewConsole = Boolean(submission && (canApprove || canReject));
 
   return (
     <main className="app-shell">
@@ -73,7 +94,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
             <span className="kind big" aria-hidden="true">{info?.category === 'EHS' ? 'EHS' : 'Q'}<small>{info?.selfCheck ? 'self' : 'spot'}</small></span>
             <div>
               <p className="eyebrow">{info?.label ?? 'Work order'}</p>
-              <h1>{wo.title}</h1>
+              <h1>{named.title}</h1>
               <p className="hero-meta">
                 <span className={`state ${status.tone}`}>{status.label}</span>
                 <span className={`due ${due.tone}`}>{due.text}</span>
@@ -87,6 +108,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
               <section className="panel">
                 <h2 className="panel-title">Details</h2>
                 <dl className="facts">
+                  {named.note ? <div><dt>Note</dt><dd>{named.note}</dd></div> : null}
                   <div><dt>Project ID (DU)</dt><dd><a href={projectWorkOrdersPath(wo.project.id)}><code>{wo.project.code}</code></a> {wo.project.name}</dd></div>
                   <div><dt>Site</dt><dd><b>{wo.site.siteCode}</b> {wo.site.name !== wo.site.siteCode ? wo.site.name : ''}<small>{[wo.site.city, wo.site.area].filter(Boolean).join(' · ')}</small></dd></div>
                   <div><dt>Checklist</dt><dd>{wo.templateId && may('qc_template.view') ? <a className="link" href={`/quality/templates/${wo.templateId}`}>{wo.templateName}</a> : wo.templateName ?? '—'}</dd></div>
@@ -98,22 +120,24 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                 </dl>
               </section>
 
-              {may('qc_submission.view')
+              {may('qc_submission.view') && !showReviewConsole
                 ? <section className="panel">
                     <h2 className="panel-title">Filled checklist</h2>
                     {submission
-                      ? <FilledChecklist submission={submission} sections={submissionSections} name={name} />
+                      ? <FilledChecklist submission={submission} sections={submissionSections} name={name} evidence={evidence} />
                       : <p className="subtle">{submitted && 'message' in submitted ? submitted.message : 'Nothing submitted yet.'}</p>}
                   </section>
                 : null}
 
-              {submission && (canApprove || canReject) ? (
+              {submission && showReviewConsole ? (
                 <ReviewConsole
                   submission={submission}
                   projectId={wo.projectId}
                   workOrderId={wo.id}
                   canApprove={canApprove}
                   canReject={canReject}
+                  evidence={evidence}
+                  sections={submissionSections}
                 />
               ) : null}
             </div>
@@ -133,6 +157,12 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                 ? <section className="panel">
                     <h2 className="panel-title">Checklist</h2>
                     <ChecklistOutline sections={sections} />
+                  </section>
+                : null}
+              {canDownloadPhotos
+                ? <section className="panel">
+                    <h2 className="panel-title">Photos</h2>
+                    <a className="soft-button" href={`/api/work-orders/${wo.id}/photo-package`} download>Download Photo Package</a>
                   </section>
                 : null}
               <section className="panel">
@@ -176,11 +206,17 @@ function describe(event: WorkOrderEvent, name: (id: string | null | undefined) =
   const text = (key: string) => (typeof d[key] === 'string' ? d[key] as string : null);
   switch (event.kind) {
     case 'CREATED': return <>Assigned to <b>{name(text('assigneeId'))}</b>, due {formatDay(text('plannedCompletionAt'))}</>;
+    case 'STARTED': return <>Work started</>;
     case 'REASSIGNED': return <>Handed over from <b>{name(text('from'))}</b> to <b>{name(text('to'))}</b></>;
     case 'RESCHEDULED': return <>Due date moved from {formatDay(text('from'))} to <b>{formatDay(text('to'))}</b></>;
     case 'CANCELLED': return <>Cancelled — {text('reason')}</>;
     case 'SUBMITTED': return <>Checklist submitted{d['attemptNo'] && Number(d['attemptNo']) > 1 ? ` (attempt ${d['attemptNo']})` : ''}</>;
     case 'APPROVED': return <>Approved by QC{text('comment') ? ` — ${text('comment')}` : ''}</>;
     case 'REJECTED': return <>Sent back for rework{text('comment') ? ` — ${text('comment')}` : ''}</>;
+    default: {
+      // A new kind fails typecheck here until it is described.
+      const unknownKind: never = event.kind;
+      return unknownKind;
+    }
   }
 }

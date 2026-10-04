@@ -39,7 +39,9 @@ class BiometricAuthState {
     return 'Fingerprint';
   }
 
-  String get biometricName => hasFaceId ? 'Face ID' : 'Fingerprint';
+  /// Platform-neutral name of the biometric method, for prose such as
+  /// "Fast face id access".
+  String get biometricName => hasFace ? 'Face ID' : 'Fingerprint';
 
   IconData get biometricIcon =>
       hasFace ? Icons.face_rounded : Icons.fingerprint_rounded;
@@ -51,11 +53,13 @@ class BiometricAuthState {
     List<BiometricType>? availableBiometrics,
     bool? isAuthenticating,
     String? statusMessage,
+    bool clearEnrolledUsername = false,
   }) {
     return BiometricAuthState(
       isHardwareSupported: isHardwareSupported ?? this.isHardwareSupported,
       isConfigured: isConfigured ?? this.isConfigured,
-      enrolledUsername: enrolledUsername ?? this.enrolledUsername,
+      enrolledUsername:
+          clearEnrolledUsername ? null : (enrolledUsername ?? this.enrolledUsername),
       availableBiometrics: availableBiometrics ?? this.availableBiometrics,
       isAuthenticating: isAuthenticating ?? this.isAuthenticating,
       statusMessage: statusMessage,
@@ -71,7 +75,7 @@ final biometricServiceProvider = Provider<BiometricAuthService>((ref) {
 class BiometricAuthNotifier extends Notifier<BiometricAuthState> {
   @override
   BiometricAuthState build() {
-    Future.microtask(() => checkBiometricStatus());
+    Future.microtask(checkBiometricStatus);
     return const BiometricAuthState();
   }
 
@@ -86,88 +90,91 @@ class BiometricAuthNotifier extends Notifier<BiometricAuthState> {
       isHardwareSupported: isSupported,
       isConfigured: isConfigured,
       enrolledUsername: username,
+      clearEnrolledUsername: username == null,
       availableBiometrics: available,
+      statusMessage: state.statusMessage,
     );
   }
 
+  /// Runs the native prompt, then restores the stored session. Returns false
+  /// (with [BiometricAuthState.statusMessage] set, unless the user simply
+  /// cancelled) when either step does not succeed.
   Future<bool> authenticateAndLogin() async {
     final service = ref.read(biometricServiceProvider);
     final enrolledUser = state.enrolledUsername;
     if (enrolledUser == null || enrolledUser.isEmpty) return false;
 
-    state = state.copyWith(isAuthenticating: true, statusMessage: null);
-
+    state = state.copyWith(isAuthenticating: true);
     try {
-      final reason = state.hasFaceId
-          ? 'Authenticate with Face ID to access iPMS Field App as @$enrolledUser'
-          : 'Scan fingerprint to access iPMS Field App as @$enrolledUser';
-
-      final success = await service.authenticate(
-        localizedReason: reason,
+      final check = await service.authenticate(
+        localizedReason:
+            'Use ${state.biometricLabel} to access iPMS Field App as @$enrolledUser',
       );
-
-      if (success) {
-        await ref
-            .read(authStateProvider.notifier)
-            .loginWithBiometrics(enrolledUser);
-        state = state.copyWith(isAuthenticating: false);
-        return true;
-      } else {
+      if (!check.success) {
         state = state.copyWith(
           isAuthenticating: false,
-          statusMessage: 'Biometric scan was cancelled or unrecognized.',
+          statusMessage: check.cancelled ? null : check.message,
         );
         return false;
       }
+
+      final auth = ref.read(authStateProvider.notifier);
+      await auth.loginWithBiometrics(enrolledUser);
+      final result = ref.read(authStateProvider);
+      if (result.hasError || result.value == null) {
+        state = state.copyWith(
+          isAuthenticating: false,
+          statusMessage: result.error?.toString() ?? 'Could not restore your session.',
+        );
+        return false;
+      }
+      state = state.copyWith(isAuthenticating: false);
+      return true;
     } catch (e) {
       state = state.copyWith(
         isAuthenticating: false,
-        statusMessage: 'Biometric error: $e',
+        statusMessage: 'Biometric sign-in failed: $e',
       );
       return false;
     }
   }
 
-  Future<bool> enrollBiometric(String username) async {
+  /// Confirms with the native prompt, then keeps the current session for
+  /// biometric sign-in. Must be called while signed in. Returns null on
+  /// success, otherwise why it did not happen ('' when the user cancelled).
+  Future<String?> enrollBiometric(String username) async {
     final service = ref.read(biometricServiceProvider);
     state = state.copyWith(isAuthenticating: true);
 
     try {
-      final reason = state.hasFaceId
-          ? 'Authenticate with Face ID to confirm biometric login enrollment'
-          : 'Scan fingerprint to confirm biometric login enrollment';
-
-      final verified = await service.authenticate(
-        localizedReason: reason,
+      final check = await service.authenticate(
+        localizedReason:
+            'Use ${state.biometricLabel} to turn on biometric sign-in',
       );
-
-      if (verified) {
-        await service.enrollBiometric(username);
-        state = state.copyWith(
-          isConfigured: true,
-          enrolledUsername: username,
-          isAuthenticating: false,
-        );
-        return true;
-      } else {
+      if (!check.success) {
         state = state.copyWith(isAuthenticating: false);
-        return false;
+        return check.cancelled ? '' : check.message;
       }
-    } catch (_) {
+      await service.enrollBiometric(username);
+      state = state.copyWith(
+        isConfigured: true,
+        enrolledUsername: username,
+        isAuthenticating: false,
+      );
+      return null;
+    } catch (e) {
       state = state.copyWith(isAuthenticating: false);
-      return false;
+      return 'Could not turn on biometric sign-in: $e';
     }
   }
 
   Future<void> disableBiometric() async {
     final service = ref.read(biometricServiceProvider);
     await service.disableBiometric();
-    state = state.copyWith(
-      isConfigured: false,
-      enrolledUsername: null,
-      statusMessage: null,
-    );
+    state = state.copyWith(isConfigured: false, clearEnrolledUsername: true);
   }
+
+  void clearStatus() => state = state.copyWith();
 }
 
 final biometricAuthStateProvider =

@@ -1,5 +1,6 @@
 'use client';
-import { useActionState } from 'react';
+import {  } from 'react';
+import { useActionStateWithToast } from '../../../components/toast';
 import type { TemplateImportPreview } from '@ipms/contracts';
 import { FormError, SubmitButton } from '../../../components/forms';
 import { commitTemplateImportAction, previewTemplateImportAction, type TemplateImportState } from './actions';
@@ -13,8 +14,8 @@ function commitPayload(preview: TemplateImportPreview): string | null {
 }
 
 export function TemplateImportForm() {
-  const [previewState, previewAction] = useActionState(previewTemplateImportAction, START);
-  const [commitState, commitAction] = useActionState(commitTemplateImportAction, START);
+  const [previewState, previewAction] = useActionStateWithToast(previewTemplateImportAction, START, null);
+  const [commitState, commitAction] = useActionStateWithToast(commitTemplateImportAction, START, 'Checklists imported');
   const preview = previewState.preview;
   const payload = preview ? commitPayload(preview) : null;
 

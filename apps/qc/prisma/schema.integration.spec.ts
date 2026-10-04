@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma-clients/qc';
 import { uuidv7 } from '@ipms/contracts';
 import { startTestDb } from './test-db.js';
-import { ACTOR, resetDb, seedPublishedTemplate } from './fixtures.js';
+import { ACTOR, resetDb, seedPublishedTemplate, seedWorkOrder } from './fixtures.js';
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
 let prisma: PrismaClient;
@@ -36,5 +36,22 @@ describe('template_version partial unique indexes', () => {
   it('refuses a duplicate code company-wide', async () => {
     await seedPublishedTemplate(prisma, { code: 'SAME' });
     await expect(seedPublishedTemplate(prisma, { code: 'SAME' })).rejects.toThrow();
+  });
+});
+
+describe('QC evidence schema', () => {
+  it('stores video counts, defaulting to zero', async () => {
+    const { itemId } = await seedPublishedTemplate(prisma);
+    expect(await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemId } })).toMatchObject({ minVideos: 0, maxVideos: 0 });
+  });
+
+  it('keeps one draft per work order, removed with the work order', async () => {
+    const { templateId } = await seedPublishedTemplate(prisma);
+    const order = await seedWorkOrder(prisma, templateId);
+    const data = { workOrderId: order.id, holderId: ACTOR, deviceId: 'd1', deviceLabel: 'Pixel 7', version: 1, responses: [] };
+    await prisma.workOrderDraft.create({ data });
+    await expect(prisma.workOrderDraft.create({ data })).rejects.toThrow();
+    await prisma.workOrder.delete({ where: { id: order.id } });
+    expect(await prisma.workOrderDraft.count()).toBe(0);
   });
 });

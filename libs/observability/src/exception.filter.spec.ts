@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BadRequestException, ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ZodError, z } from 'zod';
 import { GlobalExceptionFilter } from './exception.filter.js';
 
@@ -54,5 +54,27 @@ describe('GlobalExceptionFilter', () => {
     const { host: h, response } = host();
     filter.catch(new BadRequestException('bad'), h as never);
     expect(response.send.mock.calls[0]![0].error.correlationId).toBeTruthy();
+  });
+
+  it('passes details from an HttpException object response', () => {
+    const { host: h, response } = host();
+    filter.catch(new ConflictException({ message: 'Some files are not ready', details: { reason: 'MEDIA_NOT_READY', files: [{ id: 'x', reason: 'UPLOADING' }] } }), h as never);
+    expect(response.status).toHaveBeenCalledWith(409);
+    expect(response.send.mock.calls[0]![0].error).toMatchObject({
+      code: 'CONFLICT', message: 'Some files are not ready', details: { reason: 'MEDIA_NOT_READY', files: [{ id: 'x', reason: 'UPLOADING' }] },
+    });
+  });
+
+  it('adds no details for a plain message', () => {
+    const { host: h, response } = host();
+    filter.catch(new ConflictException('Taken'), h as never);
+    expect(response.send.mock.calls[0]![0].error.details).toBeUndefined();
+  });
+
+  it.each([['null', null], ['an empty array', []], ['an array', ['x']]])('omits details that are %s', (_label, details) => {
+    const { host: h, response } = host();
+    filter.catch(new ConflictException({ message: 'Taken', details }), h as never);
+    expect(response.send.mock.calls[0]![0].error.details).toBeUndefined();
+    expect('details' in response.send.mock.calls[0]![0].error).toBe(false);
   });
 });

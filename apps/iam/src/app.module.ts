@@ -21,6 +21,8 @@ import { ScopesController } from './scopes/scopes.controller.js';
 import { ScopesService } from './scopes/scopes.service.js';
 import { EffectiveController } from './effective/effective.controller.js';
 import { EffectiveService } from './effective/effective.service.js';
+import { InternalAuthzController } from './internal/internal-authz.controller.js';
+import { ProjectAccessExpirer } from './scopes/project-access.expirer.js';
 import { OutboxDrainer } from './outbox/outbox.drainer.js';
 
 const PRISMA_CLIENT = 'PRISMA_CLIENT';
@@ -90,7 +92,7 @@ function iamOverrideProvider(prisma: PrismaService): OverrideProvider {
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [AuthController, UsersController, RolesController, ScopesController, EffectiveController, HealthController, MetricsController],
+  controllers: [AuthController, UsersController, RolesController, ScopesController, EffectiveController, HealthController, MetricsController, InternalAuthzController],
   providers: [
     {
       provide: PrismaService,
@@ -206,6 +208,12 @@ function iamOverrideProvider(prisma: PrismaService): OverrideProvider {
       provide: EffectiveService,
       useFactory: (prisma: PrismaService) => new EffectiveService(prisma.db as never),
       inject: [PrismaService],
+    },
+    {
+      provide: ProjectAccessExpirer,
+      useFactory: (scopes: ScopesService, effective: EffectiveService) =>
+        new ProjectAccessExpirer(scopes, (projectId) => effective.holders('scope.grant', projectId)),
+      inject: [ScopesService, EffectiveService],
     },
     {
       provide: OutboxDrainer,

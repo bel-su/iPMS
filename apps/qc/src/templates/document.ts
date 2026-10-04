@@ -23,6 +23,8 @@ export function toDocument(version: VersionWithTree): TemplateDocument {
         selectOptions: item.selectOptions,
         minPhotos: item.minPhotos,
         maxPhotos: item.maxPhotos,
+        minVideos: item.minVideos,
+        maxVideos: item.maxVideos,
         allowsNa: item.allowsNa,
         isRequired: item.isRequired,
         ...(item.guidanceText === null ? {} : { guidanceText: item.guidanceText }),
@@ -44,7 +46,7 @@ export async function writeTree(tx: Tx, versionId: string, doc: TemplateDocument
       data: section.items.map((item, itemOrder) => ({
         id: uuidv7(), sectionId, number: item.number, requirementText: item.requirementText,
         severity: item.severity, responseType: item.responseType, selectOptions: item.selectOptions,
-        minPhotos: item.minPhotos, maxPhotos: item.maxPhotos, allowsNa: item.allowsNa,
+        minPhotos: item.minPhotos, maxPhotos: item.maxPhotos, minVideos: item.minVideos, maxVideos: item.maxVideos, allowsNa: item.allowsNa,
         isRequired: item.isRequired, guidanceText: item.guidanceText ?? null, order: itemOrder,
       })),
     });

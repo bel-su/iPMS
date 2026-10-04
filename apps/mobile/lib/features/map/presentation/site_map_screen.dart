@@ -13,14 +13,15 @@ class SiteMapScreen extends ConsumerStatefulWidget {
     this.initialLongitude,
     this.siteCode,
     this.siteName,
-    this.geofenceRadiusMeters = 100.0,
+    this.geofenceRadiusMeters,
   });
 
   final double? initialLatitude;
   final double? initialLongitude;
   final String? siteCode;
   final String? siteName;
-  final double geofenceRadiusMeters;
+  /// Null when the site runs no geofence check.
+  final double? geofenceRadiusMeters;
 
   @override
   ConsumerState<SiteMapScreen> createState() => _SiteMapScreenState();
@@ -28,17 +29,18 @@ class SiteMapScreen extends ConsumerStatefulWidget {
 
 class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
   late final MapController _mapController;
-  late final LatLng _siteLocation;
+
+  /// Null when the site has no coordinates recorded yet.
+  late final LatLng? _siteLocation;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
-    // Default to Kathmandu / Nepal hub if no specific site passed
-    _siteLocation = LatLng(
-      widget.initialLatitude ?? 27.7172,
-      widget.initialLongitude ?? 85.3240,
-    );
+    _siteLocation =
+        widget.initialLatitude != null && widget.initialLongitude != null
+        ? LatLng(widget.initialLatitude!, widget.initialLongitude!)
+        : null;
   }
 
   @override
@@ -48,24 +50,39 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
   }
 
   void _recenterToSite() {
-    _mapController.move(_siteLocation, 16.0);
+    final site = _siteLocation;
+    if (site != null) _mapController.move(site, 16.0);
   }
 
   @override
   Widget build(BuildContext context) {
     final userPositionAsync = ref.watch(userLocationProvider);
     final userPosition = userPositionAsync.value;
+    final site = _siteLocation;
 
     double? distanceMeters;
-    if (userPosition != null) {
+    if (userPosition != null && site != null) {
       distanceMeters = calculateDistanceMeters(
-        siteLocation: _siteLocation,
+        siteLocation: site,
         userPosition: userPosition,
       );
     }
+    final String distanceText;
+    if (site == null) {
+      distanceText = 'No coordinates recorded for this site';
+    } else if (distanceMeters != null) {
+      distanceText = distanceMeters < 1000
+          ? '${distanceMeters.toStringAsFixed(0)} m away'
+          : '${(distanceMeters / 1000).toStringAsFixed(2)} km away';
+    } else if (userPositionAsync.hasError) {
+      distanceText = userPositionAsync.error.toString();
+    } else {
+      distanceText = 'Acquiring GPS...';
+    }
 
+    final radius = widget.geofenceRadiusMeters;
     final isWithinGeofence =
-        distanceMeters != null && distanceMeters <= widget.geofenceRadiusMeters;
+        distanceMeters != null && radius != null && distanceMeters <= radius;
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
@@ -80,7 +97,9 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
               style: AppTypography.headingSmall,
             ),
             Text(
-              '${_siteLocation.latitude.toStringAsFixed(4)}, ${_siteLocation.longitude.toStringAsFixed(4)}',
+              site != null
+                  ? '${site.latitude.toStringAsFixed(4)}, ${site.longitude.toStringAsFixed(4)}'
+                  : 'Location not set',
               style: AppTypography.caption,
             ),
           ],
@@ -100,11 +119,12 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
               }
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.location_city_rounded),
-            tooltip: 'Center Site',
-            onPressed: _recenterToSite,
-          ),
+          if (site != null)
+            IconButton(
+              icon: const Icon(Icons.location_city_rounded),
+              tooltip: 'Center Site',
+              onPressed: _recenterToSite,
+            ),
         ],
       ),
       body: Stack(
@@ -113,8 +133,13 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _siteLocation,
-              initialZoom: 15.0,
+              // Without site coordinates, start on the phone (or a country view).
+              initialCenter:
+                  site ??
+                  (userPosition != null
+                      ? LatLng(userPosition.latitude, userPosition.longitude)
+                      : const LatLng(28.3949, 84.1240)),
+              initialZoom: site != null || userPosition != null ? 15.0 : 6.0,
               minZoom: 4.0,
               maxZoom: 18.0,
             ),
@@ -126,62 +151,64 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
               ),
 
               // Geofence Circle Overlay (around site coordinates)
-              CircleLayer(
-                circles: [
-                  CircleMarker(
-                    point: _siteLocation,
-                    radius: widget.geofenceRadiusMeters,
-                    useRadiusInMeter: true,
-                    color: AppColors.primaryLavender.withValues(alpha: 0.35),
-                    borderColor: AppColors.primaryLavenderDark,
-                    borderStrokeWidth: 2,
-                  ),
-                ],
-              ),
+              if (site != null && radius != null)
+                CircleLayer(
+                  circles: [
+                    CircleMarker(
+                      point: site,
+                      radius: radius,
+                      useRadiusInMeter: true,
+                      color: AppColors.primaryLavender.withValues(alpha: 0.35),
+                      borderColor: AppColors.primaryLavenderDark,
+                      borderStrokeWidth: 2,
+                    ),
+                  ],
+                ),
 
               // Marker Pins (Site Marker + User Location Marker)
               MarkerLayer(
                 markers: [
                   // Site Marker Pin
-                  Marker(
-                    point: _siteLocation,
-                    width: 80,
-                    height: 80,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.darkSlate,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.25),
-                                blurRadius: 6,
+                  if (site != null)
+                    Marker(
+                      point: site,
+                      width: 80,
+                      height: 80,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.darkSlate,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.25),
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              widget.siteCode ?? 'SITE',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
                               ),
-                            ],
-                          ),
-                          child: Text(
-                            widget.siteCode ?? 'SITE',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ),
-                        const Icon(
-                          Icons.location_on_rounded,
-                          color: AppColors.priorityHighText,
-                          size: 38,
-                        ),
-                      ],
+                          const Icon(
+                            Icons.location_on_rounded,
+                            color: AppColors.priorityHighText,
+                            size: 38,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
 
                   // User Current Location Pin (if GPS granted)
                   if (userPosition != null)
@@ -253,11 +280,11 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                widget.siteCode ?? 'KOS121 Hub',
+                                widget.siteCode ?? 'Site',
                                 style: AppTypography.titleLarge,
                               ),
                               Text(
-                                widget.siteName ?? 'Kathmandu Central Telecommunications',
+                                widget.siteName ?? '',
                                 style: AppTypography.bodySmall,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -272,15 +299,25 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: isWithinGeofence
+                            color: distanceMeters == null || radius == null
+                                ? AppColors.searchFieldBackground
+                                : isWithinGeofence
                                 ? AppColors.statusCompletedBg
                                 : AppColors.statusBlockedBg,
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Text(
-                            isWithinGeofence ? 'On Site' : 'Off Site',
+                            distanceMeters == null
+                                ? 'Unknown'
+                                : radius == null
+                                ? 'No geofence'
+                                : isWithinGeofence
+                                ? 'On Site'
+                                : 'Off Site',
                             style: AppTypography.badge.copyWith(
-                              color: isWithinGeofence
+                              color: distanceMeters == null || radius == null
+                                  ? AppColors.textSecondary
+                                  : isWithinGeofence
                                   ? AppColors.statusCompletedText
                                   : AppColors.statusBlockedText,
                             ),
@@ -296,30 +333,33 @@ class _SiteMapScreenState extends ConsumerState<SiteMapScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.navigation_rounded,
-                              size: 16,
-                              color: AppColors.textSecondary,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              distanceMeters != null
-                                  ? distanceMeters < 1000
-                                      ? '${distanceMeters.toStringAsFixed(0)} m away'
-                                      : '${(distanceMeters / 1000).toStringAsFixed(2)} km away'
-                                  : 'Acquiring GPS...',
-                              style: AppTypography.bodyMedium.copyWith(
-                                fontWeight: FontWeight.w600,
+                        Expanded(
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.navigation_rounded,
+                                size: 16,
+                                color: AppColors.textSecondary,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  distanceText,
+                                  style: AppTypography.bodyMedium.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        Text(
-                          'Radius: ${widget.geofenceRadiusMeters.toInt()}m',
-                          style: AppTypography.caption,
-                        ),
+                        const SizedBox(width: 8),
+                        if (site != null && radius != null)
+                          Text(
+                            'Radius: ${radius.toInt()}m',
+                            style: AppTypography.caption,
+                          ),
                       ],
                     ),
                   ],

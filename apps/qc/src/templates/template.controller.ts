@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { RequirePermission, type AuthzUser } from '@ipms/authz';
 import {
-  CreateTemplateSchema, ListTemplatesQuerySchema, SaveDraftSchema, UpdateTemplateSchema,
+  CreateTemplateSchema, ListTemplatesQuerySchema, SaveTemplateDraftSchema, UpdateTemplateSchema,
   UuidSchema, VersionNumberSchema,
 } from '@ipms/contracts';
 import { TemplateQueries } from './template.queries.js';
@@ -37,7 +37,7 @@ export class TemplateController {
 
   @Put(':id/draft') @RequirePermission('qc_template.update')
   saveDraft(@Param('id') id: string, @Body() body: unknown) {
-    return this.templates.saveDraft(UuidSchema.parse(id), SaveDraftSchema.parse(body));
+    return this.templates.saveDraft(UuidSchema.parse(id), SaveTemplateDraftSchema.parse(body));
   }
 
   @Delete(':id/draft') @RequirePermission('qc_template.update')

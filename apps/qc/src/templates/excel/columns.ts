@@ -12,6 +12,8 @@ export const COLUMNS = [
   { key: 'options', header: 'Options', width: 30 },
   { key: 'minPhotos', header: 'Min Photos', width: 12 },
   { key: 'maxPhotos', header: 'Max Photos', width: 12 },
+  { key: 'minVideos', header: 'Min Videos', width: 12 },
+  { key: 'maxVideos', header: 'Max Videos', width: 12 },
   { key: 'allowNa', header: 'Allow N/A', width: 11 },
   { key: 'required', header: 'Required', width: 11 },
   { key: 'guidance', header: 'Guidance', width: 50 },

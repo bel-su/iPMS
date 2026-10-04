@@ -4,29 +4,51 @@ import '../../../core/config/env.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/brand_mark.dart';
+import '../../auth/domain/models/auth_user.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/providers/biometric_provider.dart';
 import '../../projects/providers/project_providers.dart';
 import '../../tasks/providers/task_providers.dart';
-import '../providers/profile_providers.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   void _showLogoutDialog(BuildContext context, WidgetRef ref) {
+    final biometric = ref.read(biometricAuthStateProvider);
+    final keepsBiometric = biometric.isConfigured;
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Confirm Logout'),
-        content: const Text(
-          'Are you sure you want to log out? All active session tokens will be purged.',
+        content: Text(
+          keepsBiometric
+              ? 'You can sign back in with ${biometric.biometricLabel}. '
+                  'To sign out everywhere and turn ${biometric.biometricLabel} off on this device, '
+                  'choose "Sign out & forget device".'
+              : 'Are you sure you want to log out? Your session will be ended on all devices.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
+          if (keepsBiometric)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                // Read before signing out: this screen is gone afterwards.
+                final biometrics = ref.read(biometricAuthStateProvider.notifier);
+                ref
+                    .read(authStateProvider.notifier)
+                    .logout(purgeBiometrics: true)
+                    .then((_) => biometrics.checkBiometricStatus());
+              },
+              child: const Text(
+                'Sign out & forget device',
+                style: TextStyle(color: AppColors.statusBlockedText),
+              ),
+            ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.statusBlockedText,
@@ -42,7 +64,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  void _showAccountSettingsSheet(BuildContext context, dynamic user) {
+  void _showAccountSettingsSheet(BuildContext context, AuthUser? user) {
     showModalBottomSheet<void>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -68,7 +90,7 @@ class ProfileScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               _buildInfoRow('Full Name', user?.displayName ?? 'Field Engineer'),
               _buildInfoRow('Username', user?.username ?? 'engineer'),
-              _buildInfoRow('Assigned Role', user?.role ?? 'Field Operations'),
+              _buildInfoRow('Assigned Role', user?.roleLabel ?? 'Field Operations'),
               _buildInfoRow('User Identifier', user?.id ?? 'Local Session'),
               _buildInfoRow('Secure Enclave', 'Hardware Keystore / EncryptedPrefs'),
               const SizedBox(height: 12),
@@ -79,7 +101,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  void _showEditProfileSheet(BuildContext context, WidgetRef ref, dynamic user) {
+  void _showEditProfileSheet(BuildContext context, WidgetRef ref, AuthUser? user) {
     final nameController = TextEditingController(text: user?.displayName ?? '');
     final emailController = TextEditingController(text: user?.email ?? '');
     final codeController = TextEditingController(text: user?.employeeCode ?? '');
@@ -247,10 +269,7 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).value;
-    final prefs = ref.watch(appPreferencesProvider);
 
-    final notificationsEnabled = prefs['notifications'] ?? true;
-    final darkModeEnabled = prefs['darkMode'] ?? false;
     final biometricState = ref.watch(biometricAuthStateProvider);
 
     return Scaffold(
@@ -348,8 +367,8 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              user?.role != null
-                  ? '${user!.role} • Field Operations'
+              user?.roleLabel != null
+                  ? '${user!.roleLabel} • Field Operations'
                   : 'Field Engineer • Telecom & Civil',
               style: AppTypography.bodySmall,
             ),
@@ -450,43 +469,7 @@ class ProfileScreen extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Column(
                     children: [
-                      SwitchListTile.adaptive(
-                        secondary: const Icon(
-                          Icons.notifications_none_rounded,
-                          color: AppColors.darkSlate,
-                        ),
-                        title: Text(
-                          'Notification',
-                          style: AppTypography.titleMedium,
-                        ),
-                        value: notificationsEnabled,
-                        activeThumbColor: AppColors.darkSlate,
-                        onChanged: (val) {
-                          ref
-                              .read(appPreferencesProvider.notifier)
-                              .toggleNotification(val);
-                        },
-                      ),
-                      const Divider(height: 1, color: AppColors.subtleDivider),
-                      SwitchListTile.adaptive(
-                        secondary: const Icon(
-                          Icons.dark_mode_outlined,
-                          color: AppColors.darkSlate,
-                        ),
-                        title: Text(
-                          'Dark mode',
-                          style: AppTypography.titleMedium,
-                        ),
-                        value: darkModeEnabled,
-                        activeThumbColor: AppColors.darkSlate,
-                        onChanged: (val) {
-                          ref
-                              .read(appPreferencesProvider.notifier)
-                              .toggleDarkMode(val);
-                        },
-                      ),
                       if (biometricState.isHardwareSupported) ...[
-                        const Divider(height: 1, color: AppColors.subtleDivider),
                         SwitchListTile.adaptive(
                           secondary: Icon(
                             biometricState.biometricIcon,
@@ -506,15 +489,12 @@ class ProfileScreen extends ConsumerWidget {
                           activeThumbColor: AppColors.darkSlate,
                           onChanged: (val) async {
                             if (val) {
-                              final success = await ref
+                              final problem = await ref
                                   .read(biometricAuthStateProvider.notifier)
                                   .enrollBiometric(user?.username ?? 'engineer');
-                              if (context.mounted && !success) {
+                              if (context.mounted && problem != null && problem.isNotEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                        '${biometricState.biometricLabel} enrollment was cancelled or failed.'),
-                                  ),
+                                  SnackBar(content: Text(problem)),
                                 );
                               }
                             } else {
@@ -524,7 +504,15 @@ class ProfileScreen extends ConsumerWidget {
                             }
                           },
                         ),
-                      ],
+                      ] else
+                        ListTile(
+                          leading: const Icon(Icons.fingerprint_rounded, color: AppColors.textSecondary),
+                          title: Text('Biometric login', style: AppTypography.titleMedium),
+                          subtitle: Text(
+                            'Not available: set up Face ID or a fingerprint on this device first.',
+                            style: AppTypography.caption,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -555,7 +543,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             Center(
               child: Text(
-                'iPMS Mobile v1.0.0 • Pure Stateless Client',
+                'Axiom Mobile v1.0.0 • Pure Stateless Client',
                 style: AppTypography.caption,
               ),
             ),

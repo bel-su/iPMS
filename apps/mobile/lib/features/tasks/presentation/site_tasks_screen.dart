@@ -18,9 +18,12 @@ class SiteTasksScreen extends ConsumerWidget {
   final ProjectItem project;
   final ProjectSite site;
 
+  ({String projectId, String siteId, String siteCode}) get _siteKey =>
+      (projectId: project.id, siteId: site.id, siteCode: site.siteCode);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tasksAsync = ref.watch(siteTasksProvider(site.siteCode));
+    final tasksAsync = ref.watch(siteTasksProvider(_siteKey));
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
@@ -57,7 +60,7 @@ class SiteTasksScreen extends ConsumerWidget {
                     initialLongitude: site.longitude,
                     siteCode: site.siteCode,
                     siteName: site.name,
-                    geofenceRadiusMeters: (site.geofenceRadiusM ?? 100).toDouble(),
+                    geofenceRadiusMeters: site.geofenceRadiusM?.toDouble(),
                   ),
                 ),
               );
@@ -66,7 +69,7 @@ class SiteTasksScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20),
             tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(siteTasksProvider(site.siteCode)),
+            onPressed: () => ref.invalidate(siteTasksProvider(_siteKey)),
           ),
         ],
       ),
@@ -162,13 +165,15 @@ class SiteTasksScreen extends ConsumerWidget {
                               const Icon(Icons.explore_outlined, size: 14, color: AppColors.darkSlate),
                               const SizedBox(width: 6),
                               Text(
-                                '${site.latitude?.toStringAsFixed(4) ?? "27.7172"} N, ${site.longitude?.toStringAsFixed(4) ?? "85.3240"} E',
+                                site.latitude != null && site.longitude != null
+                                    ? '${site.latitude!.toStringAsFixed(4)}, ${site.longitude!.toStringAsFixed(4)}'
+                                    : 'Coordinates not recorded',
                                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.darkSlate),
                               ),
                             ],
                           ),
                           Text(
-                            'Geofence: ${site.geofenceRadiusM ?? 100}m',
+                            site.geofenceRadiusM != null ? 'Geofence: ${site.geofenceRadiusM}m' : 'No geofence',
                             style: AppTypography.caption,
                           ),
                         ],
@@ -254,7 +259,7 @@ class SiteTasksScreen extends ConsumerWidget {
                       TextButton.icon(
                         icon: const Icon(Icons.refresh_rounded, size: 16),
                         label: const Text('Retry'),
-                        onPressed: () => ref.invalidate(siteTasksProvider(site.siteCode)),
+                        onPressed: () => ref.invalidate(siteTasksProvider(_siteKey)),
                       ),
                     ],
                   ),

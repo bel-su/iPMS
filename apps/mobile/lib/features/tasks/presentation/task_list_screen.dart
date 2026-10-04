@@ -52,9 +52,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(assignedTasksProvider);
-          },
+          onRefresh: () => ref.refresh(assignedTasksProvider.future).then((_) {}, onError: (_) {}),
           child: CustomScrollView(
             slivers: [
               // Top Header (User Avatar, Greeting, Live Connection Status)
@@ -88,7 +86,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              user?.role != null ? '${user!.role} • Field Ops' : 'Field Operations',
+                              user?.roleLabel != null ? '${user!.roleLabel} • Field Ops' : 'Field Operations',
                               style: AppTypography.caption,
                             ),
                           ],
@@ -271,7 +269,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                     child: CircularProgressIndicator(),
                   ),
                 ),
-                error: (_, _) => SliverFillRemaining(
+                error: (error, _) => SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
                     child: Column(
@@ -280,6 +278,15 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                         const Icon(Icons.cloud_off_outlined, size: 40, color: AppColors.textSecondary),
                         const SizedBox(height: 12),
                         Text('Unable to load tasks', style: AppTypography.titleMedium),
+                        const SizedBox(height: 4),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 32),
+                          child: Text(
+                            error.toString(),
+                            style: AppTypography.bodySmall,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         TextButton.icon(
                           icon: const Icon(Icons.refresh_rounded, size: 16),

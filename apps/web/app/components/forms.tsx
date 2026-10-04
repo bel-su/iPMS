@@ -1,5 +1,6 @@
 'use client';
-import { useActionState, useState } from 'react';
+import { useState } from 'react';
+import { useActionStateWithToast } from './toast';
 import { useFormStatus } from 'react-dom';
 import { EMPTY, type FormState } from '../lib/form-state';
 
@@ -61,15 +62,17 @@ export function FormError({ state }: { state: FormState }) {
  * fine, and it keeps this component ignorant of what it is deleting.
  */
 export function RowAction({
-  action, hidden, label, confirm, className = 'danger-button',
+  action, hidden, label, confirm, success = 'Done', className = 'danger-button',
 }: {
   action: (state: FormState, form: FormData) => Promise<FormState>;
   hidden: Record<string, string>;
   label: string;
   confirm?: string;
+  /** Said in a toast once the action succeeds, e.g. "Site deleted". */
+  success?: string;
   className?: string;
 }) {
-  const [state, formAction] = useActionState(action, EMPTY);
+  const [state, formAction] = useActionStateWithToast(action, EMPTY, success);
   return (
     <form action={formAction} onSubmit={(event) => { if (confirm && !window.confirm(confirm)) event.preventDefault(); }}>
       {Object.entries(hidden).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}

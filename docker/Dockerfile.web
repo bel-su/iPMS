@@ -3,8 +3,16 @@ RUN npm install -g pnpm@10.15.0
 WORKDIR /app
 
 FROM base AS build
+# Same build-only network settings and shared pnpm store cache as
+# Dockerfile.service.
+ENV NODE_OPTIONS=--dns-result-order=ipv4first \
+    npm_config_store_dir=/pnpm-store \
+    npm_config_fetch_retries=6 \
+    npm_config_fetch_retry_mintimeout=20000 \
+    npm_config_network_concurrency=8
 COPY . .
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store,sharing=locked \
+    pnpm install --frozen-lockfile
 RUN pnpm -r --filter "./libs/*" build
 RUN pnpm --filter web build
 
@@ -17,6 +25,8 @@ RUN groupadd -r ipms && useradd -r -g ipms ipms
 
 COPY --from=build --chown=ipms:ipms /app/apps/web/.next/standalone ./
 COPY --from=build --chown=ipms:ipms /app/apps/web/.next/static ./apps/web/.next/static
+# Standalone output leaves `public/` behind: the brand logos and icons live there.
+COPY --from=build --chown=ipms:ipms /app/apps/web/public ./apps/web/public
 
 USER ipms
 EXPOSE 3100

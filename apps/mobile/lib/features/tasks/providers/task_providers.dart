@@ -1,11 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../projects/providers/project_providers.dart';
 import '../data/task_repository.dart';
+import '../domain/models/checklist_item.dart';
 import '../domain/models/task_item.dart';
 
 final taskRepositoryProvider = Provider<TaskRepository>((ref) {
-  final apiClient = ref.watch(apiClientProvider);
-  return TaskRepository(apiClient: apiClient);
+  ref.watch(sessionOwnerProvider);
+  return TaskRepository(
+    apiClient: ref.watch(apiClientProvider),
+    projectRepository: ref.watch(projectRepositoryProvider),
+    tokenStorage: ref.watch(tokenStorageProvider),
+  );
 });
 
 class SelectedStatusFilterNotifier extends Notifier<String> {
@@ -46,10 +52,20 @@ final taskDetailProvider =
   return repository.getTaskById(taskId);
 });
 
-final siteTasksProvider =
-    FutureProvider.family<List<TaskItem>, String>((ref, siteCode) async {
+/// Every work order on one site that the caller can see, not only their own.
+final siteTasksProvider = FutureProvider.family<List<TaskItem>,
+    ({String projectId, String siteId, String siteCode})>((ref, site) async {
   final repository = ref.watch(taskRepositoryProvider);
-  return repository.getAssignedTasks(siteCode: siteCode);
+  return repository.getAssignedTasks(
+    projectId: site.projectId,
+    siteId: site.siteId,
+    siteCode: site.siteCode,
+    assignedToMe: false,
+  );
 });
 
-
+final taskChecklistProvider =
+    FutureProvider.family<TaskChecklist, String>((ref, taskId) async {
+  final repository = ref.watch(taskRepositoryProvider);
+  return repository.getChecklist(taskId);
+});

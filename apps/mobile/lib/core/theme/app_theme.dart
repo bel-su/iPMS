@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
-/// Central theme provider for the iPMS mobile application.
+/// Central theme provider for the Axiom mobile application.
 class AppTheme {
   AppTheme._();
 

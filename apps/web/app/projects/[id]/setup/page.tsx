@@ -37,6 +37,7 @@ export default async function ProjectSetupPage({ params }: { params: Promise<{ i
                             action={deleteTaskTypeAction}
                             hidden={{ projectId: data.id, taskTypeId: taskType.id }}
                             label="Delete"
+                            success="Task type deleted"
                             confirm={`Delete task type ${taskType.code}?`}
                           />
                         : null}
@@ -68,6 +69,7 @@ export default async function ProjectSetupPage({ params }: { params: Promise<{ i
                             action={deleteMilestoneAction}
                             hidden={{ projectId: data.id, milestoneId: milestone.id }}
                             label="Delete"
+                            success="Milestone deleted"
                             confirm={`Delete milestone ${milestone.code}?`}
                           />
                         : null}

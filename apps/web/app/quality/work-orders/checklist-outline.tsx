@@ -1,5 +1,5 @@
 import type { ChecklistSection } from '../../lib/qc-api';
-import { RESPONSE_TYPE_LABELS, photoLabel } from '../templates/labels';
+import { RESPONSE_TYPE_LABELS, photoLabel, videoLabel } from '../templates/labels';
 
 /**
  * The shape of a checklist at a glance: how big it is, what is critical, what
@@ -11,7 +11,7 @@ import { RESPONSE_TYPE_LABELS, photoLabel } from '../templates/labels';
 export function ChecklistOutline({ sections }: { sections: ChecklistSection[] }) {
   const items = sections.flatMap((section) => section.items);
   const critical = items.filter((item) => item.severity === 'CRITICAL').length;
-  const photos = items.filter((item) => item.minPhotos > 0).length;
+  const photos = items.filter((item) => item.minPhotos > 0 || item.minVideos > 0).length;
   if (sections.length === 0) return <p className="subtle">This checklist has no sections.</p>;
   return (
     <div className="outline">
@@ -19,7 +19,7 @@ export function ChecklistOutline({ sections }: { sections: ChecklistSection[] })
         <div><dt>Sections</dt><dd>{sections.length}</dd></div>
         <div><dt>Items</dt><dd>{items.length}</dd></div>
         <div><dt>Critical</dt><dd className={critical ? 'red' : undefined}>{critical}</dd></div>
-        <div><dt>Photo proof</dt><dd>{photos}</dd></div>
+        <div><dt>Photo/video proof</dt><dd>{photos}</dd></div>
       </dl>
       <ol className="outline-sections">
         {sections.map((section) => {
@@ -35,6 +35,7 @@ export function ChecklistOutline({ sections }: { sections: ChecklistSection[] })
                 <ul className="outline-items">
                   {section.items.map((item) => {
                     const photo = photoLabel(item.minPhotos, item.maxPhotos);
+                    const video = videoLabel(item.minVideos, item.maxVideos);
                     return (
                       <li key={item.id} className={item.severity === 'CRITICAL' ? 'critical' : undefined}>
                         <span className="outline-num">{item.number}</span>
@@ -44,6 +45,7 @@ export function ChecklistOutline({ sections }: { sections: ChecklistSection[] })
                             {item.severity === 'CRITICAL' ? <i className="tag red">Critical</i> : null}
                             {item.responseType !== 'RESULT_ONLY' ? <i className="tag">{RESPONSE_TYPE_LABELS[item.responseType]}</i> : null}
                             {photo ? <i className="tag">{photo}</i> : null}
+                            {video ? <i className="tag">{video}</i> : null}
                             {item.allowsNa ? <i className="tag">N/A allowed</i> : null}
                             {item.isRequired ? null : <i className="tag">Optional</i>}
                           </span>

@@ -41,6 +41,7 @@ export default async function ProjectSitesPage({ params }: { params: Promise<{ i
                             action={deleteSiteAction}
                             hidden={{ projectId: data.id, siteId: site.id }}
                             label="Delete"
+                            success="Site deleted"
                             confirm={`Delete site ${site.siteCode}? This cannot be undone.`}
                           />
                         : null}

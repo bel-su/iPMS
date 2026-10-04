@@ -3,13 +3,33 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 // the `output` comment in prisma/schema.prisma.
 import type { PrismaClient } from '@prisma-clients/iam';
 import { uuidv7, type CreateOverrideDto } from '@ipms/contracts';
+import { mayManage, type AuthzUser } from '@ipms/authz';
 import { buildOutboxRecord, type JsonObject } from '@ipms/persistence';
 import { SUBJECTS } from '@ipms/events';
 import { getCorrelationId } from '@ipms/observability';
 import type { TokenVersionStore } from '../auth/auth.service.js';
 import type { TokenService } from '../auth/token.service.js';
 
+/** Project access for these roles lapses after a year and is renewed on request. */
+const EXPIRING_ROLES: readonly string[] = ['FIELD_ENGINEER'];
+
+/** Recorded as the actor when the expiry sweep, not a person, removes access. */
+export const SYSTEM_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
+
+const DAY_MS = 86_400_000;
+
+export function oneYearFrom(from: Date): Date {
+  const next = new Date(from);
+  next.setUTCFullYear(next.getUTCFullYear() + 1);
+  return next;
+}
+
+const isLiveGrant = (expiresAt: Date | null | undefined, now: Date): boolean => !expiresAt || expiresAt > now;
+
 type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
+
+/** The parts of the caller a project or site grant is judged on. */
+export type ScopeActor = Pick<AuthzUser, 'id' | 'roles' | 'permissions'>;
 
 export interface OverrideView {
   id: string;
@@ -75,57 +95,191 @@ export class ScopesService {
     await this.versions.publish(userId, updated.tokenVersion, this.tokens.refreshTtlSeconds);
   }
 
-  async grantProject(userId: string, projectId: string, actorId: string): Promise<void> {
+  /**
+   * The object gate for project and site access, which `scope.grant` alone
+   * cannot express. Project managers hold the verb so they can staff their own
+   * projects; without this, it would let them staff *any* project — including
+   * one they cannot see — and edit an administrator's access.
+   *
+   * Two rules. The target must be someone the actor could manage at all (the
+   * same `mayManage` table the users screen enforces). And the actor must reach
+   * the project themselves, through global or project scope held in iam's own
+   * tables — the source of truth, not a replicated copy. An actor trusted with
+   * `scope.grant_global` skips the reach check: they may hand out every project
+   * already, one at a time or all at once.
+   *
+   * Throws `NotFoundException` for an unknown target, as the grants always did.
+   */
+  private async assertMayScope(tx: Tx, actor: ScopeActor, userId: string, projectId: string): Promise<string[]> {
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { id: true, roles: { select: { role: { select: { code: true } } } } },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    const targetRoles = [...new Set(user.roles.map((r) => r.role.code))];
+    if (!mayManage(actor.roles, targetRoles)) {
+      throw new ForbiddenException('You may not manage this user');
+    }
+    if (actor.permissions.includes('scope.grant_global')) return targetRoles;
+
+    const [global, project] = await Promise.all([
+      tx.userGlobalScope.findUnique({ where: { userId: actor.id } }),
+      tx.userProjectScope.findUnique({ where: { userId_projectId: { userId: actor.id, projectId } } }),
+    ]);
+    if (!global && !(project && isLiveGrant(project.expiresAt, new Date()))) {
+      throw new ForbiddenException('You can only grant access to projects you have access to');
+    }
+    return targetRoles;
+  }
+
+  async grantProject(userId: string, projectId: string, actor: ScopeActor): Promise<void> {
+    const actorId = actor.id;
     await this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user) throw new NotFoundException('User not found');
+      const targetRoles = await this.assertMayScope(tx, actor, userId, projectId);
+      const now = new Date();
+      const expiresAt = targetRoles.some((code) => EXPIRING_ROLES.includes(code)) ? oneYearFrom(now) : null;
 
       const existing = await tx.userProjectScope.findUnique({ where: { userId_projectId: { userId, projectId } } });
-      if (existing) return;   // idempotent: no duplicate row, no duplicate event
-
-      await tx.userProjectScope.create({ data: { id: uuidv7(), userId, projectId, createdBy: actorId } });
-      await this.emit(tx, SUBJECTS.IAM_SCOPE_GRANTED, { userId, level: 'PROJECT', projectId, siteId: null }, actorId);
-      await this.audit(tx, actorId, 'scope.project_granted', 'User', userId, {}, { projectId });
-    });
-  }
-
-  async revokeProject(userId: string, projectId: string, actorId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const { count } = await tx.userProjectScope.deleteMany({ where: { userId, projectId } });
-      if (count === 0) return;
-
-      // Sites under a revoked project must go too, or the user keeps orphaned site access.
-      // Read them before deleting: after the delete there is nothing left to name.
-      const cascaded = await tx.userSiteScope.findMany({ where: { userId, projectId } });
-      await tx.userSiteScope.deleteMany({ where: { userId, projectId } });
-
-      await this.emit(tx, SUBJECTS.IAM_SCOPE_REVOKED, { userId, level: 'PROJECT', projectId, siteId: null }, actorId);
-
-      /**
-       * One SITE-level event per cascaded row, rather than a list of site ids
-       * inside the PROJECT payload. Consumers cache scope keyed by site and
-       * already handle `{level: 'SITE', siteId}` from `revokeSite`, so this
-       * needs no new payload shape and no consumer change — whereas an id array
-       * would only be honoured by a consumer that had been taught to look for
-       * it, and a consumer that had not would keep the orphaned sites. Duplicate
-       * delivery is harmless: every consumer deduplicates on `eventId`.
-       */
-      for (const site of cascaded) {
-        await this.emit(
-          tx, SUBJECTS.IAM_SCOPE_REVOKED,
-          { userId, level: 'SITE', projectId: site.projectId, siteId: site.siteId },
-          actorId,
-        );
+      if (existing) {
+        // A lapsed grant the sweep has not reached yet: granting again is a renewal.
+        if (existing.expiresAt && existing.expiresAt <= now && expiresAt) {
+          await tx.userProjectScope.update({ where: { id: existing.id }, data: { expiresAt, warnedStage: 0 } });
+          await this.audit(tx, actorId, 'scope.project_renewed', 'User', userId, {}, { projectId, expiresAt: expiresAt.toISOString() });
+        }
+        return;   // idempotent: no duplicate row, no duplicate event
       }
 
-      await this.audit(tx, actorId, 'scope.project_revoked', 'User', userId, { projectId }, {});
+      await tx.userProjectScope.create({ data: { id: uuidv7(), userId, projectId, createdBy: actorId, expiresAt } });
+      await this.emit(tx, SUBJECTS.IAM_SCOPE_GRANTED, { userId, level: 'PROJECT', projectId, siteId: null }, actorId);
+      await this.audit(tx, actorId, 'scope.project_granted', 'User', userId, {}, {
+        projectId, expiresAt: expiresAt?.toISOString() ?? null,
+      });
     });
   }
 
-  async grantSite(userId: string, siteId: string, projectId: string, actorId: string): Promise<void> {
+  /**
+   * Another year from today, for a grant that expires. Same object gate as the
+   * grant itself. A grant that does not expire has nothing to renew, and one
+   * the sweep has already removed has to be granted again: that is a
+   * `BadRequestException`, not a quiet no-op, so a stale Renew button says so.
+   */
+  async renewProject(userId: string, projectId: string, actor: ScopeActor): Promise<{ expiresAt: string }> {
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertMayScope(tx, actor, userId, projectId);
+      const existing = await tx.userProjectScope.findUnique({ where: { userId_projectId: { userId, projectId } } });
+      if (!existing) throw new BadRequestException('This user no longer has access to the project; grant it again');
+      if (!existing.expiresAt) throw new BadRequestException('This access does not expire');
+
+      const expiresAt = oneYearFrom(new Date());
+      await tx.userProjectScope.update({ where: { id: existing.id }, data: { expiresAt, warnedStage: 0 } });
+      await this.audit(tx, actor.id, 'scope.project_renewed', 'User', userId,
+        { projectId, expiresAt: existing.expiresAt.toISOString() }, { projectId, expiresAt: expiresAt.toISOString() });
+      return { expiresAt: expiresAt.toISOString() };
+    });
+  }
+
+  async revokeProject(userId: string, projectId: string, actor: ScopeActor): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user) throw new NotFoundException('User not found');
+      await this.assertMayScope(tx, actor, userId, projectId);
+      await this.removeProject(tx, userId, projectId, actor.id, 'scope.project_revoked');
+    });
+  }
+
+  /**
+   * Removes every project grant whose year has run out, through the same path a
+   * manual revoke takes, so replicas drop the access by the events they already
+   * understand. One transaction per grant: a failure on one must not hold back
+   * the rest. Returns how many were removed.
+   */
+  async expireDue(now: Date = new Date()): Promise<number> {
+    const due = await this.prisma.userProjectScope.findMany({
+      where: { expiresAt: { lte: now } }, select: { userId: true, projectId: true },
+    });
+    let removed = 0;
+    for (const { userId, projectId } of due) {
+      await this.prisma.$transaction(async (tx) => {
+        if (await this.removeProject(tx, userId, projectId, SYSTEM_ACTOR_ID, 'scope.project_expired')) removed += 1;
+      });
+    }
+    return removed;
+  }
+
+  /**
+   * Warns ahead of a lapse: once at 30 days and again at 7. Grants entering a
+   * stage are grouped by user, so someone with three projects ending the same
+   * week gets one notice. `managersOf` names who may renew a project; the
+   * engineer is told too, by `notification`, which gets the user id in the event.
+   * Returns how many events were raised.
+   */
+  async warnExpiring(managersOf: (projectId: string) => Promise<string[]>, now: Date = new Date()): Promise<number> {
+    const horizon = new Date(now.getTime() + 30 * DAY_MS);
+    const rows = await this.prisma.userProjectScope.findMany({
+      where: { expiresAt: { gt: now, lte: horizon }, warnedStage: { lt: 2 } },
+      select: { id: true, userId: true, projectId: true, expiresAt: true, warnedStage: true },
+    });
+    const byUser = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const stage = row.expiresAt!.getTime() - now.getTime() <= 7 * DAY_MS ? 2 : 1;
+      if (row.warnedStage >= stage) continue;
+      byUser.set(row.userId, [...(byUser.get(row.userId) ?? []), { ...row, warnedStage: stage }]);
+    }
+
+    let raised = 0;
+    for (const [userId, grants] of byUser) {
+      const managers = new Set<string>();
+      for (const grant of grants) for (const id of await managersOf(grant.projectId)) managers.add(id);
+      managers.delete(userId);
+      await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({ where: { id: userId }, select: { fullName: true, isActive: true } });
+        if (!user?.isActive) return;
+        const soonest = Math.min(...grants.map((g) => g.expiresAt!.getTime()));
+        await this.emit(tx, SUBJECTS.IAM_SCOPE_EXPIRING, {
+          userId, userName: user.fullName, daysLeft: Math.max(0, Math.ceil((soonest - now.getTime()) / DAY_MS)),
+          grants: grants.map((g) => ({ projectId: g.projectId, expiresAt: g.expiresAt!.toISOString() })),
+          managerIds: [...managers],
+        }, SYSTEM_ACTOR_ID);
+        for (const grant of grants) await tx.userProjectScope.update({ where: { id: grant.id }, data: { warnedStage: grant.warnedStage } });
+        raised += 1;
+      });
+    }
+    return raised;
+  }
+
+  private async removeProject(tx: Tx, userId: string, projectId: string, actorId: string, action: string): Promise<boolean> {
+    const { count } = await tx.userProjectScope.deleteMany({ where: { userId, projectId } });
+    if (count === 0) return false;
+    // Sites under a revoked project must go too, or the user keeps orphaned site access.
+    // Read them before deleting: after the delete there is nothing left to name.
+    const cascaded = await tx.userSiteScope.findMany({ where: { userId, projectId } });
+    await tx.userSiteScope.deleteMany({ where: { userId, projectId } });
+
+    await this.emit(tx, SUBJECTS.IAM_SCOPE_REVOKED, { userId, level: 'PROJECT', projectId, siteId: null }, actorId);
+
+    /**
+     * One SITE-level event per cascaded row, rather than a list of site ids
+     * inside the PROJECT payload. Consumers cache scope keyed by site and
+     * already handle `{level: 'SITE', siteId}` from `revokeSite`, so this
+     * needs no new payload shape and no consumer change — whereas an id array
+     * would only be honoured by a consumer that had been taught to look for
+     * it, and a consumer that had not would keep the orphaned sites. Duplicate
+     * delivery is harmless: every consumer deduplicates on `eventId`.
+     */
+    for (const site of cascaded) {
+      await this.emit(
+        tx, SUBJECTS.IAM_SCOPE_REVOKED,
+        { userId, level: 'SITE', projectId: site.projectId, siteId: site.siteId },
+        actorId,
+      );
+    }
+
+    await this.audit(tx, actorId, action, 'User', userId, { projectId }, {});
+    return true;
+  }
+
+  async grantSite(userId: string, siteId: string, projectId: string, actor: ScopeActor): Promise<void> {
+    const actorId = actor.id;
+    await this.prisma.$transaction(async (tx) => {
+      await this.assertMayScope(tx, actor, userId, projectId);
 
       /**
        * `projectId` arrives in the request body and was previously trusted. A
@@ -157,13 +311,16 @@ export class ScopesService {
     });
   }
 
-  async revokeSite(userId: string, siteId: string, actorId: string): Promise<void> {
+  async revokeSite(userId: string, siteId: string, actor: ScopeActor): Promise<void> {
+    const actorId = actor.id;
     await this.prisma.$transaction(async (tx) => {
       // Read first: the payload needs the row's `projectId`, which is
       // non-nullable on the row and was previously hardcoded to `null` — leaving
-      // consumers unable to tell which project's site had gone.
+      // consumers unable to tell which project's site had gone. The object gate
+      // needs it too, to know which project the actor must reach.
       const existing = await tx.userSiteScope.findUnique({ where: { userId_siteId: { userId, siteId } } });
       if (!existing) return;
+      await this.assertMayScope(tx, actor, userId, existing.projectId);
 
       await tx.userSiteScope.delete({ where: { id: existing.id } });
       await this.emit(
@@ -265,19 +422,28 @@ export class ScopesService {
   }
 
   /** Project and site scope only — see `listOverridesForUser` for the rest. */
-  async listForUser(userId: string): Promise<{ global: boolean; projectIds: string[]; siteIds: string[] }> {
+  async listForUser(userId: string): Promise<{
+    global: boolean; projectIds: string[]; siteIds: string[];
+    /** The same projects with when each lapses; `expiresAt` is null for access that does not. */
+    projects: Array<{ projectId: string; expiresAt: string | null }>;
+  }> {
     const [globalScope, projects, sites] = await Promise.all([
       this.prisma.userGlobalScope.findUnique({ where: { userId } }),
       this.prisma.userProjectScope.findMany({ where: { userId } }),
       this.prisma.userSiteScope.findMany({ where: { userId } }),
     ]);
+    const now = new Date();
+    // A grant past its date is gone as far as anyone reading is concerned, even
+    // in the hour before the sweep deletes the row.
+    const live = projects.filter((p) => isLiveGrant(p.expiresAt, now));
     return {
       // Reported alongside the lists rather than inferred from them being
       // empty. Empty lists mean "granted nothing", which is the opposite of
       // global reach, and conflating the two is how a scope screen ends up
       // telling an operator the reverse of the truth.
       global: globalScope !== null,
-      projectIds: projects.map((p) => p.projectId),
+      projectIds: live.map((p) => p.projectId),
+      projects: live.map((p) => ({ projectId: p.projectId, expiresAt: p.expiresAt?.toISOString() ?? null })),
       siteIds: sites.map((s) => s.siteId),
     };
   }

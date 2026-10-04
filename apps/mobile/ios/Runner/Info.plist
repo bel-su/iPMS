@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>iPMS Field</string>
+	<string>Axiom Field</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -67,10 +67,17 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>iPMS uses the camera to capture photo evidence for your field tasks.</string>
+	<string>Axiom uses the camera to capture photo evidence for your field tasks.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>iPMS uses your location to show nearby sites and to stamp GPS coordinates on task evidence photos.</string>
+	<string>Axiom uses your location to show nearby sites and to stamp GPS coordinates on task evidence photos.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Axiom connects to your organisation's Axiom server, which may be on your local network.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Authenticate with Face ID or fingerprint to quickly and securely access your iPMS field tasks.</string>
+	<string>Authenticate with Face ID or fingerprint to quickly and securely access your Axiom field tasks.</string>
 </dict>
 </plist>

@@ -7,6 +7,7 @@ import 'auth_interceptor.dart';
 class ApiClient {
   ApiClient({
     required TokenStorage tokenStorage,
+    void Function()? onSessionExpired,
     Dio? dio,
   }) : dio = dio ??
             Dio(
@@ -21,7 +22,14 @@ class ApiClient {
               ),
             ) {
     this.dio.interceptors.add(
-          AuthInterceptor(tokenStorage: tokenStorage),
+          AuthInterceptor(
+            tokenStorage: tokenStorage,
+            onSessionExpired: onSessionExpired,
+            // Same server and transport, without this interceptor, so a
+            // refresh or retry cannot recurse into another refresh.
+            refreshDio: Dio(this.dio.options.copyWith())
+              ..httpClientAdapter = this.dio.httpClientAdapter,
+          ),
         );
   }
 

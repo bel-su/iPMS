@@ -16,6 +16,9 @@ class BiometricEnrollmentSheet extends ConsumerStatefulWidget {
     return showModalBottomSheet<bool>(
       context: context,
       isDismissible: true,
+      // Sized to its content, scrolling on short screens instead of
+      // overflowing the default half-height sheet.
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -39,40 +42,40 @@ class _BiometricEnrollmentSheetState
       _error = null;
     });
 
-    final success = await ref
+    // Looked up before the sheet closes: its context is gone afterwards.
+    final messenger = ScaffoldMessenger.of(context);
+    final problem = await ref
         .read(biometricAuthStateProvider.notifier)
         .enrollBiometric(widget.username);
     final label = ref.read(biometricAuthStateProvider).biometricLabel;
 
-    if (mounted) {
-      if (success) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF1B5E20),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '$label login enabled for this device.',
-                    style: const TextStyle(fontSize: 12, color: Colors.white),
-                  ),
+    if (!mounted) return;
+    if (problem == null) {
+      Navigator.pop(context, true);
+      messenger.showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF1B5E20),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '$label login enabled for this device.',
+                  style: const TextStyle(fontSize: 12, color: Colors.white),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        );
-      } else {
-        setState(() {
-          _isProcessing = false;
-          _error = 'Biometric scan was cancelled or not recognized. Try again.';
-        });
-      }
+        ),
+      );
+    } else {
+      setState(() {
+        _isProcessing = false;
+        _error = problem.isEmpty ? null : problem;
+      });
     }
   }
 
@@ -82,7 +85,7 @@ class _BiometricEnrollmentSheetState
     final label = biometricState.biometricLabel;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,

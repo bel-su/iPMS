@@ -1,4 +1,4 @@
-/// Model representing a project in the iPMS system.
+/// Model representing a project in the Axiom system.
 class ProjectItem {
   const ProjectItem({
     required this.id,
@@ -7,7 +7,7 @@ class ProjectItem {
     this.clientName,
     this.phase,
     required this.status,
-    this.defaultGeofenceRadiusM = 500,
+    this.defaultGeofenceRadiusM,
     this.startDate,
     this.targetDate,
     this.siteCount = 0,
@@ -21,7 +21,8 @@ class ProjectItem {
   final String? clientName;
   final String? phase;
   final String status;
-  final int defaultGeofenceRadiusM;
+  /// Null when the project runs no geofence check by default.
+  final int? defaultGeofenceRadiusM;
   final DateTime? startDate;
   final DateTime? targetDate;
   final int siteCount;
@@ -69,14 +70,26 @@ class ProjectItem {
       clientName: json['clientName'] as String?,
       phase: json['phase'] as String?,
       status: json['status'] as String? ?? 'ACTIVE',
-      defaultGeofenceRadiusM: (json['defaultGeofenceRadiusM'] as num?)?.toInt() ?? 500,
+      defaultGeofenceRadiusM: (json['defaultGeofenceRadiusM'] as num?)?.toInt(),
       startDate: json['startDate'] != null ? DateTime.tryParse(json['startDate'].toString()) : null,
       targetDate: json['targetDate'] != null ? DateTime.tryParse(json['targetDate'].toString()) : null,
       siteCount: (count?['sites'] as num?)?.toInt() ?? rawSites.length,
       taskCount: (count?['tasks'] as num?)?.toInt() ?? 0,
-      sites: rawSites.map((s) => ProjectSite.fromJson(s as Map<String, dynamic>)).toList(),
+      sites: rawSites
+          .map((s) => ProjectSite.fromJson(
+                s as Map<String, dynamic>,
+                defaultGeofenceRadiusM: (json['defaultGeofenceRadiusM'] as num?)?.toInt(),
+              ))
+          .toList(),
     );
   }
+}
+
+/// Coordinates are Postgres decimals, which the API serialises as strings.
+double? _toDouble(dynamic value) {
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value.toString());
 }
 
 /// Site belonging to a project.
@@ -103,14 +116,24 @@ class ProjectSite {
   final String? city;
   final String status;
 
-  factory ProjectSite.fromJson(Map<String, dynamic> json) {
+  /// The radius the site is checked against, resolved the way the server does:
+  /// OFF means no check (null), CUSTOM its own radius, and INHERIT the
+  /// project's [defaultGeofenceRadiusM].
+  factory ProjectSite.fromJson(Map<String, dynamic> json, {int? defaultGeofenceRadiusM}) {
+    final own = (json['geofenceRadiusM'] as num?)?.toInt();
+    final radius = switch (json['geofenceMode'] as String?) {
+      'OFF' => null,
+      'CUSTOM' => own,
+      'INHERIT' => defaultGeofenceRadiusM,
+      _ => own ?? defaultGeofenceRadiusM,
+    };
     return ProjectSite(
       id: json['id'] as String? ?? '',
       siteCode: json['siteCode'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
-      longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
-      geofenceRadiusM: (json['geofenceRadiusM'] as num?)?.toInt(),
+      latitude: _toDouble(json['latitude']),
+      longitude: _toDouble(json['longitude']),
+      geofenceRadiusM: radius,
       address: json['address'] as String?,
       city: json['city'] as String?,
       status: json['status'] as String? ?? 'ACTIVE',

@@ -28,7 +28,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ message: 'Invalid email or password.' }, { status: 401 });
   }
   if (result.state === 'unavailable') {
-    return NextResponse.json({ message: 'The iPMS API is not available. Try again in a moment.' }, { status: 503 });
+    return NextResponse.json({ message: 'The Axiom API is not available. Try again in a moment.' }, { status: 503 });
   }
 
   // The token this login returns carries no roles and no permissions when a

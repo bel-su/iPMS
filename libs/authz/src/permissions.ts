@@ -55,11 +55,15 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
 
   // Tasks
   def('task', 'view', 'View tasks'),
+  // Without it, task.view reaches only the work assigned to the caller, and
+  // never cancelled work: a field engineer's queue is their own. Anyone who
+  // dispatches or cancels work has to see all of it, hence the dependencies.
+  def('task', 'view_all', 'View every task in scope, not only those assigned to you', ['task.view']),
   def('task', 'create', 'Create tasks', ['task.view']),
   def('task', 'update', 'Update tasks', ['task.view']),
-  def('task', 'assign', 'Assign tasks to engineers', ['task.view', 'task.update']),
+  def('task', 'assign', 'Assign tasks to engineers', ['task.view', 'task.view_all', 'task.update']),
   def('task', 'generate', 'Bulk-generate tasks for a milestone scope', ['task.view', 'task.create']),
-  def('task', 'cancel', 'Cancel a task', ['task.view', 'task.update']),
+  def('task', 'cancel', 'Cancel a task', ['task.view', 'task.view_all', 'task.update']),
   def('task', 'delete', 'Delete a task', ['task.view', 'task.update']),
 
   // Quality control
@@ -82,7 +86,9 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   def('audit', 'view', 'View the audit ledger'),
   def('audit', 'verify', 'Verify audit chain integrity', ['audit.view']),
 
-  // DEFERRED — no `notification.*` or `docs.*` permissions (spec 2026-09-20 §6.4).
+  // notification needs no permissions: its routes are authenticated and own-data-only, enforced
+  // by the recipientId filter (spec 2026-10-02 §4.3). Only `docs.*` remains deferred
+  // (DEFERRED — no `docs.*` permissions, spec 2026-09-20 §6.4).
   //
   // `media` needs none added: `qc_evidence.upload` and `qc_evidence.export`
   // above are already its permissions.

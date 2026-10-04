@@ -42,7 +42,7 @@ export type TemplateDetail = ChecklistTemplate & { versions: VersionSummary[] };
 export interface ChecklistItem {
   id: string; sectionId: string; number: string; requirementText: string;
   severity: Severity; responseType: ResponseType; selectOptions: string[];
-  minPhotos: number; maxPhotos: number; allowsNa: boolean; isRequired: boolean;
+  minPhotos: number; maxPhotos: number; minVideos: number; maxVideos: number; allowsNa: boolean; isRequired: boolean;
   guidanceText: string | null; order: number;
 }
 
@@ -59,7 +59,7 @@ export type Verdict = 'PASS' | 'FAIL' | 'NA';
 export type ReviewResult = 'PENDING' | 'APPROVED' | 'REJECTED' | 'NA';
 export type SubmissionStatus = 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED_REWORK';
 
-export interface ItemPhoto { id: string; itemResponseId: string; mediaId: string; sequence: number }
+export interface ItemMedia { id: string; itemResponseId: string; mediaId: string; kind: 'PHOTO' | 'VIDEO'; sequence: number }
 
 export interface ItemResponse {
   id: string; submissionId: string; itemId: string;
@@ -87,7 +87,7 @@ export interface Submission {
 }
 
 export type SubmissionDetail = Submission & {
-  responses: (ItemResponse & { item: ChecklistItem; photos: ItemPhoto[] })[];
+  responses: (ItemResponse & { item: ChecklistItem; media: ItemMedia[] })[];
   decisions: ReviewDecision[];
   template: ChecklistTemplate;
 };

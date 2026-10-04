@@ -1,12 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
-import { createLogger } from '@ipms/observability';
+import { GlobalExceptionFilter, createLogger } from '@ipms/observability';
 import { AppModule } from './app.module.js';
 
 const log = createLogger('notification');
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { bufferLogs: true });
+  // The platform error envelope. Without it a zod failure on a bad query is a 500.
+  app.useGlobalFilters(new GlobalExceptionFilter('notification'));
   app.enableShutdownHooks();
 
   /**

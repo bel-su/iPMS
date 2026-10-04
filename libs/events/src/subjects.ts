@@ -1,6 +1,7 @@
 export const SUBJECTS = {
   IAM_SCOPE_GRANTED: 'iam.scope.granted',
   IAM_SCOPE_REVOKED: 'iam.scope.revoked',
+  IAM_SCOPE_EXPIRING: 'iam.scope.expiring',
   IAM_ROLE_ASSIGNED: 'iam.role.assigned',
   IAM_ROLE_REMOVED: 'iam.role.removed',
   IAM_USER_DEACTIVATED: 'iam.user.deactivated',
@@ -8,6 +9,7 @@ export const SUBJECTS = {
   AUDIT_EVENT: 'audit.event.recorded',
   QC_SUBMISSION_SUBMITTED: 'qc.submission.submitted',
   QC_SUBMISSION_REVIEWED: 'qc.submission.reviewed',
+  QC_WORK_ORDER_CANCELLED: 'qc.work_order.cancelled',
 } as const;
 
 export type Subject = (typeof SUBJECTS)[keyof typeof SUBJECTS];
@@ -36,7 +38,7 @@ export const STREAMS: Record<'IAM' | 'AUDIT' | 'QC', StreamDefinition> = {
      */
     durableConsumers: [
       'project-scope-granted', 'project-scope-revoked', 'project-scope-deactivated',
-      'qc-scope-cache',
+      'notification-scope-expiring',
     ],
   },
   AUDIT: {
@@ -50,9 +52,13 @@ export const STREAMS: Record<'IAM' | 'AUDIT' | 'QC', StreamDefinition> = {
     name: 'QC',
     subjects: ['qc.>'],
     maxAgeMs: 7 * 24 * 60 * 60 * 1000,
-    // Facts about submissions, for whoever needs them next (notifications).
-    // Nobody consumes them yet: qc moves its own work orders in the same
-    // transaction, so project no longer needs to hear of them.
-    durableConsumers: [],
+    // media hears of cancelled work orders so it can release their unsubmitted
+    // evidence; notification has one durable per submission subject (a durable
+    // carries a single filter_subject, see the note on IAM above).
+    durableConsumers: [
+      'media-work-order-cancelled',
+      'notification-submission-submitted',
+      'notification-submission-reviewed',
+    ],
   },
 };

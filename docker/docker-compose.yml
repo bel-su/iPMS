@@ -136,6 +136,43 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Local stand-in for Cloudflare R2. Never used in staging or production.
+  #
+  # - Image: minio/minio was pulled from Docker Hub, Quay and GHCR in 2025 (the
+  #   namespace no longer publishes a server image; see
+  #   https://github.com/minio/minio/issues/21647). alpine/minio republishes
+  #   the same upstream source under the same RELEASE.* tags, so it is used
+  #   here instead, pinned by digest (the manifest-list digest, so both amd64
+  #   and arm64 resolve) rather than trusting the tag not to move.
+  # - User: this named volume (minio-data:/data, kept across restarts) is
+  #   root-owned in the image, and the image's default `minio` user cannot
+  #   write to it — so the container runs as root. Local dev/test only; never
+  #   used in staging or production.
+  # - Healthcheck: the image has neither `mc` nor `curl`, only `wget`
+  #   (busybox), so the healthcheck uses `wget` against MinIO's own health
+  #   endpoint, the same pattern already used for `nats` above.
+  #
+  # Opt-in: starts only with `--profile local-storage`, for developers without
+  # R2 keys (see docker/env/README.md). Never started on staging or production.
+  minio:
+    profiles: ["local-storage"]
+    image: alpine/minio:RELEASE.2025-10-15T17-29-55Z@sha256:cf23643a6cf9ce159c57643ceb88279e431262282428c9e0bf3a7ef1a97e84b4
+    user: "0:0"
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: ipms_media
+      MINIO_ROOT_PASSWORD: ipms_media_local_secret
+    volumes:
+      - minio-data:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   loki:
     image: grafana/loki:3.3.2
     command: ["-config.file=/etc/loki/local-config.yaml"]
@@ -279,8 +316,6 @@ services:
     depends_on:
       postgres-media: { condition: service_healthy }
 
-  # Postgres only: media has no EventBus and no Redis client, so it waits on
-  # neither and its env file carries no NATS_URL or REDIS_URL.
   media:
     <<: *service-defaults
     build:
@@ -289,9 +324,14 @@ services:
       args: { SERVICE: media }
     env_file:
       - ./env/media.env
+      # All object-storage settings (R2, or local MinIO) live here, gitignored.
+      # Without it media refuses to start: there is no silent fallback.
+      - path: ./env/media.secrets.env
+        required: false
     depends_on:
       postgres-media: { condition: service_healthy }
       media-migrate:  { condition: service_completed_successfully }
+      nats:           { condition: service_healthy }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3006/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -311,8 +351,11 @@ services:
     depends_on:
       postgres-notification: { condition: service_healthy }
 
-  # Postgres only: notification has no EventBus and no Redis client, so it waits on
-  # neither and its env file carries no NATS_URL or REDIS_URL.
+  # Postgres and NATS: notification consumes qc submission events. It needs no
+  # Redis (idempotency is a unique key in its own database) and reaches iam
+  # directly, but does not wait on it: a lookup that fails is retried with
+  # backoff for about 30 s, then the event is dropped (no dead-letter store yet),
+  # so start iam promptly after notification.
   notification:
     <<: *service-defaults
     build:
@@ -323,6 +366,7 @@ services:
       - ./env/notification.env
     depends_on:
       postgres-notification: { condition: service_healthy }
+      nats:                  { condition: service_healthy }
       notification-migrate:  { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3007/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -406,4 +450,5 @@ volumes:
   postgres-docs-data:
   nats-data:
   redis-data:
+  minio-data:
   loki-data:

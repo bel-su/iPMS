@@ -33,7 +33,7 @@ export async function GET(
       cache: 'no-store',
     });
   } catch {
-    return NextResponse.json({ message: 'The iPMS API could not be reached.' }, { status: 503 });
+    return NextResponse.json({ message: 'The Axiom API could not be reached.' }, { status: 503 });
   }
 
   if (!upstream.ok) {

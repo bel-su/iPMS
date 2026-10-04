@@ -43,6 +43,7 @@ void main() {
               initialLongitude: 85.3240,
               siteCode: 'KOS121',
               siteName: 'Kathmandu Central Hub',
+              geofenceRadiusMeters: 100,
             ),
           ),
         ),

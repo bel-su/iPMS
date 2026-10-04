@@ -47,32 +47,35 @@ class BiometricAuthService {
         biometrics.contains(BiometricType.strong);
   }
 
-  /// Invokes the native platform Face ID / Touch ID / fingerprint authentication sheet.
-  /// Returns `true` if verified, `false` if cancelled or rejected.
-  Future<bool> authenticate({
+  /// Invokes the native platform Face ID / Touch ID / fingerprint sheet.
+  /// The device passcode is allowed as a fallback, as the platforms expect.
+  Future<BiometricResult> authenticate({
     String? localizedReason,
   }) async {
     try {
-      final canAuth = await canAuthenticateWithBiometrics();
-      if (!canAuth) return false;
-
+      if (!await _localAuth.isDeviceSupported()) {
+        return const BiometricResult.failed('This device does not support biometric sign-in.');
+      }
       final isFace = await hasFaceIdSensor();
       final reason = localizedReason ??
           (isFace
-              ? 'Authenticate with Face ID to access iPMS Field App'
-              : 'Scan fingerprint to authenticate to iPMS Field App');
+              ? 'Authenticate with Face ID to access Axiom Field App'
+              : 'Scan fingerprint to authenticate to Axiom Field App');
 
-      return await _localAuth.authenticate(
+      final ok = await _localAuth.authenticate(
         localizedReason: reason,
         biometricOnly: false,
         persistAcrossBackgrounding: true,
       );
-    } on LocalAuthException {
-      return false;
-    } on PlatformException {
-      return false;
-    } catch (_) {
-      return false;
+      return ok
+          ? const BiometricResult.success()
+          : const BiometricResult.failed('Biometric check was not recognized. Try again.');
+    } on LocalAuthException catch (e) {
+      return BiometricResult.fromException(e);
+    } on PlatformException catch (e) {
+      return BiometricResult.failed(e.message ?? 'Biometric sign-in is unavailable on this device.');
+    } catch (e) {
+      return BiometricResult.failed('Biometric sign-in failed: $e');
     }
   }
 
@@ -99,9 +102,54 @@ class BiometricAuthService {
     await _tokenStorage.setBiometricUsername(username);
   }
 
-  /// Disables biometric login and removes the enrolled username anchor.
-  Future<void> disableBiometric() async {
-    await _tokenStorage.setBiometricEnabled(false);
-    await _tokenStorage.setBiometricUsername(null);
+  /// Disables biometric login and forgets the session kept for it.
+  Future<void> disableBiometric() => _tokenStorage.clearBiometric();
+}
+
+/// The outcome of one native biometric prompt.
+class BiometricResult {
+  const BiometricResult.success()
+      : success = true,
+        cancelled = false,
+        message = null;
+
+  const BiometricResult.cancelled()
+      : success = false,
+        cancelled = true,
+        message = null;
+
+  const BiometricResult.failed(this.message)
+      : success = false,
+        cancelled = false;
+
+  factory BiometricResult.fromException(LocalAuthException e) {
+    switch (e.code) {
+      case LocalAuthExceptionCode.userCanceled:
+      case LocalAuthExceptionCode.systemCanceled:
+      case LocalAuthExceptionCode.userRequestedFallback:
+        return const BiometricResult.cancelled();
+      case LocalAuthExceptionCode.noBiometricsEnrolled:
+        return const BiometricResult.failed(
+            'No Face ID or fingerprint is set up on this device. Add one in Settings.');
+      case LocalAuthExceptionCode.noCredentialsSet:
+        return const BiometricResult.failed(
+            'Set a device passcode and Face ID or fingerprint in Settings first.');
+      case LocalAuthExceptionCode.noBiometricHardware:
+      case LocalAuthExceptionCode.biometricHardwareTemporarilyUnavailable:
+        return const BiometricResult.failed('Biometric hardware is not available right now.');
+      case LocalAuthExceptionCode.temporaryLockout:
+        return const BiometricResult.failed('Too many attempts. Wait a moment and try again.');
+      case LocalAuthExceptionCode.biometricLockout:
+        return const BiometricResult.failed(
+            'Biometrics are locked. Unlock the device with its passcode, then try again.');
+      case LocalAuthExceptionCode.authInProgress:
+        return const BiometricResult.failed('A biometric check is already in progress.');
+      default:
+        return BiometricResult.failed(e.description ?? 'Biometric sign-in failed.');
+    }
   }
+
+  final bool success;
+  final bool cancelled;
+  final String? message;
 }

@@ -1,0 +1,68 @@
+# Production override for the 2 vCPU / 4 GB test VPS.
+# Use: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Needs Docker Compose >= 2.24 (for !reset / !override).
+# Put a reverse proxy (Caddy/nginx) on 80/443 in front of 127.0.0.1:3100 (web)
+# and 127.0.0.1:3000 (gateway).
+
+x-pg: &pg
+  command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=20", "-c", "work_mem=2MB", "-c", "maintenance_work_mem=32MB"]
+  mem_limit: 160m
+  ports: !reset []
+
+x-node: &node
+  mem_limit: 192m
+  environment:
+    NODE_OPTIONS: --max-old-space-size=144
+
+services:
+  postgres-iam:
+    <<: *pg
+  postgres-audit:
+    <<: *pg
+  postgres-project:
+    <<: *pg
+  postgres-qc:
+    <<: *pg
+  postgres-media:
+    <<: *pg
+  postgres-notification:
+    <<: *pg
+  postgres-docs:
+    <<: *pg
+  iam:
+    <<: *node
+    mem_limit: 320m
+    environment:
+      NODE_OPTIONS: --max-old-space-size=256
+  audit:
+    <<: *node
+  project:
+    <<: *node
+  qc:
+    <<: *node
+    mem_limit: 256m
+    environment:
+      NODE_OPTIONS: --max-old-space-size=192
+  media:
+    <<: *node
+    mem_limit: 256m
+    environment:
+      NODE_OPTIONS: --max-old-space-size=192
+  notification:
+    <<: *node
+  docs:
+    <<: *node
+  gateway:
+    <<: *node
+    ports: !override
+      - "127.0.0.1:${GATEWAY_PORT:-3000}:3000"
+  web:
+    mem_limit: 320m
+    ports: !override
+      - "127.0.0.1:${WEB_PORT:-3100}:3100"
+  nats:
+    mem_limit: 96m
+  redis:
+    mem_limit: 64m
+  loki:
+    mem_limit: 128m

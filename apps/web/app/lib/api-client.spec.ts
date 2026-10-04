@@ -149,14 +149,14 @@ describe('authFetch — outcomes', () => {
     ));
 
     const result = await authFetch('/api/v1/projects');
-    expect(result).toEqual({ state: 'unavailable', status: 502, message: 'The iPMS API returned an unexpected error.' });
+    expect(result).toEqual({ state: 'unavailable', status: 502, message: 'The Axiom API returned an unexpected error.' });
     expect(JSON.stringify(result)).not.toContain('/var/secret');
   });
 
   it('reports an unreachable gateway with no status', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
     expect(await authFetch('/api/v1/projects')).toEqual({
-      state: 'unavailable', status: null, message: 'The iPMS API could not be reached.',
+      state: 'unavailable', status: null, message: 'The Axiom API could not be reached.',
     });
   });
 

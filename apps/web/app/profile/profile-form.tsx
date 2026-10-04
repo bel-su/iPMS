@@ -1,5 +1,6 @@
 'use client';
-import { useActionState, useState } from 'react';
+import { useState } from 'react';
+import { useActionStateWithToast } from '../components/toast';
 import { useFormStatus } from 'react-dom';
 import { updateMyProfileAction } from '../users/actions';
 import { EMPTY, type FormState } from '../lib/form-state';
@@ -42,7 +43,7 @@ function FormStatusMessage({ state }: { state: FormState }) {
 
 export function ProfileManager({ user }: { user: User }) {
   const [activeTab, setActiveTab] = useState<'details' | 'security' | 'roles'>('details');
-  const [state, action] = useActionState(updateMyProfileAction, EMPTY);
+  const [state, action] = useActionStateWithToast(updateMyProfileAction, EMPTY, 'Profile saved');
 
   return (
     <div className="profile-container">
@@ -111,7 +112,7 @@ export function ProfileManager({ user }: { user: User }) {
                   maxLength={200}
                   placeholder="e.g. Jane Doe"
                 />
-                <span className="hint">Your legal or display name within iPMS.</span>
+                <span className="hint">Your legal or display name within Axiom.</span>
               </label>
 
               <label className="field">
@@ -142,7 +143,7 @@ export function ProfileManager({ user }: { user: User }) {
             <div className="profile-form-footer">
               <SubmitButton />
               <p className="form-note-inline">
-                Changes are saved directly to your iPMS identity account.
+                Changes are saved directly to your Axiom identity account.
               </p>
             </div>
           </form>
@@ -215,7 +216,7 @@ export function ProfileManager({ user }: { user: User }) {
               </div>
               <div className="security-card-content">
                 <h3>Mobile Biometrics</h3>
-                <p>Fingerprint biometric authentication can be enabled on your iPMS Mobile app for quick sign-in.</p>
+                <p>Fingerprint biometric authentication can be enabled on your Axiom Mobile app for quick sign-in.</p>
                 <div className="bio-pill">
                   <span className="pulse-dot" />
                   <span>Configured via Mobile App</span>

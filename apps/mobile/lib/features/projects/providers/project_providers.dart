@@ -4,6 +4,7 @@ import '../data/project_repository.dart';
 import '../domain/models/project_item.dart';
 
 final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
+  ref.watch(sessionOwnerProvider);
   final apiClient = ref.watch(apiClientProvider);
   return ProjectRepository(apiClient: apiClient);
 });
@@ -11,6 +12,13 @@ final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
 final projectListProvider = FutureProvider<List<ProjectItem>>((ref) async {
   final repo = ref.watch(projectRepositoryProvider);
   return await repo.getProjects();
+});
+
+/// A project with its sites, which the list endpoint does not include.
+final projectDetailProvider =
+    FutureProvider.family<ProjectItem, String>((ref, projectId) async {
+  final repo = ref.watch(projectRepositoryProvider);
+  return repo.getProjectById(projectId);
 });
 
 class SelectedProjectNotifier extends Notifier<ProjectItem?> {

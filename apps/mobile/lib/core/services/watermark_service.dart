@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -28,8 +30,11 @@ class WatermarkMetadata {
   final String projectCode;
   final double latitude;
   final double longitude;
+  /// Metres; negative when the phone had no GPS fix at capture.
   final double accuracy;
   final DateTime timestamp;
+
+  bool get hasLocationFix => accuracy >= 0;
   final String? taskTitle;
   final String? checklistItemId;
   final String? checklistItemTitle;
@@ -142,7 +147,7 @@ class WatermarkService {
 
     // Line 1: Header / Seal
     drawLine(
-      '[VERIFIED] iPMS SECURE FIELD EVIDENCE',
+      '[VERIFIED] Axiom SECURE FIELD EVIDENCE',
       fontSize: 13.5,
       color: const Color(0xFFDDD7F7),
       fontWeight: FontWeight.w700,
@@ -189,7 +194,9 @@ class WatermarkService {
 
     // Line 5: GPS Coordinates
     drawLine(
-      'GPS: $latStr $latDir, $longStr $longDir (Accuracy: +/-${metadata.accuracy.toStringAsFixed(1)}m)',
+      metadata.hasLocationFix
+          ? 'GPS: $latStr $latDir, $longStr $longDir (Accuracy: +/-${metadata.accuracy.toStringAsFixed(1)}m)'
+          : 'GPS: unavailable at capture',
       fontSize: 12.0,
       color: const Color(0xFF8CEFC6), // Subtle high-contrast mint
       fontWeight: FontWeight.w600,
@@ -206,11 +213,22 @@ class WatermarkService {
     // 11. Render Canvas into image bytes
     final picture = recorder.endRecording();
     final finalImage = await picture.toImage(sourceImage.width, sourceImage.height);
-    final byteData = await finalImage.toByteData(format: ui.ImageByteFormat.png);
+    final byteData = await finalImage.toByteData(format: ui.ImageByteFormat.rawRgba);
 
     if (byteData == null) {
       throw Exception('Failed to generate watermarked image byte data.');
     }
+
+    // The media service stores evidence as JPEG only, capped at 5 MB, so the
+    // file is encoded here, once, and the same bytes are hashed and uploaded.
+    final jpegBytes = await compute(
+      encodeEvidenceJpeg,
+      (
+        rgba: byteData.buffer.asUint8List(),
+        width: finalImage.width,
+        height: finalImage.height,
+      ),
+    );
 
     // 12. Save strictly to sandboxed private in-app storage (never public device gallery)
     final appDir = await getApplicationDocumentsDirectory();
@@ -225,9 +243,31 @@ class WatermarkService {
     }
 
     final timestampId = DateTime.now().millisecondsSinceEpoch;
-    final outputFile = File('${evidenceDir.path}/evidence_${metadata.siteCode}_$timestampId.png');
-    await outputFile.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
+    final outputFile = File('${evidenceDir.path}/evidence_${metadata.siteCode}_$timestampId.jpg');
+    await outputFile.writeAsBytes(jpegBytes, flush: true);
 
     return outputFile;
   }
+}
+
+/// Largest photo the media service accepts.
+const int maxEvidencePhotoBytes = 5 * 1024 * 1024;
+
+/// Encodes raw RGBA pixels as JPEG, stepping the quality down until the file
+/// fits under [maxEvidencePhotoBytes]. Top-level so it can run in an isolate.
+Uint8List encodeEvidenceJpeg(({Uint8List rgba, int width, int height}) input) {
+  final image = img.Image.fromBytes(
+    width: input.width,
+    height: input.height,
+    bytes: input.rgba.buffer,
+    numChannels: 4,
+    order: img.ChannelOrder.rgba,
+  );
+  var quality = 85;
+  var encoded = img.encodeJpg(image, quality: quality);
+  while (encoded.length > maxEvidencePhotoBytes && quality > 40) {
+    quality -= 15;
+    encoded = img.encodeJpg(image, quality: quality);
+  }
+  return encoded;
 }

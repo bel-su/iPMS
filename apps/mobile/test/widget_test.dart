@@ -9,7 +9,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
-  testWidgets('iPMS boots into LoginScreen when no tokens exist', (WidgetTester tester) async {
+  testWidgets('Axiom boots into LoginScreen when no tokens exist', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
         child: IpmsApp(),

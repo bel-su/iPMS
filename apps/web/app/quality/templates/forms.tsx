@@ -1,5 +1,6 @@
 'use client';
-import { useActionState } from 'react';
+import {  } from 'react';
+import { useActionStateWithToast } from '../../components/toast';
 import { EMPTY } from '../../lib/form-state';
 import { FormError, SubmitButton } from '../../components/forms';
 import { createTemplateAction, renameTemplateAction } from './actions';
@@ -7,7 +8,7 @@ import { CATEGORIES, CATEGORY_LABELS } from './labels';
 import type { TemplateCategory } from '../../lib/qc-api';
 
 export function CreateTemplateForm() {
-  const [state, action] = useActionState(createTemplateAction, EMPTY);
+  const [state, action] = useActionStateWithToast(createTemplateAction, EMPTY, 'Checklist created');
   return (
     <form action={action} className="panel-form">
       <div className="form-grid">
@@ -29,7 +30,7 @@ export function CreateTemplateForm() {
 }
 
 export function RenameTemplateForm({ templateId, name, category }: { templateId: string; name: string; category: TemplateCategory }) {
-  const [state, action] = useActionState(renameTemplateAction, EMPTY);
+  const [state, action] = useActionStateWithToast(renameTemplateAction, EMPTY, 'Checklist renamed');
   return (
     <details className="inline-details">
       <summary className="ghost-button">Rename</summary>

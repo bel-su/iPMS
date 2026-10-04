@@ -1,4 +1,5 @@
 import { getCurrentUser, hasPermission } from '../../lib/iam-api';
+import { CategorySelect } from './category-select';
 import { listTemplates, type TemplateCategory, type TemplateTab } from '../../lib/qc-api';
 import { Sidebar, StatePage, TopActions } from '../../shell';
 import { CATEGORIES, CATEGORY_LABELS, TABS, formatDate } from './labels';
@@ -56,15 +57,21 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
                 <a key={entry.key} href={tabHref(entry.key)} aria-current={entry.key === tab ? 'true' : undefined}>{entry.label}</a>
               ))}
             </nav>
-            <form className="inline-form" method="get" action="/quality/templates">
+            <form className="lib-filter" method="get" action="/quality/templates" role="search">
               <input type="hidden" name="tab" value={tab} />
-              <input name="q" defaultValue={q ?? ''} placeholder="Search code or name" aria-label="Search code or name" maxLength={100} />
-              <select name="category" defaultValue={category ?? ''} aria-label="Category">
-                <option value="">All categories</option>
-                {CATEGORIES.map((entry) => <option key={entry} value={entry}>{CATEGORY_LABELS[entry]}</option>)}
-              </select>
-              <button className="ghost-button" type="submit">Filter</button>
+              <div className="lib-search">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                <input type="search" name="q" defaultValue={q ?? ''} placeholder="Search by template code or name" aria-label="Search code or name" maxLength={100} />
+                {q ? <a className="lib-search-clear" href={category ? `/quality/templates?tab=${tab}&category=${category}` : `/quality/templates?tab=${tab}`} aria-label="Clear search">&times;</a> : null}
+              </div>
+              <CategorySelect value={category ?? ''} options={CATEGORIES.map((entry) => ({ value: entry, label: CATEGORY_LABELS[entry] }))} />
+              <button className="lib-filter-btn" type="submit">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                Search
+              </button>
+              {q || category ? <a className="lib-clear" href={`/quality/templates?tab=${tab}`}>Reset</a> : null}
             </form>
+            {q || category ? <p className="lib-result-note">{templates.data.length} {templates.data.length === 1 ? 'result' : 'results'}{q ? <> for &ldquo;<b>{q}</b>&rdquo;</> : null}</p> : null}
             {templates.data.length === 0 ? (
               <p className="empty-list">No templates here yet.</p>
             ) : (

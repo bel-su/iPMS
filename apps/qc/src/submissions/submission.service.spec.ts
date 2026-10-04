@@ -1,14 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { BadRequestException } from '@nestjs/common';
+import { scopeWhere, type AuthzScope } from '@ipms/authz';
 import { SubmissionService } from './submission.service.js';
 
 describe('SubmissionService', () => {
   let service: SubmissionService;
   let prisma: any;
   let geofenceClient: any;
+  let media: any;
+  let kinds: Record<string, 'PHOTO' | 'VIDEO'> = {};
 
   beforeEach(() => {
     vi.clearAllMocks();
+    kinds = {};
 
     prisma = {
       submission: {
@@ -30,9 +33,10 @@ describe('SubmissionService', () => {
         create: vi.fn(),
         update: vi.fn(),
       },
-      itemPhoto: {
+      itemMedia: {
         createMany: vi.fn(),
       },
+      workOrderDraft: { findUnique: vi.fn().mockResolvedValue(null), deleteMany: vi.fn() },
       outboxEvent: {
         create: vi.fn(),
       },
@@ -45,6 +49,7 @@ describe('SubmissionService', () => {
       reviewDecision: {
         create: vi.fn(),
       },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (cb) => cb(prisma)),
     };
 
@@ -52,7 +57,11 @@ describe('SubmissionService', () => {
       fetch: vi.fn().mockResolvedValue(null),
     };
 
-    service = new SubmissionService(prisma, geofenceClient, 7);
+    media = {
+      check: vi.fn(async (body: { mediaIds: string[] }) => body.mediaIds.map((id) => ({ id, kind: kinds[id] ?? 'PHOTO', usable: true }))),
+      attach: vi.fn().mockResolvedValue('attached'),
+    };
+    service = new SubmissionService(prisma, geofenceClient, media, 7);
   });
 
   describe('createSubmission validation', () => {
@@ -95,6 +104,8 @@ describe('SubmissionService', () => {
                 allowsNa: false,
                 minPhotos: 1,
                 maxPhotos: 5,
+                minVideos: 0,
+                maxVideos: 1,
               },
             ],
           },
@@ -102,102 +113,128 @@ describe('SubmissionService', () => {
       });
     });
 
-    it('rejects when required photos are missing (photoMediaIds.length < minPhotos)', async () => {
-      const dto = {
-        taskId,
-        siteId,
-        projectId,
-        templateVersionId,
-        idempotencyKey: 'idem-1',
-        responses: [
-          {
-            itemId,
-            selfCheckResult: 'PASS' as const,
-            photoMediaIds: [], // 0 photos, but minPhotos = 1
-          },
-        ],
-      };
-
-      await expect(service.createSubmission(dto as any, actorId, 'bearer')).rejects.toThrow(BadRequestException);
-      await expect(service.createSubmission(dto as any, actorId, 'bearer')).rejects.toThrow('Item 1.1 has an invalid photo count');
+    const P = (n: number) => `0192f7a0-0000-7000-8000-0000000000${String(n).padStart(2, '0')}`;
+    const dtoWith = (mediaIds: string[], extra: Record<string, unknown> = {}) => ({
+      taskId, siteId, projectId, templateVersionId, idempotencyKey: `idem-${Math.random()}`,
+      responses: [{ itemId, selfCheckResult: 'PASS' as const, mediaIds }], ...extra,
     });
 
-    it('rejects when photoMediaIds exceed maxPhotos', async () => {
-      const dto = {
-        taskId,
-        siteId,
-        projectId,
-        templateVersionId,
-        idempotencyKey: 'idem-2',
-        responses: [
-          {
-            itemId,
-            selfCheckResult: 'PASS' as const,
-            photoMediaIds: [
-              '0192f7a0-0000-7000-8000-000000000010',
-              '0192f7a0-0000-7000-8000-000000000011',
-              '0192f7a0-0000-7000-8000-000000000012',
-              '0192f7a0-0000-7000-8000-000000000013',
-              '0192f7a0-0000-7000-8000-000000000014',
-              '0192f7a0-0000-7000-8000-000000000015', // 6 photos, max is 5
-            ],
-          },
-        ],
-      };
-
-      await expect(service.createSubmission(dto as any, actorId, 'bearer')).rejects.toThrow('Item 1.1 has an invalid photo count');
-    });
-
-    it('rejects when selfCheckResult is NA but allowsNa is false', async () => {
-      const dto = {
-        taskId,
-        siteId,
-        projectId,
-        templateVersionId,
-        idempotencyKey: 'idem-3',
-        responses: [
-          {
-            itemId,
-            selfCheckResult: 'NA' as const,
-            photoMediaIds: ['0192f7a0-0000-7000-8000-000000000010'],
-          },
-        ],
-      };
-
-      await expect(service.createSubmission(dto as any, actorId, 'bearer')).rejects.toThrow('Item 1.1 does not allow N/A');
-    });
-
-    it('successfully creates submission and records photos when evidence requirements are met', async () => {
-      const photoId = '0192f7a0-0000-7000-8000-000000000010';
-      const dto = {
-        taskId,
-        siteId,
-        projectId,
-        templateVersionId,
-        idempotencyKey: 'idem-4',
-        responses: [
-          {
-            itemId,
-            selfCheckResult: 'PASS' as const,
-            photoMediaIds: [photoId],
-          },
-        ],
-      };
-
-      prisma.submission.create.mockResolvedValue({ id: 'sub-created-1', attemptNo: 2, submittedAt: new Date() });
+    it('counts photos and videos by the kinds media reports', async () => {
+      kinds = { [P(2)]: 'VIDEO' };
+      prisma.submission.create.mockResolvedValue({ id: 'sub-1', attemptNo: 2, submittedAt: new Date() });
       prisma.itemResponse.create.mockResolvedValue({ id: 'resp-1' });
+      await service.createSubmission(dtoWith([P(1), P(2)]) as any, actorId, 'Bearer t');
+      expect(media.check).toHaveBeenCalledWith({ workOrderId: taskId, siteId, mediaIds: [P(1), P(2)] }, 'Bearer t');
+      expect(prisma.itemMedia.createMany).toHaveBeenCalledWith({ data: [
+        { id: expect.any(String), itemResponseId: 'resp-1', mediaId: P(1), kind: 'PHOTO', sequence: 0 },
+        { id: expect.any(String), itemResponseId: 'resp-1', mediaId: P(2), kind: 'VIDEO', sequence: 1 },
+      ] });
+      const submissionId = prisma.submission.create.mock.calls[0][0].data.id;
+      expect(media.attach).toHaveBeenCalledWith({ submissionId, workOrderId: taskId, siteId, mediaIds: [P(1), P(2)] }, 'Bearer t');
+      expect(prisma.workOrderDraft.deleteMany).toHaveBeenCalledWith({ where: { workOrderId: taskId } });
+    });
 
-      const result = await service.createSubmission(dto as any, actorId, 'bearer');
-      expect(result).toBeDefined();
-      expect(prisma.submission.create).toHaveBeenCalled();
-      expect(prisma.itemPhoto.createMany).toHaveBeenCalledWith({
-        data: [{ id: expect.any(String), itemResponseId: 'resp-1', mediaId: photoId, sequence: 0 }],
+    it('publishes the work order and site labels the notification service needs', async () => {
+      prisma.workOrder.findUnique.mockResolvedValue({
+        id: taskId, assigneeId: actorId, status: 'ONGOING', projectId, siteId, templateId,
+        title: 'Tower foundation check', siteCode: 'KOS121',
       });
-      expect(prisma.workOrder.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: 'REVIEWING' }),
-        }),
-      );
+      prisma.submission.create.mockResolvedValue({
+        id: 'sub-1', taskId, projectId, siteId, attemptNo: 2, submittedAt: new Date('2026-10-02T08:00:00Z'),
+      });
+      prisma.itemResponse.create.mockResolvedValue({ id: 'resp-1' });
+      await service.createSubmission(dtoWith([P(1)]) as any, actorId, 'Bearer t');
+      const record = prisma.outboxEvent.create.mock.calls[0][0].data;
+      expect(record.subject).toBe('qc.submission.submitted');
+      expect(record.payload).toMatchObject({
+        submissionId: 'sub-1', workOrderId: taskId, workOrderTitle: 'Tower foundation check',
+        siteId, siteCode: 'KOS121', projectId, submittedBy: actorId, attemptNo: 2,
+      });
+    });
+
+    it('refuses too few photos without attaching anything', async () => {
+      kinds = { [P(1)]: 'VIDEO' };
+      await expect(service.createSubmission(dtoWith([P(1)]) as any, actorId, 'b')).rejects.toThrow('Item 1.1 needs 1–5 photos; it has 0');
+      expect(media.attach).not.toHaveBeenCalled();
+    });
+
+    it('refuses too many videos', async () => {
+      kinds = { [P(2)]: 'VIDEO', [P(3)]: 'VIDEO' };
+      await expect(service.createSubmission(dtoWith([P(1), P(2), P(3)]) as any, actorId, 'b')).rejects.toThrow('Item 1.1 allows at most 1 video; it has 2');
+    });
+
+    it('refuses the same file twice', async () => {
+      await expect(service.createSubmission(dtoWith([P(1), P(1)]) as any, actorId, 'b')).rejects.toThrow('Item 1.1 lists the same file twice');
+    });
+
+    it('refuses with MEDIA_NOT_READY and each file’s reason', async () => {
+      media.check.mockResolvedValue([{ id: P(1), kind: 'PHOTO', usable: false, reason: 'UPLOADING' }]);
+      await expect(service.createSubmission(dtoWith([P(1)]) as any, actorId, 'b')).rejects.toMatchObject({
+        status: 409, response: { details: { reason: 'MEDIA_NOT_READY', files: [{ id: P(1), reason: 'UPLOADING' }] } },
+      });
+      expect(media.attach).not.toHaveBeenCalled();
+    });
+
+    it('re-checks and refuses when attach loses a race', async () => {
+      media.attach.mockResolvedValue('refused');
+      media.check
+        .mockResolvedValueOnce([{ id: P(1), kind: 'PHOTO', usable: true }])
+        .mockResolvedValueOnce([{ id: P(1), kind: 'PHOTO', usable: false, reason: 'NOT_FOUND' }]);
+      await expect(service.createSubmission(dtoWith([P(1)]) as any, actorId, 'b')).rejects.toMatchObject({
+        status: 409, response: { details: { reason: 'MEDIA_NOT_READY', files: [{ id: P(1), reason: 'NOT_FOUND' }] } },
+      });
+      expect(prisma.submission.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses while the draft is held by another device', async () => {
+      prisma.workOrderDraft.findUnique.mockResolvedValue({ deviceId: 'other', deviceLabel: 'Pixel 7', updatedAt: new Date('2026-09-30T08:00:00Z') });
+      await expect(service.createSubmission(dtoWith([P(1)], { deviceId: 'mine' }) as any, actorId, 'b')).rejects.toMatchObject({
+        status: 409, response: { details: { reason: 'DRAFT_HELD_ELSEWHERE', deviceLabel: 'Pixel 7' } },
+      });
+    });
+
+    it('refuses more than 500 files in one submission before asking media', async () => {
+      const ids = Array.from({ length: 501 }, (_, n) => `0192f7a0-0000-7000-8000-${String(n).padStart(12, '0')}`);
+      await expect(service.createSubmission(dtoWith(ids) as any, actorId, 'b')).rejects.toMatchObject({ status: 400, message: 'A submission can carry at most 500 files' });
+      expect(media.check).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a file is missing from the answer', [{ id: P(1), kind: 'PHOTO', usable: true }]],
+      ['a file is answered twice', [{ id: P(1), kind: 'PHOTO', usable: true }, { id: P(1), kind: 'PHOTO', usable: true }, { id: P(2), kind: 'PHOTO', usable: true }]],
+      ['an unknown file is answered', [{ id: P(1), kind: 'PHOTO', usable: true }, { id: P(3), kind: 'PHOTO', usable: true }]],
+      ['a usable file has no kind', [{ id: P(1), kind: 'PHOTO', usable: true }, { id: P(2), kind: null, usable: true }]],
+    ])('answers 503 when media’s answer is inconsistent: %s', async (_label, answer) => {
+      media.check.mockResolvedValue(answer);
+      await expect(service.createSubmission(dtoWith([P(1), P(2)]) as any, actorId, 'b')).rejects.toMatchObject({
+        status: 503, message: 'Evidence could not be checked right now. Try again shortly.',
+      });
+      expect(media.attach).not.toHaveBeenCalled();
+    });
+
+    it('re-checks the assignee, status and draft holder under the work-order lock', async () => {
+      // Pre-check sees a free work order; inside the transaction another device holds the draft.
+      prisma.workOrderDraft.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ deviceId: 'other', deviceLabel: 'Pixel 7', updatedAt: new Date() });
+      await expect(service.createSubmission(dtoWith([P(1)]) as any, actorId, 'b')).rejects.toMatchObject({ status: 409, response: { details: { reason: 'DRAFT_HELD_ELSEWHERE' } } });
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(prisma.submission.create).not.toHaveBeenCalled();
+    });
+
+    it('asks for no photos on an item marked N/A', async () => {
+      const version = await prisma.templateVersion.findUnique();
+      prisma.templateVersion.findUnique.mockResolvedValue({
+        ...version,
+        sections: [{ id: 'sec-1', items: [{ ...version.sections[0].items[0], allowsNa: true }] }],
+      });
+      prisma.submission.create.mockResolvedValue({ id: 'sub-1', attemptNo: 1, submittedAt: new Date() });
+      prisma.itemResponse.create.mockResolvedValue({ id: 'resp-1' });
+      const dto = { ...dtoWith([]), responses: [{ itemId, selfCheckResult: 'NA' as const, mediaIds: [] }] };
+      await expect(service.createSubmission(dto as any, actorId, 'b')).resolves.toBeDefined();
+    });
+
+    it('still refuses N/A where it is not allowed', async () => {
+      const dto = { ...dtoWith([P(1)]), responses: [{ itemId, selfCheckResult: 'NA' as const, mediaIds: [P(1)] }] };
+      await expect(service.createSubmission(dto as any, actorId, 'b')).rejects.toThrow('Item 1.1 does not allow N/A');
     });
   });
 
@@ -207,9 +244,12 @@ describe('SubmissionService', () => {
     const itemId = '0192f7a0-0000-7000-8000-000000000003';
     const taskId = '0192f7a0-0000-7000-8000-000000000004';
     const projectId = '0192f7a0-0000-7000-8000-000000000005';
+    const submitter = '0192f7a0-0000-7000-8000-000000000006';
+    const siteId = '0192f7a0-0000-7000-8000-000000000007';
+    const scope: AuthzScope = { global: false, projectIds: [projectId], siteIds: [] };
 
     beforeEach(() => {
-      prisma.submission.findUnique.mockResolvedValue({
+      prisma.submission.findFirst.mockResolvedValue({
         id: submissionId,
         status: 'SUBMITTED',
         taskId,
@@ -234,6 +274,43 @@ describe('SubmissionService', () => {
       prisma.workOrder.findUnique.mockResolvedValue({ id: taskId });
     });
 
+    it('looks the submission up within the caller’s scope', async () => {
+      const dto = { decision: 'APPROVE' as const, itemReviews: [{ itemId, result: 'APPROVED' as const }] };
+      await service.reviewSubmission(submissionId, dto, actorId, scope);
+      expect(prisma.submission.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: { AND: [{ id: submissionId }, scopeWhere(scope)] },
+      }));
+    });
+
+    it('publishes who submitted the work and the labels the notification service needs', async () => {
+      prisma.submission.update.mockResolvedValue({
+        id: submissionId, status: 'REJECTED_REWORK', taskId, projectId, siteId, attemptNo: 2,
+        submittedBy: submitter, reviewedAt: new Date('2026-10-02T09:00:00Z'),
+      });
+      prisma.workOrder.findUnique.mockResolvedValue({ id: taskId, title: 'Tower foundation check', siteCode: 'KOS121' });
+      const dto = { decision: 'REJECT_REWORK' as const, comment: 'Photo is blurred', itemReviews: [{ itemId, result: 'REJECTED' as const }] };
+      await service.reviewSubmission(submissionId, dto as any, actorId, scope);
+      const record = prisma.outboxEvent.create.mock.calls[0][0].data;
+      expect(record.subject).toBe('qc.submission.reviewed');
+      expect(record.payload).toMatchObject({
+        submissionId, workOrderId: taskId, workOrderTitle: 'Tower foundation check', siteId, siteCode: 'KOS121',
+        submittedBy: submitter, decision: 'REJECT_REWORK', reviewedBy: actorId, comment: 'Photo is blurred',
+      });
+    });
+
+    it('answers 404 for a submission outside the caller’s scope, before writing anything', async () => {
+      prisma.submission.findFirst.mockResolvedValue(null);
+      const dto = { decision: 'APPROVE' as const, itemReviews: [{ itemId, result: 'APPROVED' as const }] };
+      await expect(service.reviewSubmission(submissionId, dto, actorId, { global: false, projectIds: [], siteIds: [] }))
+        .rejects.toMatchObject({ status: 404 });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.itemResponse.update).not.toHaveBeenCalled();
+      expect(prisma.reviewDecision.create).not.toHaveBeenCalled();
+      expect(prisma.submission.update).not.toHaveBeenCalled();
+      expect(prisma.workOrder.updateMany).not.toHaveBeenCalled();
+      expect(prisma.outboxEvent.create).not.toHaveBeenCalled();
+    });
+
     it('rejects approval when an item review is REJECTED', async () => {
       const dto = {
         decision: 'APPROVE' as const,
@@ -246,7 +323,7 @@ describe('SubmissionService', () => {
         ],
       };
 
-      await expect(service.reviewSubmission(submissionId, dto as any, actorId)).rejects.toThrow(
+      await expect(service.reviewSubmission(submissionId, dto as any, actorId, scope)).rejects.toThrow(
         'A submission with rejected items cannot be approved',
       );
     });
@@ -263,7 +340,7 @@ describe('SubmissionService', () => {
         ],
       };
 
-      await service.reviewSubmission(submissionId, dto as any, actorId);
+      await service.reviewSubmission(submissionId, dto as any, actorId, scope);
       expect(prisma.reviewDecision.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ decision: 'APPROVE' }),
@@ -298,7 +375,7 @@ describe('SubmissionService', () => {
         reviewedAt: new Date(),
       });
 
-      await service.reviewSubmission(submissionId, dto as any, actorId);
+      await service.reviewSubmission(submissionId, dto as any, actorId, scope);
       expect(prisma.workOrder.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ status: 'RECTIFYING' }),

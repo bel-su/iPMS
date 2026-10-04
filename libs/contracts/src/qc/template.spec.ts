@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CreateTemplateSchema, ImportCommitSchema, ListTemplatesQuerySchema, PublishableDocumentSchema,
-  SaveDraftSchema, TemplateDocumentSchema, UpdateTemplateSchema,
+  SaveTemplateDraftSchema, TemplateDocumentSchema, UpdateTemplateSchema,
 } from './template.js';
 
 const item = (over: Record<string, unknown> = {}) => ({ number: '1.1', requirementText: 'PPE worn', ...over });
@@ -16,7 +16,7 @@ describe('TemplateDocumentSchema — save rules', () => {
     const parsed = TemplateDocumentSchema.parse(doc());
     expect(parsed.sections[0]!.items[0]).toEqual({
       number: '1.1', requirementText: 'PPE worn', severity: 'NORMAL', responseType: 'RESULT_ONLY',
-      selectOptions: [], minPhotos: 0, maxPhotos: 0, allowsNa: false, isRequired: true,
+      selectOptions: [], minPhotos: 0, maxPhotos: 0, minVideos: 0, maxVideos: 0, allowsNa: false, isRequired: true,
     });
   });
 
@@ -106,8 +106,8 @@ describe('request schemas', () => {
   });
 
   it('a draft save carries a revision', () => {
-    expect(SaveDraftSchema.safeParse({ document: { sections: [] } }).success).toBe(false);
-    expect(SaveDraftSchema.parse({ revision: 3, document: { sections: [] } }).revision).toBe(3);
+    expect(SaveTemplateDraftSchema.safeParse({ document: { sections: [] } }).success).toBe(false);
+    expect(SaveTemplateDraftSchema.parse({ revision: 3, document: { sections: [] } }).revision).toBe(3);
   });
 
   it('an import commit must be publishable', () => {

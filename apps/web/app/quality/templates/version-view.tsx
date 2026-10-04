@@ -1,5 +1,5 @@
 import type { ChecklistSection } from '../../lib/qc-api';
-import { RESPONSE_TYPE_LABELS, photoLabel } from './labels';
+import { RESPONSE_TYPE_LABELS, photoLabel, videoLabel } from './labels';
 
 export function VersionView({ sections }: { sections: ChecklistSection[] }) {
   if (sections.length === 0) return <p className="empty-list">This version has no sections yet.</p>;
@@ -11,6 +11,7 @@ export function VersionView({ sections }: { sections: ChecklistSection[] }) {
           <ol className="checklist-items">
             {section.items.map((item) => {
               const photos = photoLabel(item.minPhotos, item.maxPhotos);
+              const videos = videoLabel(item.minVideos, item.maxVideos);
               return (
                 <li key={item.id} className="checklist-item">
                   <div><strong>{item.number}</strong> {item.requirementText}</div>
@@ -19,6 +20,7 @@ export function VersionView({ sections }: { sections: ChecklistSection[] }) {
                     <span className="badge slate">{RESPONSE_TYPE_LABELS[item.responseType]}</span>
                     {item.responseType === 'SELECT' ? <span className="badge slate">{item.selectOptions.join(' · ')}</span> : null}
                     {photos ? <span className="badge blue">{photos}</span> : null}
+                    {videos ? <span className="badge blue">{videos}</span> : null}
                     {item.allowsNa ? <span className="badge slate">N/A allowed</span> : null}
                     {item.isRequired ? null : <span className="badge amber">Optional</span>}
                   </div>

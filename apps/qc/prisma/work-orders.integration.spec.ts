@@ -5,6 +5,7 @@ import type { PrismaClient } from '@prisma-clients/qc';
 import type { AuthzScope } from '@ipms/authz';
 import { uuidv7, type AssignableUser, type SiteRefs } from '@ipms/contracts';
 import { SubmissionService } from '../src/submissions/submission.service.js';
+import type { MediaClient } from '../src/submissions/media.client.js';
 import type { SiteGeofenceClient } from '../src/submissions/site-geofence.client.js';
 import { TemplateQueries } from '../src/templates/template.queries.js';
 import type { ProjectDirectoryClient } from '../src/work-orders/project-directory.client.js';
@@ -40,6 +41,12 @@ const directory = {
   scope: async () => ({ state: 'found', value: GLOBAL }),
 } as unknown as ProjectDirectoryClient;
 
+// Finds every file usable; these specs carry none.
+const fakeMedia = {
+  check: async (body: { mediaIds: string[] }) => body.mediaIds.map((id) => ({ id, kind: 'PHOTO' as const, usable: true })),
+  attach: async () => 'attached' as const,
+} as unknown as MediaClient;
+
 let templateId: string;
 let versionId: string;
 let itemId: string;
@@ -48,7 +55,7 @@ beforeAll(async () => {
   db = await startTestDb();
   prisma = db.prisma;
   service = new WorkOrderService(prisma, new TemplateQueries(prisma), directory);
-  submissions = new SubmissionService(prisma, { fetch: async () => null } as unknown as SiteGeofenceClient, 7);
+  submissions = new SubmissionService(prisma, { fetch: async () => null } as unknown as SiteGeofenceClient, fakeMedia, 7);
 }, 180_000);
 afterAll(async () => { await db?.stop(); });
 
@@ -65,7 +72,7 @@ const create = (projectId: string, siteId: string) => service.create({
 
 const submit = (order: { id: string; projectId: string; siteId: string }) => submissions.createSubmission({
   taskId: order.id, projectId: order.projectId, siteId: order.siteId, templateVersionId: versionId,
-  idempotencyKey: `key-${uuidv7()}`, responses: [{ itemId, selfCheckResult: 'PASS', photoMediaIds: [] }],
+  idempotencyKey: `key-${uuidv7()}`, responses: [{ itemId, selfCheckResult: 'PASS', mediaIds: [] }],
 }, ENGINEER, 'Bearer t');
 
 describe('work orders against a real database', () => {
@@ -108,11 +115,11 @@ describe('work orders against a real database', () => {
 
     const first = await submit(order);
     expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: order.id } })).status).toBe('REVIEWING');
-    await submissions.reviewSubmission(first.id, { decision: 'REJECT_REWORK', comment: 'Blurred', itemReviews: [{ itemId, result: 'REJECTED' }] }, ACTOR);
+    await submissions.reviewSubmission(first.id, { decision: 'REJECT_REWORK', comment: 'Blurred', itemReviews: [{ itemId, result: 'REJECTED' }] }, ACTOR, GLOBAL);
     expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: order.id } })).status).toBe('RECTIFYING');
 
     const second = await submit(order);
-    await submissions.reviewSubmission(second.id, { decision: 'APPROVE', itemReviews: [{ itemId, result: 'APPROVED' }] }, ACTOR);
+    await submissions.reviewSubmission(second.id, { decision: 'APPROVE', itemReviews: [{ itemId, result: 'APPROVED' }] }, ACTOR, GLOBAL);
     const done = await prisma.workOrder.findUniqueOrThrow({ where: { id: order.id } });
     expect(done).toMatchObject({ status: 'COMPLETED', currentAttemptNo: 2, currentSubmissionId: second.id });
     expect(done.actualCompletionAt).not.toBeNull();
@@ -125,6 +132,9 @@ describe('work orders against a real database', () => {
     const { created } = await create(ANTENNA, ANTENNA_SITE);
     const order = created[0]!;
     await service.cancel(GLOBAL, order.id, { reason: 'Site handed back' }, ACTOR);
+    const published = await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'qc.work_order.cancelled' } });
+    expect(published.payload).toMatchObject({ workOrderId: order.id, projectId: ANTENNA, siteId: ANTENNA_SITE });
+    expect(typeof (published.payload as { cancelledAt: unknown }).cancelledAt).toBe('string');
     await expect(submit(order)).rejects.toThrow('cancelled');
     expect(await prisma.workOrder.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ status: 'CANCELLED', cancelReason: 'Site handed back' });
     await expect(service.update(GLOBAL, order.id, { assigneeId: ENGINEER }, ACTOR, 'Bearer t')).rejects.toThrow('cancelled');
@@ -142,5 +152,76 @@ describe('work orders against a real database', () => {
     await create(ANTENNA, ANTENNA_SITE);
     expect(await service.usage({ projectId: ANTENNA })).toEqual({ count: 1 });
     expect(await service.usage({ siteId: POWER_SITE })).toEqual({ count: 0 });
+  });
+
+  it('deletes the draft when the work order is reassigned or cancelled', async () => {
+    const OTHER = uuidv7();
+    reach = { [ANTENNA]: [{ userId: ENGINEER, wholeProject: true, siteIds: [] }, { userId: OTHER, wholeProject: true, siteIds: [] }] };
+    const addDraft = (workOrderId: string) => prisma.workOrderDraft.create({ data: { workOrderId, holderId: ENGINEER, deviceId: 'd', deviceLabel: 'P', version: 1, responses: [] } });
+
+    const reassigned = (await create(ANTENNA, ANTENNA_SITE)).created[0]!;
+    await addDraft(reassigned.id);
+    await service.update(GLOBAL, reassigned.id, { assigneeId: OTHER }, ACTOR, 'Bearer t');
+    expect(await prisma.workOrderDraft.count({ where: { workOrderId: reassigned.id } })).toBe(0);
+
+    const cancelled = (await create(ANTENNA, ANTENNA_SITE)).created[0]!;
+    await addDraft(cancelled.id);
+    await service.cancel(GLOBAL, cancelled.id, { reason: 'Site dropped' }, ACTOR);
+    expect(await prisma.workOrderDraft.count({ where: { workOrderId: cancelled.id } })).toBe(0);
+  });
+
+  it('keeps the draft when only the date moves', async () => {
+    const order = (await create(ANTENNA, ANTENNA_SITE)).created[0]!;
+    await prisma.workOrderDraft.create({ data: { workOrderId: order.id, holderId: ENGINEER, deviceId: 'd', deviceLabel: 'P', version: 1, responses: [] } });
+    await service.update(GLOBAL, order.id, { plannedCompletionAt: new Date('2026-10-15T18:14:59Z') }, ACTOR, 'Bearer t');
+    expect(await prisma.workOrderDraft.count({ where: { workOrderId: order.id } })).toBe(1);
+  });
+
+  /**
+   * A field engineer holds task.view but not task.view_all: they see the work
+   * assigned to them and nothing else, and cancelled work drops out of their
+   * queue — even when another engineer's work sits on a site they can reach.
+   */
+  describe('for a caller restricted to their own work', () => {
+    const OTHER = uuidv7();
+    const mine = (scope: AuthzScope = GLOBAL) => ({ ...scope, onlyAssignee: ENGINEER });
+
+    async function seedTwoEngineers() {
+      reach[ANTENNA] = [
+        { userId: ENGINEER, wholeProject: true, siteIds: [] },
+        { userId: OTHER, wholeProject: true, siteIds: [] },
+      ];
+      const own = (await create(ANTENNA, ANTENNA_SITE)).created[0]!;
+      const theirs = (await service.create({
+        projectId: ANTENNA, workOrderType: 'QUALITY_SELF_CHECK', templateId, siteIds: [ANTENNA_SITE], assigneeId: OTHER,
+        plannedCompletionAt: new Date('2026-09-30T18:14:59Z'),
+      }, ACTOR, 'Bearer t')).created[0]!;
+      const cancelled = (await create(ANTENNA, ANTENNA_SITE)).created[0]!;
+      await service.cancel(GLOBAL, cancelled.id, { reason: 'Site dropped' }, ACTOR);
+      return { own, theirs, cancelled };
+    }
+
+    it('lists only their open and closed work, never another engineer’s or a cancelled one', async () => {
+      const { own } = await seedTwoEngineers();
+      const page = await service.list(mine(), { page: 1, limit: 20 });
+      expect(page.items.map((item) => item.id)).toEqual([own.id]);
+      expect(page.counts).toMatchObject({ ALL: 1, NOT_STARTED: 1, CANCELLED: 0 });
+      expect((await service.list(mine(), { page: 1, limit: 20, status: 'CANCELLED' })).total).toBe(0);
+      // Asking for someone else's work by assignee finds nothing, not their work.
+      expect((await service.list(mine(), { page: 1, limit: 20, assigneeId: OTHER })).total).toBe(0);
+    });
+
+    it('keeps another engineer’s and cancelled work out of the brief and the detail read', async () => {
+      const { own, theirs, cancelled } = await seedTwoEngineers();
+      expect((await service.brief(mine(), ANTENNA)).map((row) => row.id)).toEqual([own.id]);
+      expect((await service.get(mine(), own.id)).id).toBe(own.id);
+      await expect(service.get(mine(), theirs.id)).rejects.toThrow('Work order not found');
+      await expect(service.get(mine(), cancelled.id)).rejects.toThrow('Work order not found');
+    });
+
+    it('leaves an unrestricted caller seeing everything, cancelled included', async () => {
+      await seedTwoEngineers();
+      expect((await service.list(GLOBAL, { page: 1, limit: 20 })).counts).toMatchObject({ ALL: 3, CANCELLED: 1 });
+    });
   });
 });

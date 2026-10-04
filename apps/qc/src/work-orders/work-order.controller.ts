@@ -4,7 +4,7 @@ import {
   CancelWorkOrderSchema, CreateWorkOrdersSchema, ListWorkOrdersQuerySchema, UpdateWorkOrderSchema, UuidSchema,
 } from '@ipms/contracts';
 import { ProjectDirectoryClient, required } from './project-directory.client.js';
-import { WorkOrderService } from './work-order.service.js';
+import { WorkOrderService, type WorkOrderScope } from './work-order.service.js';
 
 type Authed = { user: AuthzUser; headers: Record<string, string | undefined> };
 
@@ -25,19 +25,19 @@ export class WorkOrderController {
   @Get() @RequirePermission('task.view')
   async list(@Query() query: unknown, @Req() req: Authed) {
     const parsed = ListWorkOrdersQuerySchema.parse(query);
-    return this.workOrders.list(await this.scope(req), parsed);
+    return this.workOrders.list(await this.readScope(req), parsed);
   }
 
   @Get('by-project/:projectId') @RequirePermission('task.view')
   async brief(@Param('projectId') projectId: string, @Req() req: Authed) {
     const id = UuidSchema.parse(projectId);
-    return this.workOrders.brief(await this.scope(req), id);
+    return this.workOrders.brief(await this.readScope(req), id);
   }
 
   @Get(':id') @RequirePermission('task.view')
   async get(@Param('id') id: string, @Req() req: Authed) {
     const parsed = UuidSchema.parse(id);
-    return this.workOrders.get(await this.scope(req), parsed);
+    return this.workOrders.get(await this.readScope(req), parsed);
   }
 
   /**
@@ -64,6 +64,17 @@ export class WorkOrderController {
     const parsed = UuidSchema.parse(id);
     const dto = CancelWorkOrderSchema.parse(body);
     return this.workOrders.cancel(await this.scope(req), parsed, dto, req.user.id);
+  }
+
+  /**
+   * The scope reads use. `task.view` alone reaches only the caller's own,
+   * uncancelled work; `task.view_all` lifts that to everything in scope.
+   * Enforced here rather than in the web, so the field app and direct API
+   * calls get the same answer.
+   */
+  private async readScope(req: Authed): Promise<WorkOrderScope> {
+    const scope = await this.scope(req);
+    return req.user.permissions.includes('task.view_all') ? scope : { ...scope, onlyAssignee: req.user.id };
   }
 
   private async scope(req: Authed) {

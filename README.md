@@ -1,4 +1,4 @@
-# Integrated Project Management System (iPMS)
+# Axiom — Integrated Project Management System
 
 Enterprise-grade, distributed microservices platform for project delivery tracking, site milestones, and quality control (QC) inspections with mobile offline-first capabilities.
 
@@ -55,6 +55,7 @@ graph TD
 | **QC Database** | `localhost:5436` | `5432` | Dedicated DB for Quality Control (`ipms_qc`) |
 | **NATS JetStream** | `localhost:4222` | `4222` | Message broker and event streams |
 | **Redis** | `localhost:6379` | `6379` | Cache, token versions & rate limits |
+| **MinIO (local R2 stand-in, opt-in)** | `localhost:9000` | `9000` | Starts only with `--profile local-storage`; see `docker/env/README.md` |
 
 ---
 
@@ -64,10 +65,10 @@ The stack automatically provisions four demo accounts on initial boot:
 
 | Role | Username | Password | Access Level |
 | :--- | :--- | :--- | :--- |
-| **Administrator** | `admin` | `password123` | Full platform administration |
-| **Project Manager** | `manager` | `password123` | Project, milestone, and site management |
-| **Quality Control** | `qc` | `password123` | Inspection checklist review & verification |
-| **Field Engineer** | `engineer` | `password123` | Field task execution & submission |
+| **Administrator** | `admin@ipms.local` | `P@ssword1234` | Full platform administration |
+| **Project Manager** | `manager@ipms.local` | `P@ssword1234` | Project, milestone, and site management |
+| **Quality Control** | `qc@ipms.local` | `P@ssword1234` | Inspection checklist review & verification |
+| **Field Engineer** | `engineer@ipms.local` | `P@ssword1234` | Field task execution & submission |
 
 ---
 
@@ -98,7 +99,7 @@ docker compose -f docker/docker-compose.yml ps
 ```
 
 ### 4. Open in Your Browser
-- **Web UI**: Open **[http://localhost:3100](http://localhost:3100)** and sign in with `admin` / `password123`.
+- **Web UI**: Open **[http://localhost:3100](http://localhost:3100)** and sign in with `admin@ipms.local` / `P@ssword1234`.
 - **API Readiness**: Visit **[http://localhost:3000/health/ready](http://localhost:3000/health/ready)**.
 
 ### 5. View Logs
