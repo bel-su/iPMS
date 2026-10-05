@@ -45,11 +45,10 @@ export class PaymentService {
         ({ applied, payout } = planSettlement(approved, balance.outstanding));
       }
 
-      if (compareMoney(payout, '0') > 0) {
-        const details = PaymentDetailsSchema.safeParse(body);
-        if (!details.success) throw new UnprocessableEntityException('Payment details are required: mode, reference and date');
-        await this.writePayment(tx, id, 'PAYOUT', payout, details.data, actor);
-      }
+      // Validate before any write, then take the conditional write first so a concurrent loser gets a 409
+      // rather than waiting on the winner's payout and failing the one-payout-per-request unique index.
+      const details = compareMoney(payout, '0') > 0 ? PaymentDetailsSchema.safeParse(body) : null;
+      if (details && !details.success) throw new UnprocessableEntityException('Payment details are required: mode, reference and date');
 
       const status = finalStatus(row.kind as 'ADVANCE' | 'SETTLEMENT' | 'REIMBURSEMENT');
       const moved = await tx.financeRequest.updateMany({
@@ -57,6 +56,8 @@ export class PaymentService {
         data: { status, ...(applied === null ? {} : { appliedAmount: applied }) },
       });
       if (moved.count !== 1) throw new ConflictException('The request changed; reload and try again');
+
+      if (details?.success) await this.writePayment(tx, id, 'PAYOUT', payout, details.data, actor);
 
       await recordAction(tx, { requestId: id, revision: row.revision, step: 'FINANCE', action: 'PAID', actorId: actor.id, amount: payout });
       const after = await tx.financeRequest.findUniqueOrThrow({ where: { id } });

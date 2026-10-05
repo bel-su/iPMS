@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma-clients/finance';
+import { ConflictException } from '@nestjs/common';
 import { uuidv7 } from '@ipms/contracts';
 import { startTestDb } from '../../prisma/test-db.js';
 import { ACTORS, PROJECT, aCategory, resetDb, scopes } from '../../prisma/fixtures.js';
@@ -144,9 +145,27 @@ describe('pay an advance or reimbursement', () => {
       payments.pay(id, bank, ACTORS.finance, scopes.global),
     ]);
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toBeInstanceOf(ConflictException);
+    expect((rejected[0]!.reason as ConflictException).getStatus()).toBe(409);
     expect(await prisma.payment.count()).toBe(1);
     expect(await prisma.outboxEvent.count({ where: { subject: 'finance.request.paid' } })).toBe(1);
+  });
+
+  it('answers the loser of two concurrent payments of a settlement with a payout with 409', async () => {
+    const advanceId = await paidAdvance('5000');
+    const sId = await settlementAtFinance(advanceId, '7000');
+    const results = await Promise.allSettled([
+      payments.pay(sId, bank, ACTORS.finance, scopes.global),
+      payments.pay(sId, bank, ACTORS.finance, scopes.global),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toBeInstanceOf(ConflictException);
+    expect((rejected[0]!.reason as ConflictException).getStatus()).toBe(409);
+    expect(await prisma.payment.count({ where: { requestId: sId, kind: 'PAYOUT' } })).toBe(1);
   });
 
   it('pays a reimbursement', async () => {
