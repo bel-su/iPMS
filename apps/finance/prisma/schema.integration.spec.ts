@@ -48,4 +48,25 @@ describe('finance schema', () => {
     await prisma.financeRequest.delete({ where: { id: row.id } });
     expect(await prisma.requestInvoice.count()).toBe(0);
   });
+
+  describe('payments', () => {
+    const payment = (requestId: string, kind: 'PAYOUT' | 'CASH_RETURN', amount = '10.00') => prisma.payment.create({
+      data: { id: uuidv7(), requestId, kind, mode: 'CASH', reference: 'R', paidOn: new Date('2026-10-05'), amount, recordedBy: ACTORS.finance.id },
+    });
+
+    it('refuses a second payout for the same request', async () => {
+      const row = await request({ status: 'PAID' });
+      await payment(row.id, 'PAYOUT');
+      await expect(payment(row.id, 'PAYOUT')).rejects.toThrow();
+      expect(await prisma.payment.count({ where: { requestId: row.id } })).toBe(1);
+    });
+
+    it('allows one payout and any number of cash returns on a request', async () => {
+      const row = await request({ status: 'PAID' });
+      await payment(row.id, 'PAYOUT', '1000.00');
+      await payment(row.id, 'CASH_RETURN');
+      await payment(row.id, 'CASH_RETURN');
+      expect(await prisma.payment.count({ where: { requestId: row.id } })).toBe(3);
+    });
+  });
 });

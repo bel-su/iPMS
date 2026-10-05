@@ -108,6 +108,8 @@ model Payment {
   request      FinanceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
 
   @@index([requestId, kind])
+  // Also a partial unique index "payment_one_payout_per_request" on (requestId) WHERE kind = 'PAYOUT', so a
+  // request is paid out at most once. Prisma cannot express it; see migration 20261006000100_payment_one_payout.
   @@map("payment")
 }
 
