@@ -22,6 +22,7 @@ class TokenStorage {
   static const String _biometricUserIdKey = 'ipms_biometric_user_id';
   static const String _deviceIdKey = 'ipms_device_id';
   static const String _apiBaseUrlKey = 'ipms_api_base_url';
+  static const String _hasSeenGuideKey = 'ipms_has_seen_guide_v1';
 
   Future<void> saveTokens({
     required String accessToken,
@@ -149,5 +150,16 @@ class TokenStorage {
     if (purgeBiometrics) {
       await clearBiometric();
     }
+  }
+
+  /// Checks if the user has already viewed the onboarding project guide.
+  Future<bool> hasSeenProjectGuide() async {
+    final val = await _storage.read(key: _hasSeenGuideKey);
+    return val == 'true';
+  }
+
+  /// Records that the user has seen the project guide so it won't auto-pop again.
+  Future<void> markProjectGuideAsSeen() async {
+    await _storage.write(key: _hasSeenGuideKey, value: 'true');
   }
 }

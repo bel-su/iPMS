@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/security/token_storage.dart';
 import '../../core/theme/app_colors.dart';
 import '../../features/auth/presentation/widgets/biometric_enrollment_sheet.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/providers/biometric_provider.dart';
+import '../../features/guide/presentation/app_guide_modal.dart';
 import 'floating_nav_bar.dart';
 
 /// Navigation index notifier for active tab switching across screens.
@@ -33,7 +35,24 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _offerBiometricSignIn());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _offerBiometricSignIn();
+      if (mounted) {
+        await _checkFirstTimeGuide();
+      }
+    });
+  }
+
+  /// Displays the interactive onboarding guide once on initial installation / first login.
+  Future<void> _checkFirstTimeGuide() async {
+    final storage = TokenStorage();
+    final hasSeen = await storage.hasSeenProjectGuide();
+    if (!hasSeen && mounted) {
+      await storage.markProjectGuideAsSeen();
+      if (mounted) {
+        await AppGuideModal.show(context);
+      }
+    }
   }
 
   /// After a password sign-in, offers to turn on Face ID / fingerprint once,

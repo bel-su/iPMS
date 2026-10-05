@@ -11,6 +11,7 @@ import { SIDEBAR_COLLAPSED, SIDEBAR_COOKIE } from './components/sidebar-state';
 import { NotificationCenter } from './components/notification-center';
 import { SidebarToggle } from './components/sidebar-toggle';
 import { TopSearch } from './components/top-search';
+import { ProjectGuideTrigger } from './components/project-guide';
 import { getCurrentUser, hasPermission, mayReadDocs } from './lib/iam-api';
 import { getMyProfile } from './lib/user-api';
 import { listWorkOrders } from './lib/work-order-api';
@@ -306,6 +307,7 @@ export function TopActions({ children }: { children?: React.ReactNode }) {
     <div className="top-actions">
       <Suspense fallback={null}><TopSearch /></Suspense>
       {children}
+      <ProjectGuideTrigger />
       <NotificationCenter />
     </div>
   );
