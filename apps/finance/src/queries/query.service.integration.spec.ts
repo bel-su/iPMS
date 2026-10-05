@@ -62,6 +62,15 @@ describe('list', () => {
     expect((await queries.list(ACTORS.engineer, scopes.project, { view: 'awaiting', page: 1, limit: 20 })).items).toEqual([]);
   });
 
+  it('returns nothing for awaiting when the caller lacks view_all, even with an approval permission', async () => {
+    await make(ACTORS.engineer);
+    const noViewAll = { ...ACTORS.pm, permissions: ACTORS.pm.permissions.filter((p) => p !== 'finance_request.view_all') };
+    expect(noViewAll.permissions).toContain('finance_approval.pm');
+    const page = await queries.list(noViewAll, scopes.project, { view: 'awaiting', page: 1, limit: 20 });
+    expect(page.items).toEqual([]);
+    expect(page.total).toBe(0);
+  });
+
   it('filters by status, kind and project, and paginates newest first', async () => {
     await make(); await make(); await make();
     const page = await queries.list(ACTORS.pm, scopes.project, { view: 'all', page: 2, limit: 2, status: 'PENDING_PM', kind: 'ADVANCE', projectId: PROJECT.id });

@@ -3,6 +3,7 @@ import { scopeWhere, type AuthzScope } from '@ipms/authz';
 import type { ReportQuery } from '@ipms/contracts';
 import type { Prisma, PrismaClient } from '@prisma-clients/finance';
 import type { Actor } from '../common.js';
+import { advanceBalance } from '../balance.js';
 import { compareMoney, fromMinor, sumMoney, toMinor } from '../money.js';
 
 export interface SpendRow {
@@ -11,6 +12,7 @@ export interface SpendRow {
   advancesPaid: string;
   applied: string;
   cashReturned: string;
+  /** Outstanding balance today of the advances in this group: for each paid advance filed under the group (by the advance's own project, category or requester, within the project and date filters), paid minus ALL its settled settlements and ALL cash returned, whatever their dates or categories. */
   outstanding: string;
   reimbursed: string;
   settled: string;
@@ -41,7 +43,7 @@ export class ReportService {
     const [requests, returns] = await Promise.all([
       this.prisma.financeRequest.findMany({
         where: { AND: [base, { status: { in: ['PAID', 'SETTLED'] } }] },
-        select: { kind: true, projectId: true, projectCode: true, projectName: true, categoryId: true, requesterId: true, approvedAmount: true, appliedAmount: true, category: { select: { name: true } } },
+        select: { id: true, kind: true, projectId: true, projectCode: true, projectName: true, categoryId: true, requesterId: true, approvedAmount: true, appliedAmount: true, category: { select: { name: true } } },
       }),
       this.prisma.payment.findMany({
         where: { kind: 'CASH_RETURN', request: base },
@@ -49,17 +51,30 @@ export class ReportService {
       }),
     ]);
 
-    const groups = new Map<string, { label: string; advances: string[]; applied: string[]; returned: string[]; reimbursed: string[]; settled: string[] }>();
+    const groups = new Map<string, { label: string; advances: string[]; outstanding: string[]; applied: string[]; returned: string[]; reimbursed: string[]; settled: string[] }>();
     const slot = (r: { projectId: string; projectCode: string; projectName: string; categoryId: string; requesterId: string; category: { name: string } }) => {
       const [key, label] = query.groupBy === 'project' ? [r.projectId, `${r.projectCode} ${r.projectName}`]
         : query.groupBy === 'category' ? [r.categoryId, r.category.name]
         : [r.requesterId, r.requesterId];
-      if (!groups.has(key)) groups.set(key, { label, advances: [], applied: [], returned: [], reimbursed: [], settled: [] });
+      if (!groups.has(key)) groups.set(key, { label, advances: [], outstanding: [], applied: [], returned: [], reimbursed: [], settled: [] });
       return { key, group: groups.get(key)! };
     };
 
+    // Outstanding is a property of each paid advance, not of the period: take its balance as it stands now.
+    const advanceIds = requests.filter((r) => r.kind === 'ADVANCE').map((r) => r.id);
+    const [settlements, allReturns] = advanceIds.length === 0 ? [[], []] : await Promise.all([
+      this.prisma.financeRequest.findMany({ where: { advanceId: { in: advanceIds }, status: 'SETTLED' }, select: { advanceId: true, appliedAmount: true } }),
+      this.prisma.payment.findMany({ where: { requestId: { in: advanceIds }, kind: 'CASH_RETURN' }, select: { requestId: true, amount: true } }),
+    ]);
+    const appliedBy = new Map<string, string[]>(); const returnedBy = new Map<string, string[]>();
+    for (const s of settlements) appliedBy.set(s.advanceId!, [...(appliedBy.get(s.advanceId!) ?? []), s.appliedAmount?.toFixed(2) ?? '0.00']);
+    for (const p of allReturns) returnedBy.set(p.requestId, [...(returnedBy.get(p.requestId) ?? []), p.amount.toFixed(2)]);
+
     for (const r of requests) {
       const { group } = slot(r);
+      if (r.kind === 'ADVANCE') {
+        group.outstanding.push(advanceBalance({ paid: r.approvedAmount?.toFixed(2) ?? '0.00', applied: appliedBy.get(r.id) ?? [], cashReturned: returnedBy.get(r.id) ?? [] }).outstanding);
+      }
       const approved = r.approvedAmount?.toFixed(2) ?? '0.00';
       if (r.kind === 'ADVANCE') group.advances.push(approved);
       else if (r.kind === 'REIMBURSEMENT') group.reimbursed.push(approved);
@@ -75,7 +90,7 @@ export class ReportService {
       const settled = sumMoney(g.settled);
       return {
         key, label: g.label, advancesPaid, applied, cashReturned,
-        outstanding: fromMinor(toMinor(advancesPaid) - toMinor(applied) - toMinor(cashReturned)),
+        outstanding: sumMoney(g.outstanding),
         reimbursed, settled, expense: sumMoney([reimbursed, settled]),
       };
     }).sort((a, b) => compareMoney(b.expense, a.expense) || a.label.localeCompare(b.label));

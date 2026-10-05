@@ -76,6 +76,35 @@ describe('spend report', () => {
   });
 });
 
+describe('spend report outstanding', () => {
+  async function twoCategories() {
+    const cats = await prisma.expenseCategory.findMany({ orderBy: { code: 'asc' }, take: 2 });
+    const [a, b] = [cats[0]!, cats[1]!];
+    const adv = await requests.create({ kind: 'ADVANCE', projectId: PROJECT.id, categoryId: a.id, purpose: 'Travel', amount: '50000' }, ACTORS.engineer, scopes.project, PROJECT);
+    await requests.submit(adv.id, ACTORS.engineer); await through(adv.id); await payments.pay(adv.id, bank, ACTORS.finance, scopes.global);
+    const set = await requests.create({ kind: 'SETTLEMENT', advanceId: adv.id, categoryId: b.id, purpose: 'Bills', invoices: [inv('12000')] }, ACTORS.engineer, scopes.project);
+    await requests.submit(set.id, ACTORS.engineer); await through(set.id); await payments.pay(set.id, {}, ACTORS.finance, scopes.global);
+    await payments.returnCash(adv.id, { ...bank, amount: '3000' }, ACTORS.finance, scopes.global);
+    return { a, b, adv, set };
+  }
+
+  it('attributes outstanding to the category the advance was filed under', async () => {
+    const { a, b } = await twoCategories();
+    const rows = await reports.spend(ACTORS.finance, scopes.global, { groupBy: 'category', format: 'json' });
+    expect(rows.find((r) => r.key === a.id)).toMatchObject({ advancesPaid: '50000.00', outstanding: '35000.00' });
+    expect(rows.find((r) => r.key === b.id)).toMatchObject({ applied: '12000.00', outstanding: '0.00' });
+  });
+
+  it('is not affected by a date filter that excludes the settlement and the return', async () => {
+    const { adv, set } = await twoCategories();
+    const old = new Date('2020-01-01T00:00:00Z');
+    await prisma.financeRequest.update({ where: { id: adv.id }, data: { createdAt: old } });
+    const [row] = await reports.spend(ACTORS.finance, scopes.global, { groupBy: 'project', format: 'json', to: new Date('2021-01-01') });
+    expect(row).toMatchObject({ advancesPaid: '50000.00', applied: '0.00', outstanding: '35000.00' });
+    expect(set.id).toBeDefined();
+  });
+});
+
 describe('spend workbook', () => {
   it('writes one row per group with a header', async () => {
     await scenario();

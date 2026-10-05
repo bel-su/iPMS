@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma-clients/finance';
 import { startTestDb } from '../../prisma/test-db.js';
@@ -34,5 +35,16 @@ describe('categories', () => {
   it('refuses a duplicate code and a caller who cannot manage categories', async () => {
     await expect(service.create({ code: 'TRAVEL', name: 'Again' }, ACTORS.finance)).rejects.toThrow(/already exists/);
     await expect(service.create({ code: 'NEWCAT', name: 'New' }, ACTORS.engineer)).rejects.toThrow(/finance_category\.manage/);
+  });
+
+  it('turns a concurrent duplicate create into a conflict, never a raw database error', async () => {
+    const results = await Promise.allSettled([
+      service.create({ code: 'RACECAT', name: 'Race' }, ACTORS.finance),
+      service.create({ code: 'RACECAT', name: 'Race' }, ACTORS.finance),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toBeInstanceOf(ConflictException);
+    expect(rejected.reason.message).toMatch(/already exists/);
   });
 });

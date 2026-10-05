@@ -68,7 +68,8 @@ export class QueryService {
       if (!actor.permissions.includes(VIEW_ALL)) throw new ForbiddenException(`This view needs the ${VIEW_ALL} permission`);
       return inProjects;
     }
-    // 'awaiting' needs no view_all: it is empty unless a permission opens an approval step.
+    // 'awaiting' is a view over everyone's requests, so it needs view_all itself; without it the list is empty, not an error.
+    if (!actor.permissions.includes(VIEW_ALL)) return { id: { in: [] } };
     const statuses = awaitingStatuses(actor.permissions);
     return { AND: [inProjects, { status: { in: statuses } }, { requesterId: { not: actor.id } }] };
   }
