@@ -31,6 +31,17 @@ function hrefs(node: unknown): string[] {
   return [...here, ...list.flatMap(hrefs)];
 }
 
+/** Walks the rendered tree for the `href` of every nav item whose section matches the active one (what NavItem marks aria-current). */
+function currentHrefs(node: unknown): string[] {
+  if (!node || typeof node !== 'object') return [];
+  const element = node as { props?: { href?: string; section?: string; active?: string; children?: unknown } };
+  const props = element.props;
+  const here = props && typeof props.href === 'string' && props.section !== undefined && props.section === props.active ? [props.href] : [];
+  const children = props?.children;
+  const list = Array.isArray(children) ? children : [children];
+  return [...here, ...list.flatMap(currentHrefs)];
+}
+
 beforeEach(() => {
   getCurrentUser.mockReset();
   listWorkOrders.mockReset();
@@ -180,6 +191,24 @@ describe('Sidebar Finance group', () => {
     expect(JSON.stringify(await Sidebar({ active: 'finance' }))).not.toContain('Overview');
     expect(links.some((href) => href.startsWith('/quality'))).toBe(false);
     expect(links).not.toContain('/#audit-log');
+  });
+});
+
+describe('Sidebar Finance active item', () => {
+  const all = { state: 'ready', data: { id: 'u-1', roles: ['SUPER_ADMIN'], permissions: ['finance_request.view', 'finance_category.manage', 'finance_request.view_all'], tokenVersion: 0, isActive: true } };
+
+  it.each([
+    ['finance', '/finance'],
+    ['finance-categories', '/finance/categories'],
+    ['finance-reports', '/finance/reports'],
+  ] as const)('marks only the %s item as current', async (active, href) => {
+    getCurrentUser.mockResolvedValue(all);
+    expect(currentHrefs(await Sidebar({ active }))).toEqual([href]);
+  });
+
+  it('falls back to the default menu when a finance-home user cannot view finance', async () => {
+    getCurrentUser.mockResolvedValue({ state: 'ready', data: { id: 'u-1', roles: ['FINANCE'], permissions: ['project.view'], tokenVersion: 0, isActive: true } });
+    expect(hrefs(await Sidebar({ active: 'overview' }))).toContain('/projects');
   });
 });
 

@@ -19,7 +19,7 @@ export default async function CategoriesPage() {
 
   return (
     <main className="app-shell">
-      <Sidebar active="finance" />
+      <Sidebar active="finance-categories" />
       <section className="content">
         <header className="topbar">
           <div className="crumbs"><a href="/">Workspace</a><b>/</b><a href="/finance">Finance</a><b>/</b><strong>Categories</strong></div>

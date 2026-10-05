@@ -7,11 +7,6 @@ export function percent(part: number, whole: number): number {
   return whole > 0 ? Math.round((part / whole) * 100) : 0;
 }
 
-/** "NPR 12,86,000" — Nepali digit grouping. */
-export function formatNpr(amount: number): string {
-  return `NPR ${amount.toLocaleString('en-IN')}`;
-}
-
 type Counts = Partial<Record<TaskStatus | 'ALL' | 'OVERDUE', number>>;
 
 export const STATUS_SEGMENTS = [
@@ -73,6 +68,22 @@ export interface LogRow {
 
 const OBJECT_PREFIX: Record<string, string> = {
   WorkOrder: 'WO', Project: 'PRJ', Site: 'SITE', Task: 'TASK', TaskType: 'TYPE', QcTemplate: 'TPL', Role: 'ROLE', Media: 'MEDIA',
+  FinanceRequest: 'FIN', ExpenseCategory: 'CAT', Payment: 'PAY',
+};
+
+const FINANCE_OBJECTS = new Set(['FinanceRequest', 'ExpenseCategory', 'Payment']);
+
+const FINANCE_VERB_ROW: Record<string, Pick<LogRow, 'tag' | 'tone'>> = {
+  created: { tag: 'Created', tone: 'blue' },
+  submitted: { tag: 'Submitted', tone: 'blue' },
+  approved: { tag: 'Approved', tone: 'green' },
+  approved_by_pm: { tag: 'Approved', tone: 'green' },
+  paid: { tag: 'Paid', tone: 'green' },
+  settled: { tag: 'Settled', tone: 'green' },
+  cash_returned: { tag: 'Returned', tone: 'green' },
+  rejected: { tag: 'Rejected', tone: 'red' },
+  cancelled: { tag: 'Cancelled', tone: 'red' },
+  returned: { tag: 'Returned', tone: 'amber' },
 };
 
 const WORK_ORDER_STATUS_ROW: Partial<Record<string, Pick<LogRow, 'tag' | 'tone' | 'group'> & { text: string }>> = {
@@ -95,6 +106,13 @@ export function auditRow(event: AuditEvent, actorName: string, actorRole: string
   const base = { key: event.id, at: new Date(event.timestamp), actor: actorName, actorRole };
   const ref = `${OBJECT_PREFIX[event.objectType] ?? 'OBJ'}-${event.objectId.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
   if (mapped) return { ...base, ...mapped, ref };
+  if (FINANCE_OBJECTS.has(event.objectType)) {
+    // "finance.request.paid" → "Request paid"; the verb picks the tag.
+    const rest = event.action.replace(/^finance\./, '');
+    const verb = rest.split('.').pop() ?? '';
+    const row = FINANCE_VERB_ROW[verb] ?? { tag: 'Updated', tone: 'slate' as const };
+    return { ...base, ...row, group: 'finance', text: sentence(rest), ref };
+  }
   if (event.action === 'work_order.cancelled') return { ...base, tag: 'Cancelled', tone: 'red', group: 'other', text: 'Work order cancelled', ref };
   if (event.action === 'media.rejected') return { ...base, tag: 'Rejected', tone: 'red', group: 'other', text: 'Evidence photo rejected', ref };
   if (event.action.endsWith('.created')) return { ...base, tag: 'Created', tone: 'blue', group: 'other', text: sentence(event.action), ref };

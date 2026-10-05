@@ -119,7 +119,7 @@ export async function AdminOverview({ searchParams }: { searchParams: Promise<{ 
                       <th scope="col">Work orders approved</th>
                       <th scope="col">Open</th>
                       <th scope="col">In rework</th>
-                            </tr>
+                    </tr>
                   </thead>
                   <tbody>
                     {rows.map(({ project, c, all, done, open, overdue: late, rework: back }) => (

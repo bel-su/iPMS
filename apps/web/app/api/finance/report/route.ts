@@ -1,7 +1,7 @@
 import { proxyDownload } from '../../../lib/download';
+import { resolveReportQuery } from '../../../finance/report-model';
 
-const GROUPINGS = ['project', 'category', 'requester'] as const;
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The spend report as an Excel file. A plain link to the gateway would arrive
@@ -10,14 +10,13 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
  * shape as the site-import template route.
  */
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const requested = url.searchParams.get('groupBy');
-  const groupBy = GROUPINGS.find((g) => g === requested) ?? 'project';
+  const { searchParams } = new URL(request.url);
+  const { groupBy, from, to } = resolveReportQuery({ groupBy: searchParams.get('groupBy') ?? undefined, from: searchParams.get('from') ?? undefined, to: searchParams.get('to') ?? undefined });
+  const projectId = searchParams.get('projectId');
   const params = new URLSearchParams({ groupBy });
-  for (const key of ['projectId', 'from', 'to'] as const) {
-    const value = url.searchParams.get(key);
-    if (value && (key === 'projectId' || DATE.test(value))) params.set(key, value);
-  }
+  if (projectId && UUID.test(projectId)) params.set('projectId', projectId);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
   params.set('format', 'xlsx');
   return proxyDownload(
     `/api/v1/finance/reports/project-spend?${params.toString()}`,

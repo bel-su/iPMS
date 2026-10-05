@@ -14,7 +14,7 @@ import { QcOverview } from './overview/qc-overview';
  * choice, never a boundary — every one reads through the gateway as the
  * signed-in person.
  */
-export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ log?: string; tab?: string }> }) {
+export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ log?: string }> }) {
   const viewer = await getCurrentUser();
   switch (viewer.state === 'ready' ? homeFor(viewer.data.roles) : 'admin') {
     case 'manager': return <ManagerOverview />;

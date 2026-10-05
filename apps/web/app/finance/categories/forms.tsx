@@ -9,8 +9,8 @@ export function CreateCategoryForm() {
   const [state, action] = useActionStateWithToast(createCategoryAction, EMPTY, 'Category added');
   return (
     <form action={action} className="inline-form">
-      <label className="field">Code<input name="code" required pattern="[A-Za-z0-9_\-]+" maxLength={50} /></label>
-      <label className="field">Name<input name="name" required maxLength={200} /></label>
+      <label className="field">Code<input name="code" required pattern="[A-Za-z0-9_]{2,30}" maxLength={30} /></label>
+      <label className="field">Name<input name="name" required maxLength={100} /></label>
       <SubmitButton>Add category</SubmitButton>
       <FormError state={state} />
     </form>
@@ -26,7 +26,7 @@ export function CategoryRow({ category }: { category: ExpenseCategory }) {
       <td>
         <form action={action} className="inline-form">
           <input type="hidden" name="id" value={category.id} />
-          <label className="field"><input name="name" defaultValue={category.name} required maxLength={200} aria-label={`Name of ${category.code}`} /></label>
+          <label className="field"><input name="name" defaultValue={category.name} required maxLength={100} aria-label={`Name of ${category.code}`} /></label>
           <SubmitButton className="ghost-button">Save</SubmitButton>
           <FormError state={state} />
         </form>

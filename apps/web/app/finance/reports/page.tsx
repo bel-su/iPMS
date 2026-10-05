@@ -35,7 +35,7 @@ export default async function SpendReportPage({ searchParams }: { searchParams: 
 
   return (
     <main className="app-shell">
-      <Sidebar active="finance" />
+      <Sidebar active="finance-reports" />
       <section className="content">
         <header className="topbar">
           <div className="crumbs"><a href="/">Workspace</a><b>/</b><a href="/finance">Finance</a><b>/</b><strong>Spend report</strong></div>

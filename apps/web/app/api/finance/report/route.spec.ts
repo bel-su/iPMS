@@ -25,4 +25,13 @@ describe('GET /api/finance/report', () => {
     await GET(new Request('http://web/api/finance/report?groupBy=%27%3Bdrop'));
     expect(proxyDownload.mock.calls[0]?.[0]).toContain('groupBy=project');
   });
+
+  it('passes a well-formed projectId and drops a malformed one', async () => {
+    const id = '3f2a91c0-1111-2222-3333-444455556666';
+    await GET(new Request(`http://web/api/finance/report?projectId=${id}`));
+    expect(proxyDownload.mock.calls[0]?.[0]).toContain(`projectId=${id}`);
+    proxyDownload.mockClear();
+    await GET(new Request('http://web/api/finance/report?projectId=1%3Bdrop'));
+    expect(proxyDownload.mock.calls[0]?.[0]).not.toContain('projectId');
+  });
 });

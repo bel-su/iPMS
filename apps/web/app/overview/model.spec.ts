@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AuditEvent } from '../lib/audit-api';
-import { auditRow, filterLog, formatNpr, parseLogFilter, percent, statusBreakdown, whenLabel } from './model';
+import { auditRow, filterLog, parseLogFilter, percent, statusBreakdown, whenLabel } from './model';
 
 function event(action: string, newState: Record<string, unknown> = {}, objectType = 'WorkOrder'): AuditEvent {
   return {
@@ -13,13 +13,6 @@ describe('percent', () => {
   it('rounds, and is 0 rather than NaN when there is nothing to divide', () => {
     expect(percent(96, 148)).toBe(65);
     expect(percent(0, 0)).toBe(0);
-  });
-});
-
-describe('formatNpr', () => {
-  it('groups digits the Nepali way', () => {
-    expect(formatNpr(1_286_000)).toBe('NPR 12,86,000');
-    expect(formatNpr(40_000)).toBe('NPR 40,000');
   });
 });
 
@@ -60,6 +53,30 @@ describe('auditRow', () => {
 
   it('falls back to a sentence for actions it has no special reading for', () => {
     expect(auditRow(event('qc_template.published', {}, 'QcTemplate'), 'A', 'R')).toMatchObject({ tag: 'Updated', text: 'QC template published' });
+  });
+});
+
+describe('finance audit events', () => {
+  it.each([
+    ['FinanceRequest', 'FIN'],
+    ['ExpenseCategory', 'CAT'],
+    ['Payment', 'PAY'],
+  ])('files %s events under Finance with a %s reference', (objectType, prefix) => {
+    const row = auditRow(event('finance.request.created', {}, objectType), 'A', 'R');
+    expect(row.group).toBe('finance');
+    expect(row.ref).toBe(`${prefix}-3F2A91`);
+  });
+
+  it('reads finance actions as what happened, not a generic Created/Updated', () => {
+    expect(auditRow(event('finance.request.paid', {}, 'FinanceRequest'), 'A', 'R')).toMatchObject({ tag: 'Paid', tone: 'green', text: 'Request paid' });
+    expect(auditRow(event('finance.request.approved', {}, 'FinanceRequest'), 'A', 'R')).toMatchObject({ tag: 'Approved', text: 'Request approved' });
+    expect(auditRow(event('finance.advance.cash_returned', {}, 'FinanceRequest'), 'A', 'R')).toMatchObject({ text: 'Advance cash returned' });
+    expect(auditRow(event('finance.category.updated', {}, 'ExpenseCategory'), 'A', 'R')).toMatchObject({ text: 'Category updated' });
+  });
+
+  it('shows up under the Finance filter only', () => {
+    const rows = [auditRow(event('finance.request.created', {}, 'FinanceRequest'), 'A', 'R'), auditRow(event('site.updated', {}, 'Site'), 'A', 'R')];
+    expect(filterLog(rows, 'finance')).toHaveLength(1);
   });
 });
 

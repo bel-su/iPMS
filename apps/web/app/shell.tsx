@@ -105,7 +105,7 @@ function ProfileIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-type Section = 'overview' | 'projects' | 'checklists' | 'work-orders' | 'users' | 'docs' | 'profile' | 'audit' | 'finance';
+type Section = 'overview' | 'projects' | 'checklists' | 'work-orders' | 'users' | 'docs' | 'profile' | 'audit' | 'finance' | 'finance-categories' | 'finance-reports';
 
 function NavItem({
   section,
@@ -165,7 +165,7 @@ export async function Sidebar({ active }: { active: Section }) {
   // QC and field staff share the manager's grouped menu; the cash-in-hand records are for everyone else.
   const staff = home === 'qc' || home === 'engineer';
   // Finance and Directors live in the finance workspace, so their menu is only that and the docs.
-  const financeHome = home === 'finance';
+  const financeHome = home === 'finance' && mayViewFinance;
   // A manager's or QC's home is a queue, so the menu says how long theirs is.
   const waiting = (manager || home === 'qc') && mayViewTasks ? await listWorkOrders({ status: 'REVIEWING', limit: 1 }) : null;
   const toReview = waiting?.state === 'ready' ? waiting.data.counts.REVIEWING : 0;
@@ -180,12 +180,12 @@ export async function Sidebar({ active }: { active: Section }) {
         Requests
       </NavItem>
       {mayManageCategories ? (
-        <NavItem section="finance" active={active} href="/finance/categories" icon={<CashIcon />}>
+        <NavItem section="finance-categories" active={active} href="/finance/categories" icon={<CashIcon />}>
           Categories
         </NavItem>
       ) : null}
       {maySeeSpend ? (
-        <NavItem section="finance" active={active} href="/finance/reports" icon={<CashIcon />}>
+        <NavItem section="finance-reports" active={active} href="/finance/reports" icon={<CashIcon />}>
           Spend report
         </NavItem>
       ) : null}
