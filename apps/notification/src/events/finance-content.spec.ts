@@ -98,3 +98,47 @@ describe('finance notification content', () => {
       .toBe('Finance recorded NPR 3,000.00 returned against advance ADV-2026-0007. The advance is now fully settled.');
   });
 });
+
+describe('sentence punctuation after a comment', () => {
+  const returned = (comment: string | null): FinanceRequestReturned => ({ ...base, approvedAmount: null, step: 'DIRECTOR', comment });
+  const rejected = (comment: string | null): FinanceRequestRejected => ({ ...base, approvedAmount: null, step: 'FINANCE', comment });
+  const cancelled = (comment: string | null): FinanceRequestCancelled => ({ ...base, heldBy: 'PM', comment });
+
+  it('adds a full stop after a comment that does not end a sentence', () => {
+    expect(returnedContent(returned('Reduce the amount')).body)
+      .toBe('Your advance ADV-2026-0007 was returned by the project director: Reduce the amount. Edit it and submit again.');
+  });
+
+  it('does not double the stop when the comment already ends with one', () => {
+    expect(returnedContent(returned('Reduce the amount.')).body)
+      .toBe('Your advance ADV-2026-0007 was returned by the project director: Reduce the amount. Edit it and submit again.');
+  });
+
+  it('keeps a question or exclamation mark as the end of the sentence', () => {
+    expect(rejectedContent(rejected('Why?')).body).toBe('Your advance ADV-2026-0007 was rejected by finance: Why?');
+    expect(rejectedContent(rejected('No way!')).body).toBe('Your advance ADV-2026-0007 was rejected by finance: No way!');
+    expect(returnedContent(returned('Why?')).body)
+      .toBe('Your advance ADV-2026-0007 was returned by the project director: Why? Edit it and submit again.');
+  });
+
+  it('treats a blank or missing comment as no comment', () => {
+    const tail = 'Advance ADV-2026-0007 for Koshi Rollout was cancelled by its requester while waiting for the project manager.';
+    expect(cancelledContent(cancelled('   ')).body).toBe(tail);
+    expect(cancelledContent(cancelled(null)).body).toBe(tail);
+    expect(rejectedContent(rejected(null)).body).toBe('Your advance ADV-2026-0007 was rejected by finance.');
+  });
+
+  it('trims the comment', () => {
+    expect(rejectedContent(rejected('  Duplicate invoice  ')).body).toBe('Your advance ADV-2026-0007 was rejected by finance: Duplicate invoice.');
+  });
+});
+
+describe('a missing approved amount', () => {
+  it('falls back to the requested amount without a "you asked for" note', () => {
+    const p: FinanceRequestApproved = { ...base, approvedAmount: null };
+    expect(paymentDueContent(p).body)
+      .toBe('Advance ADV-2026-0007 for Koshi Rollout is approved for NPR 50,000.00 and ready to pay.');
+    expect(approvedContent(p).body)
+      .toBe('Your advance ADV-2026-0007 was approved for NPR 50,000.00. It is waiting for payment.');
+  });
+});

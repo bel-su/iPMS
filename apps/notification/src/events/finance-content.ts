@@ -17,8 +17,11 @@ const urlFor = (p: FinanceEventBase): string => `/finance/requests/${p.requestId
 const subject = (p: FinanceEventBase): string => `${KIND[p.kind]} ${p.number}`;
 const lowerSubject = (p: FinanceEventBase): string => `${KIND[p.kind].toLowerCase()} ${p.number}`;
 const onProject = (p: FinanceEventBase): string => `${subject(p)} for ${p.projectName}`;
-/** `: <comment>` when there is one; each template adds its own closing full stop. */
-const reason = (comment: string | null): string => (comment ? `: ${comment}` : '');
+const clean = (comment: string | null): string => (comment ?? '').trim();
+/** `: <comment>` when there is a non-blank one. */
+const reason = (comment: string | null): string => (clean(comment) ? `: ${clean(comment)}` : '');
+/** The closing full stop, unless the comment already ends the sentence with `.`, `!` or `?`. */
+const end = (comment: string | null): string => (/[.!?]$/.test(clean(comment)) ? '' : '.');
 
 function draft(p: FinanceEventBase, type: string, title: string, body: string): NotificationDraft {
   return { type, title, body, actionUrl: urlFor(p), workOrderId: null };
@@ -44,17 +47,17 @@ export function approvedContent(p: FinanceRequestApproved): NotificationDraft {
 
 export function returnedContent(p: FinanceRequestReturned): NotificationDraft {
   return draft(p, 'FINANCE_REQUEST_RETURNED', 'Request returned',
-    `Your ${lowerSubject(p)} was returned by ${STEP[p.step]}${reason(p.comment)}. Edit it and submit again.`);
+    `Your ${lowerSubject(p)} was returned by ${STEP[p.step]}${reason(p.comment)}${end(p.comment)} Edit it and submit again.`);
 }
 
 export function rejectedContent(p: FinanceRequestRejected): NotificationDraft {
   return draft(p, 'FINANCE_REQUEST_REJECTED', 'Request rejected',
-    `Your ${lowerSubject(p)} was rejected by ${STEP[p.step]}${reason(p.comment)}.`);
+    `Your ${lowerSubject(p)} was rejected by ${STEP[p.step]}${reason(p.comment)}${end(p.comment)}`);
 }
 
 export function cancelledContent(p: FinanceRequestCancelled): NotificationDraft {
   return draft(p, 'FINANCE_REQUEST_CANCELLED', 'Request cancelled',
-    `${onProject(p)} was cancelled by its requester while waiting for ${STEP[p.heldBy]}${reason(p.comment)}.`);
+    `${onProject(p)} was cancelled by its requester while waiting for ${STEP[p.heldBy]}${reason(p.comment)}${end(p.comment)}`);
 }
 
 export function paidContent(p: FinanceRequestPaid): NotificationDraft {
