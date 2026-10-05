@@ -16,7 +16,7 @@ In scope (v1):
 - Expense categories, project-spend reporting with Excel export.
 - Two new IAM roles: `PROJECT_DIRECTOR` and `FINANCE`.
 - Notifications on every step and on payment or settlement.
-- Web UI. INR only.
+- Web UI. NPR only.
 
 Out of scope (v1): mobile app, multi-currency, partial or instalment payments, importing Excel history, a generic workflow engine, an override path for stuck requests.
 
@@ -25,16 +25,18 @@ Out of scope (v1): mobile app, multi-currency, partial or instalment payments, i
 ```
 DRAFT -> PENDING_PM -> PENDING_DIRECTOR -> PENDING_FINANCE -> PAID
              |               |                   |
-             +-- RETURNED ---+-------------------+   (requester edits, resubmits -> PENDING_PM, revision+1)
+             +-- RETURNED ---+-------------------+   (requester edits, resubmits -> first approval step, revision+1)
              +-- REJECTED   (final)
              +-- CANCELLED  (requester only, from any PENDING_* state)
 ```
+
+A request raised by a Project Manager skips `PENDING_PM` and enters at `PENDING_DIRECTOR` (see the no-self-approval rule below). After a return, resubmission re-enters at the same first step the request originally had.
 
 Field Engineer submits, Project Manager approves, Project Director approves, Finance pays.
 
 Rules:
 - **Matching:** an approver must hold the step's permission and have IAM scope on the request's `projectId`. Finance is global.
-- **No self-approval:** the actor of any step must differ from `requesterId`. If a PM raises a request, a different PM scoped to that project must approve. If none exists the request waits; it is visible to Super Admin, with no override.
+- **No self-approval:** the actor of any step must differ from `requesterId`. A request raised by a PM skips the PM step: it goes to the Project Director, then to Finance. The entry step is decided by the requester's role at submission, so a Field Engineer's request always starts at `PENDING_PM`.
 - **Amounts:** the PM approves as-is, returns or rejects and cannot change the amount. Only the Director may set `approvedAmount <= requestedAmount`. Finance pays exactly `approvedAmount`, in one payment.
 - **Return and reject** require a comment. Return sends the request to the requester; reject is final.
 - **Cancel:** the requester may cancel while any `PENDING_*` state, before payment.
@@ -68,13 +70,13 @@ It owns categories, requests, invoices, approval history and payments. It refere
 
 ## 6. Data model
 
-Money is `Decimal(14,2)`, INR.
+Money is `Decimal(14,2)`, NPR.
 
 - `expense_category(id, code, name, disabledAt)`. Examples: travel, materials, labour, accommodation, fuel, misc. Finance maintains it.
 - `finance_request(id, number, kind, projectId, workOrderId?, categoryId, requesterId, advanceId?, purpose, requestedAmount, approvedAmount?, status, revision, submittedAt, createdAt, updatedAt)`. Numbers: `ADV-2026-0001`, `SET-…`, `REI-…`. `workOrderId` is a plain optional ID with no hard dependency on `qc`.
 - `request_invoice(id, requestId, vendor, invoiceNumber, invoiceDate, amount, mediaId)`. Settlements and reimbursements need at least one invoice, and `requestedAmount` equals the invoice sum.
 - `approval_action(id, requestId, revision, step, actorId, action, amount?, comment, at)`. Append-only audit trail.
-- `payment(id, requestId, kind PAYOUT|CASH_RETURN, mode, reference, paidOn, amount, proofMediaId, recordedBy)`. Modes: bank transfer, cash, cheque, UPI.
+- `payment(id, requestId, kind PAYOUT|CASH_RETURN, mode, reference, paidOn, amount, proofMediaId, recordedBy)`. Modes: bank transfer, cash, cheque, mobile wallet (e.g. eSewa, Khalti).
 - `outbox`, same pattern as other services.
 
 ### Advance balance (derived, not stored)
@@ -119,7 +121,7 @@ New `finance-notification.consumer.ts` in `apps/notification`, like the `qc` con
 
 | Event | Notifies |
 |---|---|
-| `finance.request.submitted` (including resubmit) | PMs scoped to the project |
+| `finance.request.submitted` (including resubmit) | PMs scoped to the project; Directors instead when the requester is a PM |
 | `finance.request.approved_by_pm` | Directors scoped to the project |
 | `finance.request.approved` (Director) | Finance; requester |
 | `finance.request.returned`, `.rejected` | requester, with comment |
