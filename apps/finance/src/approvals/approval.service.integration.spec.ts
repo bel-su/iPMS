@@ -88,6 +88,22 @@ describe('approve', () => {
     await expect(approvals.approve(r.id, {}, ACTORS.pm, scopes.otherProject)).rejects.toThrow(/not found/);
   });
 
+  it('hides the request from an in-scope caller who neither raised it nor may view all requests', async () => {
+    const r = await submitted();
+    // otherEngineer is in the same project but holds no view_all: the request must look missing, whatever its status.
+    await expect(approvals.approve(r.id, {}, ACTORS.otherEngineer, scopes.project)).rejects.toThrow(expect.objectContaining({ status: 404, message: 'Request not found' }));
+    await expect(approvals.returnToRequester(r.id, 'x', ACTORS.otherEngineer, scopes.project)).rejects.toThrow(expect.objectContaining({ status: 404 }));
+    await approvals.approve(r.id, {}, ACTORS.pm, scopes.project);
+    await approvals.approve(r.id, {}, ACTORS.director, scopes.project);
+    await expect(approvals.reject(r.id, 'x', ACTORS.otherEngineer, scopes.project)).rejects.toThrow(expect.objectContaining({ status: 404, message: 'Request not found' }));
+  });
+
+  it('still tells a caller who can see the request that they lack the step permission', async () => {
+    const r = await submitted();
+    await expect(approvals.approve(r.id, {}, ACTORS.director, scopes.project)).rejects.toThrow(expect.objectContaining({ status: 403 }));
+    await expect(approvals.approve(r.id, {}, ACTORS.engineer, scopes.project)).rejects.toThrow(expect.objectContaining({ status: 403 }));
+  });
+
   it('refuses the wrong role for the step', async () => {
     const r = await submitted();
     await expect(approvals.approve(r.id, {}, ACTORS.director, scopes.project)).rejects.toThrow(/finance_approval\.pm/);

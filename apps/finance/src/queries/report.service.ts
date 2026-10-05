@@ -21,6 +21,16 @@ export interface SpendRow {
 }
 
 const VIEW_ALL = 'finance_request.view_all';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The upper bound of the date filter. A date without a time (`to=2026-10-31`
+ * parses to UTC midnight) means "up to the end of that day", so it becomes
+ * `< next midnight`; a value with a time is an exact instant, kept as `<=`.
+ */
+function upTo(to: Date): { lt: Date } | { lte: Date } {
+  return to.getTime() % DAY_MS === 0 ? { lt: new Date(to.getTime() + DAY_MS) } : { lte: to };
+}
 
 /**
  * Spend per project, category or engineer. Only completed money counts: a paid
@@ -37,7 +47,7 @@ export class ReportService {
       AND: [
         scopeWhere(scope, { project: 'projectId', site: null }) as Prisma.FinanceRequestWhereInput,
         query.projectId ? { projectId: query.projectId } : {},
-        query.from || query.to ? { createdAt: { ...(query.from ? { gte: query.from } : {}), ...(query.to ? { lte: query.to } : {}) } } : {},
+        query.from || query.to ? { createdAt: { ...(query.from ? { gte: query.from } : {}), ...(query.to ? upTo(query.to) : {}) } } : {},
       ],
     };
     const [requests, returns] = await Promise.all([

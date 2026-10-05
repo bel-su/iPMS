@@ -122,6 +122,13 @@ describe('update', () => {
     }
   });
 
+  it('re-checks the creation permission: a requester who lost it cannot edit their draft', async () => {
+    const r = await service.create(advanceDto(), ACTORS.engineer, scopes.project, PROJECT);
+    const revoked = { id: ACTORS.engineer.id, permissions: ['finance_request.view'] };
+    await expect(service.update(r.id, { purpose: 'x' }, revoked)).rejects.toThrow(expect.objectContaining({ status: 403, message: expect.stringMatching(/finance_request\.create/) }));
+    expect((await prisma.financeRequest.findUniqueOrThrow({ where: { id: r.id } })).purpose).toBe('Site travel');
+  });
+
   it('refuses an amount on a request that has invoices, and invoices on an advance', async () => {
     const adv = await service.create(advanceDto(), ACTORS.engineer, scopes.project, PROJECT);
     await expect(service.update(adv.id, { invoices: [invoice('1')] }, ACTORS.engineer)).rejects.toThrow(/advance has no invoices/i);
@@ -154,6 +161,20 @@ describe('submit', () => {
     await service.submit(r.id, ACTORS.engineer);
     const audits = await prisma.outboxEvent.findMany({ where: { subject: 'audit.event.recorded' } });
     expect(audits.map((a) => (a.payload as { action: string }).action)).toEqual(expect.arrayContaining(['finance.request.created', 'finance.request.submitted']));
+  });
+
+  it('re-checks the creation permission at submit time', async () => {
+    const r = await service.create(advanceDto(), ACTORS.engineer, scopes.project, PROJECT);
+    const revoked = { id: ACTORS.engineer.id, permissions: ['finance_request.view', 'finance_settlement.submit'] };
+    await expect(service.submit(r.id, revoked)).rejects.toThrow(expect.objectContaining({ status: 403, message: expect.stringMatching(/finance_request\.create/) }));
+    expect((await prisma.financeRequest.findUniqueOrThrow({ where: { id: r.id } })).status).toBe('DRAFT');
+  });
+
+  it('re-checks the settlement permission when submitting a settlement', async () => {
+    const advanceId = await paidAdvance();
+    const s = await service.create({ kind: 'SETTLEMENT', advanceId, categoryId, purpose: 'x', invoices: [invoice('10')] }, ACTORS.engineer, scopes.project);
+    const revoked = { id: ACTORS.engineer.id, permissions: ['finance_request.view', 'finance_request.create'] };
+    await expect(service.submit(s.id, revoked)).rejects.toThrow(expect.objectContaining({ status: 403, message: expect.stringMatching(/finance_settlement\.submit/) }));
   });
 
   it('refuses to submit someone else\'s request', async () => {

@@ -74,6 +74,24 @@ describe('spend report', () => {
     const future = await reports.spend(ACTORS.finance, scopes.global, { groupBy: 'project', format: 'json', from: new Date('2100-01-01') });
     expect(future).toEqual([]);
   });
+
+  it('includes the whole end day when `to` is a date without a time', async () => {
+    await scenario();
+    // Every paid request was created late on 31 October (UTC).
+    await prisma.financeRequest.updateMany({ data: { createdAt: new Date('2026-10-31T18:30:00Z') } });
+    const [row] = await reports.spend(ACTORS.finance, scopes.global, { groupBy: 'project', format: 'json', from: new Date('2026-10-01'), to: new Date('2026-10-31') });
+    expect(row).toMatchObject({ advancesPaid: '50000.00', cashReturned: '3000.00', reimbursed: '800.00', settled: '12000.00' });
+    // Nothing from the next day leaks in.
+    await prisma.financeRequest.updateMany({ data: { createdAt: new Date('2026-11-01T00:00:00Z') } });
+    expect(await reports.spend(ACTORS.finance, scopes.global, { groupBy: 'project', format: 'json', to: new Date('2026-10-31') })).toEqual([]);
+  });
+
+  it('keeps an exact `to` instant when it carries a time', async () => {
+    await scenario();
+    await prisma.financeRequest.updateMany({ data: { createdAt: new Date('2026-10-31T18:30:00Z') } });
+    expect(await reports.spend(ACTORS.finance, scopes.global, { groupBy: 'project', format: 'json', to: new Date('2026-10-31T12:00:00Z') })).toEqual([]);
+    expect(await reports.spend(ACTORS.finance, scopes.global, { groupBy: 'project', format: 'json', to: new Date('2026-10-31T18:30:00Z') })).toHaveLength(1);
+  });
 });
 
 describe('spend report outstanding', () => {

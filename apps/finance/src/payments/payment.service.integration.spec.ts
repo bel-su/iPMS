@@ -94,6 +94,13 @@ describe('pay an advance or reimbursement', () => {
     expect(await prisma.payment.count()).toBe(1);
   });
 
+  it('refuses Finance paying their own request with a 403, as approve does', async () => {
+    const id = await advance();
+    const self = { id: ACTORS.engineer.id, permissions: [...ACTORS.finance.permissions] };
+    await expect(payments.pay(id, bank, self, scopes.global)).rejects.toThrow(expect.objectContaining({ status: 403, message: 'You cannot act on your own request' }));
+    expect(await prisma.payment.count()).toBe(0);
+  });
+
   it('refuses Finance whose scope does not reach the project', async () => {
     const id = await advance();
     await expect(payments.pay(id, bank, ACTORS.finance, scopes.otherProject)).rejects.toThrow(/not found/);
@@ -185,7 +192,7 @@ describe('return unspent cash', () => {
   it('refuses Finance returning cash against their own advance', async () => {
     const advanceId = await paidAdvance('1000');
     const self = { id: ACTORS.engineer.id, permissions: [...ACTORS.finance.permissions] };
-    await expect(payments.returnCash(advanceId, { ...bank, amount: '10' }, self, scopes.global)).rejects.toThrow(/your own request/);
+    await expect(payments.returnCash(advanceId, { ...bank, amount: '10' }, self, scopes.global)).rejects.toThrow(expect.objectContaining({ status: 403, message: 'You cannot act on your own request' }));
     expect(await prisma.payment.count({ where: { kind: 'CASH_RETURN' } })).toBe(0);
   });
 

@@ -1,4 +1,4 @@
-import { ConflictException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, UnprocessableEntityException } from '@nestjs/common';
 import type { AuthzScope } from '@ipms/authz';
 import { PaymentDetailsSchema, uuidv7, type CashReturnDto, type PaymentDetailsDto } from '@ipms/contracts';
 import { SUBJECTS, type FinanceApprovers } from '@ipms/events';
@@ -31,7 +31,7 @@ export class PaymentService {
       const row = await tx.financeRequest.findUnique({ where: { id } });
       if (!row || !inScope(scope, row.projectId)) throw notFound('Request');
       if (row.status !== 'PENDING_FINANCE') throw new ConflictException('This request is not waiting for payment');
-      if (row.requesterId === actor.id) throw new ConflictException('You cannot act on your own request');
+      if (row.requesterId === actor.id) throw new ForbiddenException('You cannot act on your own request');
 
       const approved = row.approvedAmount!.toFixed(2);
       let applied: string | null = null;
@@ -78,7 +78,7 @@ export class PaymentService {
       const advance = await tx.financeRequest.findUnique({ where: { id: advanceId } });
       if (!advance || advance.kind !== 'ADVANCE' || !inScope(scope, advance.projectId)) throw notFound('Advance');
       if (advance.status !== 'PAID') throw new UnprocessableEntityException('Cash can only be returned against a paid advance');
-      if (advance.requesterId === actor.id) throw new ConflictException('You cannot act on your own request');
+      if (advance.requesterId === actor.id) throw new ForbiddenException('You cannot act on your own request');
 
       await lockAdvance(tx, advanceId);
       const balance = await loadBalance(tx, advanceId);

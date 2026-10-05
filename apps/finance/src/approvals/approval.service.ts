@@ -12,6 +12,8 @@ import { STEP_PERMISSION, statusAfterApproval, stepOf, type Step } from '../work
 
 type Outcome = 'APPROVED' | 'RETURNED' | 'REJECTED';
 
+const VIEW_ALL = 'finance_request.view_all';
+
 /**
  * The PM and Director steps. One route serves both, so the step is read from
  * the request's status and the permission it needs is checked here, together
@@ -37,6 +39,8 @@ export class ApprovalService {
       const row = await tx.financeRequest.findUnique({ where: { id } });
       // Out of scope looks like missing, so a request's existence is not disclosed across projects.
       if (!row || !inScope(scope, row.projectId)) throw notFound('Request');
+      // So does a request the caller could not open: only its requester and view_all holders learn it exists or where it stands.
+      if (row.requesterId !== actor.id && !actor.permissions.includes(VIEW_ALL)) throw notFound('Request');
 
       const step = stepOf(row.status);
       if (step === null || step === 'FINANCE') throw new ConflictException('This request is not waiting for an approval');

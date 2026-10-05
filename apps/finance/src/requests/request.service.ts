@@ -12,6 +12,9 @@ import { serializeDetail } from '../serialize.js';
 import { entryStatus, isEditable, isPending, isPm, stepOf } from '../workflow.js';
 
 const NUMBER_PREFIX: Record<RequestKind, string> = { ADVANCE: 'ADV', SETTLEMENT: 'SET', REIMBURSEMENT: 'REI' };
+/** The permission that raises a request of this kind. Checked again on edit and submit: it may have been revoked since the draft was made. */
+const createPermission = (kind: string): string => (kind === 'SETTLEMENT' ? 'finance_settlement.submit' : 'finance_request.create');
+const requireCreatePermission = (actor: Actor, row: FinanceRequest): void => requirePermission(actor, createPermission(row.kind));
 const WITH_DETAIL = { invoices: true, actions: { orderBy: { at: 'asc' as const } }, payments: true };
 
 /**
@@ -23,7 +26,7 @@ export class RequestService {
 
   /** `project` is required for an advance or reimbursement; a settlement takes its advance's project. */
   async create(dto: CreateRequestDto, actor: Actor, scope: AuthzScope, project?: ProjectRef) {
-    requirePermission(actor, dto.kind === 'SETTLEMENT' ? 'finance_settlement.submit' : 'finance_request.create');
+    requirePermission(actor, createPermission(dto.kind));
 
     const category = await this.prisma.expenseCategory.findUnique({ where: { id: dto.categoryId } });
     if (!category || category.disabledAt) throw new UnprocessableEntityException('Choose an active expense category');
@@ -65,6 +68,7 @@ export class RequestService {
   async update(id: string, dto: UpdateRequestDto, actor: Actor) {
     await this.prisma.$transaction(async (tx) => {
       const row = await this.own(tx, id, actor);
+      requireCreatePermission(actor, row);
       if (!isEditable(row.status)) throw new ConflictException('Only a draft or returned request can be edited');
       if (dto.invoices && row.kind === 'ADVANCE') throw new UnprocessableEntityException('An advance has no invoices');
       if (dto.amount && row.kind !== 'ADVANCE') throw new UnprocessableEntityException('The amount of this request is the total of its invoices');
@@ -99,6 +103,7 @@ export class RequestService {
   async submit(id: string, actor: Actor) {
     await this.prisma.$transaction(async (tx) => {
       const row = await this.own(tx, id, actor);
+      requireCreatePermission(actor, row);
       if (!isEditable(row.status)) throw new ConflictException('Only a draft or returned request can be submitted');
       if (row.kind !== 'ADVANCE' && (await tx.requestInvoice.count({ where: { requestId: id } })) === 0) {
         throw new UnprocessableEntityException('Add at least one invoice before submitting');
