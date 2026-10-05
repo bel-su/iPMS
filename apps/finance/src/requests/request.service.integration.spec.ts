@@ -34,6 +34,12 @@ describe('create', () => {
     expect(created.number).toMatch(/^ADV-\d{4}-0001$/);
   });
 
+  it('stores an invoice that has no file attached', async () => {
+    const { mediaId: _omitted, ...bare } = invoice('120');
+    const r = await service.create({ kind: 'REIMBURSEMENT', projectId: PROJECT.id, categoryId, purpose: 'Fuel', invoices: [bare] }, ACTORS.engineer, scopes.project, PROJECT);
+    expect(r.invoices?.[0]).toMatchObject({ vendor: 'Himal Fuel', mediaId: null });
+  });
+
   it('numbers each kind and year independently and in sequence', async () => {
     const a = await service.create(advanceDto(), ACTORS.engineer, scopes.project, PROJECT);
     const b = await service.create(advanceDto(), ACTORS.engineer, scopes.project, PROJECT);

@@ -19,6 +19,11 @@ describe('CreateRequestSchema', () => {
     expect(CreateRequestSchema.safeParse({ ...base, kind: 'ADVANCE', projectId: uuidv7(), amount: '50000' }).success).toBe(true);
   });
 
+  it('takes an invoice with no file attached yet', () => {
+    const { mediaId: _omitted, ...withoutFile } = invoice;
+    expect(CreateRequestSchema.safeParse({ ...base, kind: 'REIMBURSEMENT', projectId: uuidv7(), invoices: [withoutFile] }).success).toBe(true);
+  });
+
   it('refuses an advance with no amount', () => {
     expect(CreateRequestSchema.safeParse({ ...base, kind: 'ADVANCE', projectId: uuidv7() }).success).toBe(false);
   });

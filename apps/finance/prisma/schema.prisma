@@ -66,7 +66,7 @@ model RequestInvoice {
   invoiceNumber String         @db.VarChar(100)
   invoiceDate   DateTime       @db.Date
   amount        Decimal        @db.Decimal(14, 2)
-  mediaId       String         @db.Uuid
+  mediaId       String?        @db.Uuid
   request       FinanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@index([requestId])

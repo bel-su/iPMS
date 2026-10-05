@@ -160,7 +160,7 @@ export class RequestService {
   private async writeInvoices(tx: Tx, requestId: string, invoices: InvoiceInput[]): Promise<void> {
     if (invoices.length === 0) return;
     await tx.requestInvoice.createMany({
-      data: invoices.map((i) => ({ id: uuidv7(), requestId, vendor: i.vendor, invoiceNumber: i.invoiceNumber, invoiceDate: i.invoiceDate, amount: i.amount, mediaId: i.mediaId })),
+      data: invoices.map((i) => ({ id: uuidv7(), requestId, vendor: i.vendor, invoiceNumber: i.invoiceNumber, invoiceDate: i.invoiceDate, amount: i.amount, mediaId: i.mediaId ?? null })),
     });
   }
 

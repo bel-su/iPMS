@@ -31,8 +31,8 @@ export const InvoiceInputSchema = z.object({
   invoiceNumber: TextSchema(100),
   invoiceDate: z.coerce.date(),
   amount: MoneySchema,
-  /** The uploaded invoice scan or photo, held by the media service. */
-  mediaId: UuidSchema,
+  /** The uploaded invoice scan or photo, held by the media service. Optional until finance documents can be uploaded. */
+  mediaId: UuidSchema.optional(),
 });
 export type InvoiceInput = z.infer<typeof InvoiceInputSchema>;
 
