@@ -40,7 +40,9 @@ Rules:
 - **Matching:** an approver must hold the step's permission and have IAM scope on the request's `projectId`. Finance is global.
 - **No self-approval:** the actor of any step must differ from `requesterId`. A request raised by a PM skips the PM step: it goes to the Project Director, then to Finance. The entry step is decided by the requester's role at submission, so a Field Engineer's request always starts at `PENDING_PM`.
 - **Amounts:** the PM approves as-is, returns or rejects and cannot change the amount. Only the Director may set `approvedAmount <= requestedAmount`. Finance pays exactly `approvedAmount`, in one payment.
-- **Return and reject** require a comment. Return sends the request to the requester; reject is final.
+- **Return and reject** require a comment. Return sends the request to the requester; reject is final. The PM and the Director may return or reject at their step, and so may Finance at the payment step (holding `finance_payment.record`). Finance never "approves": paying is its approval. A return or reject at the Finance step clears `approvedAmount`, so a resubmitted request goes back through the Director, who sets the amount again.
+- **Segregation of duties:** nobody acts on two steps of the same revision. Someone who approved an earlier step may not approve, return, reject or pay a later one, even when they hold every permission (`SUPER_ADMIN`). A resubmission is a new revision, so the chain starts clean.
+- **Visibility:** an approval action on a request the caller cannot open (neither its requester nor a `finance_request.view_all` holder in scope) answers "not found", as out of scope does. Editing and submitting re-check the requester's creation permission.
 - **Cancel:** the requester may cancel while any `PENDING_*` state, before payment.
 - **Concurrency:** every transition is a conditional update on `(id, status, revision)`, so simultaneous approvals produce exactly one transition. The state change and its outbox event are written in one transaction.
 
@@ -83,7 +85,7 @@ Money is `Decimal(14,2)`, NPR.
 - `finance_request(id, number, kind, projectId, workOrderId?, categoryId, requesterId, advanceId?, purpose, requestedAmount, approvedAmount?, status, revision, submittedAt, createdAt, updatedAt)`. Numbers: `ADV-2026-0001`, `SET-…`, `REI-…`. `workOrderId` is a plain optional ID with no hard dependency on `qc`.
 - `request_invoice(id, requestId, vendor, invoiceNumber, invoiceDate, amount, mediaId)`. Settlements and reimbursements need at least one invoice, and `requestedAmount` equals the invoice sum.
 - `approval_action(id, requestId, revision, step, actorId, action, amount?, comment, at)`. Append-only audit trail.
-- `payment(id, requestId, kind PAYOUT|CASH_RETURN, mode, reference, paidOn, amount, proofMediaId, recordedBy)`. Modes: bank transfer, cash, cheque, mobile wallet (e.g. eSewa, Khalti).
+- `payment(id, requestId, kind PAYOUT|CASH_RETURN, mode, reference, paidOn, amount, proofMediaId, recordedBy)`. Modes: bank transfer, cash, cheque, mobile wallet (e.g. eSewa, Khalti). A partial unique index (`payment_one_payout_per_request`, on `requestId` where `kind = 'PAYOUT'`, written in SQL because Prisma cannot express it) allows at most one payout per request; cash returns are not limited.
 - `outbox`, same pattern as other services.
 
 ### Advance balance (derived, not stored)
@@ -92,7 +94,7 @@ Money is `Decimal(14,2)`, NPR.
 
 - Advance status: `PAID`, then `PARTIALLY_SETTLED`, then `CLOSED` when outstanding reaches 0.
 - At a settlement's Finance step the invoice total is applied to outstanding. If invoices exceed outstanding, the excess is paid to the requester as a `PAYOUT` in the same step.
-- Unspent cash: Finance records a `CASH_RETURN` against the advance.
+- Unspent cash: Finance records a `CASH_RETURN` against the advance, with a `FINANCE` / `CASH_RETURNED` line in the advance's history and a `finance.advance.cash_returned` event (`returnedAmount`, `outstandingAfter`).
 
 ## 7. API
 
@@ -103,14 +105,14 @@ Through the gateway proxy (`apps/gateway/src/proxy/routes.ts`), JWT forwarded.
 | `POST /finance/requests` | create draft |
 | `PATCH /finance/requests/:id` | edit draft or returned request |
 | `POST /finance/requests/:id/submit` | submit or resubmit |
-| `POST /finance/requests/:id/approve`, `/return`, `/reject` | approval actions; step derived from current status |
+| `POST /finance/requests/:id/approve`, `/return`, `/reject` | approval actions; step derived from current status (Finance may return or reject at the payment step, not approve) |
 | `POST /finance/requests/:id/cancel` | requester cancels |
 | `POST /finance/requests/:id/pay` | Finance records payment |
 | `POST /finance/advances/:id/cash-return` | Finance records returned cash |
 | `GET /finance/requests`, `GET /finance/requests/:id` | role-filtered list and detail with history |
 | `GET /finance/advances/:id` | paid, settled, returned, outstanding |
 | `GET/POST/PATCH /finance/categories` | list for all, manage for Finance |
-| `GET /finance/reports/project-spend` | totals by project, category, engineer; Excel export |
+| `GET /finance/reports/project-spend` | totals by project, category, engineer; Excel export. A date-only `to` includes its whole day |
 
 Lists are filtered by scope at query level. A user with no scope sees nothing.
 
@@ -131,9 +133,10 @@ New `finance-notification.consumer.ts` in `apps/notification`, like the `qc` con
 | `finance.request.submitted` (including resubmit) | PMs scoped to the project; Directors instead when the requester is a PM |
 | `finance.request.approved_by_pm` | Directors scoped to the project |
 | `finance.request.approved` (Director) | Finance; requester |
-| `finance.request.returned`, `.rejected` | requester, with comment |
+| `finance.request.returned`, `.rejected` (by the PM, the Director or Finance) | requester, with comment |
 | `finance.request.cancelled` | approvers currently holding it |
 | `finance.request.paid`, `finance.settlement.settled` | requester, approving PM, approving Director, Finance |
+| `finance.advance.cash_returned` | requester, with the amount returned and what is still outstanding |
 
 A finance JetStream stream is added to `libs/events/src/subjects.ts` with one durable consumer per subject (see the comment on the IAM stream). Every state change also emits an audit event.
 
