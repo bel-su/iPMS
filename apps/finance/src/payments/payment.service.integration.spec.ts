@@ -78,6 +78,17 @@ describe('pay an advance or reimbursement', () => {
     expect((await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.request.paid' } })).payload).toMatchObject({ approvers: { pmId: null, directorId: ACTORS.director.id } });
   });
 
+  it('re-enters a returned PM-raised request at the Director and still reports no PM approver when paid', async () => {
+    const r = await requests.create({ kind: 'ADVANCE', projectId: PROJECT.id, categoryId, purpose: 'Travel', amount: '1000' }, ACTORS.pm, scopes.project, PROJECT);
+    await requests.submit(r.id, ACTORS.pm);
+    await approvals.returnToRequester(r.id, 'Add the itinerary', ACTORS.director, scopes.project);
+    const again = await requests.submit(r.id, ACTORS.pm);
+    expect(again).toMatchObject({ status: 'PENDING_DIRECTOR', revision: 2 });
+    await approvals.approve(r.id, {}, ACTORS.director, scopes.project);
+    await payments.pay(r.id, bank, ACTORS.finance, scopes.global);
+    expect((await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.request.paid' } })).payload).toMatchObject({ approvers: { pmId: null, directorId: ACTORS.director.id } });
+  });
+
   it('refuses without payment details, and anyone who is not Finance', async () => {
     const id = await advance();
     await expect(payments.pay(id, {}, ACTORS.finance, scopes.global)).rejects.toThrow(/payment details/i);
@@ -168,6 +179,16 @@ describe('settle an advance', () => {
     expect(settled.payments?.[0]).toMatchObject({ kind: 'PAYOUT', amount: '2000.00' });
     expect(await loadBalance(prisma, advanceId)).toMatchObject({ outstanding: '0.00', status: 'CLOSED' });
     expect((await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.settlement.settled' } })).payload).toMatchObject({ appliedAmount: '5000.00', payoutAmount: '2000.00' });
+  });
+
+  it('applies only what is left after a cash return and pays out the rest', async () => {
+    const advanceId = await paidAdvance('10000');
+    await payments.returnCash(advanceId, { ...bank, amount: '4000' }, ACTORS.finance, scopes.global);
+    const sId = await settlementAtFinance(advanceId, '8000');
+    const settled = await payments.pay(sId, bank, ACTORS.finance, scopes.global);
+    expect(settled).toMatchObject({ status: 'SETTLED', appliedAmount: '6000.00' });
+    expect(settled.payments?.[0]).toMatchObject({ kind: 'PAYOUT', amount: '2000.00' });
+    expect(await loadBalance(prisma, advanceId)).toMatchObject({ applied: '6000.00', cashReturned: '4000.00', outstanding: '0.00', status: 'CLOSED' });
   });
 
   it('uses the Director\'s reduced amount when applying', async () => {
