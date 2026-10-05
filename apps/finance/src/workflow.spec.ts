@@ -12,9 +12,16 @@ describe('workflow', () => {
     expect(stepOf('PAID')).toBeNull();
   });
 
-  it('treats only the three PENDING states as cancellable-pending', () => {
+  it('treats only the three PENDING states as pending', () => {
     for (const s of ['PENDING_PM', 'PENDING_DIRECTOR', 'PENDING_FINANCE']) expect(isPending(s)).toBe(true);
     for (const s of ['DRAFT', 'RETURNED', 'REJECTED', 'CANCELLED', 'PAID', 'SETTLED']) expect(isPending(s)).toBe(false);
+  });
+
+  it('does not mistake inherited object keys for statuses', () => {
+    for (const s of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
+      expect(isPending(s)).toBe(false);
+      expect(stepOf(s)).toBeNull();
+    }
   });
 
   it('lets only a draft or returned request be edited', () => {
