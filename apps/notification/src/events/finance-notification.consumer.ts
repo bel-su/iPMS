@@ -40,8 +40,8 @@ const STEP_PERMISSION: Record<FinanceStep, string> = {
 const unique = (ids: Array<string | null | undefined>): string[] => [...new Set(ids.filter((id): id is string => typeof id === 'string'))];
 
 /** An event missing what every finance notification needs cannot be fixed by retrying, so it is skipped. */
-const hasFacts = (p: Partial<FinanceEventBase>): p is FinanceEventBase =>
-  typeof p.requestId === 'string' && typeof p.number === 'string' && typeof p.projectId === 'string';
+const hasFacts = (p: Partial<FinanceEventBase> | null | undefined): p is FinanceEventBase =>
+  p != null && typeof p.requestId === 'string' && typeof p.number === 'string' && typeof p.projectId === 'string';
 
 /**
  * Turns finance request facts into in-app notifications.
@@ -133,7 +133,7 @@ export class FinanceNotificationConsumer implements OnModuleInit {
     if (this.accept(envelope, p)) await this.send(envelope, [p.requesterId], cashReturnedContent(p));
   }
 
-  private accept(envelope: EventEnvelope<unknown>, payload: Partial<FinanceEventBase>): payload is FinanceEventBase {
+  private accept(envelope: EventEnvelope<unknown>, payload: Partial<FinanceEventBase> | null | undefined): payload is FinanceEventBase {
     if (hasFacts(payload)) return true;
     log.warn({ eventId: envelope.eventId, subject: envelope.subject }, 'finance event missing request facts, skipped');
     return false;

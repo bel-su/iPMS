@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { EventEnvelope } from '@ipms/events';
+import { SUBJECTS, type EventEnvelope } from '@ipms/events';
 import { FINANCE_DURABLES, FinanceNotificationConsumer } from './finance-notification.consumer.js';
 
 const base = {
@@ -158,5 +158,85 @@ describe('onCashReturned', () => {
     const { consumer, sent } = build();
     await consumer.onCashReturned(envelope({ ...base, returnedAmount: '3000.00', outstandingAfter: '35000.00' }));
     expect(sent().map((r) => [r.recipientId, r.type])).toEqual([['u-eng', 'FINANCE_CASH_RETURNED']]);
+  });
+});
+
+describe('register', () => {
+  const expected = [
+    [SUBJECTS.FINANCE_REQUEST_SUBMITTED, 'notification-finance-submitted', 'onSubmitted'],
+    [SUBJECTS.FINANCE_REQUEST_APPROVED_BY_PM, 'notification-finance-approved-by-pm', 'onApprovedByPm'],
+    [SUBJECTS.FINANCE_REQUEST_APPROVED, 'notification-finance-approved', 'onApproved'],
+    [SUBJECTS.FINANCE_REQUEST_RETURNED, 'notification-finance-returned', 'onReturned'],
+    [SUBJECTS.FINANCE_REQUEST_REJECTED, 'notification-finance-rejected', 'onRejected'],
+    [SUBJECTS.FINANCE_REQUEST_CANCELLED, 'notification-finance-cancelled', 'onCancelled'],
+    [SUBJECTS.FINANCE_REQUEST_PAID, 'notification-finance-paid', 'onPaid'],
+    [SUBJECTS.FINANCE_SETTLEMENT_SETTLED, 'notification-finance-settled', 'onSettled'],
+    [SUBJECTS.FINANCE_ADVANCE_CASH_RETURNED, 'notification-finance-cash-returned', 'onCashReturned'],
+  ] as const;
+
+  it('subscribes each subject to its own durable', async () => {
+    const { consumer } = build();
+    const fake = { subscribe: vi.fn().mockResolvedValue(undefined) };
+    await consumer.register(fake as never);
+    expect(fake.subscribe.mock.calls.map((c) => [c[0], c[1]])).toEqual(expected.map(([subject, durable]) => [subject, durable]));
+  });
+
+  it.each(expected)('routes %s to the matching handler', async (subject, durable, method) => {
+    const { consumer } = build();
+    const spies = Object.fromEntries(expected.map(([, , m]) => [m, vi.spyOn(consumer, m).mockResolvedValue(undefined)]));
+    const fake = { subscribe: vi.fn().mockResolvedValue(undefined) };
+    await consumer.register(fake as never);
+    const call = fake.subscribe.mock.calls.find((c) => c[0] === subject && c[1] === durable);
+    const ev = envelope({ ...base });
+    await (call?.[2] as (e: unknown) => Promise<void>)(ev);
+    for (const [m, spy] of Object.entries(spies)) {
+      if (m === method) expect(spy).toHaveBeenCalledWith(ev);
+      else expect(spy).not.toHaveBeenCalled();
+    }
+  });
+});
+
+describe('recipient edge cases', () => {
+  it('onApproved with a requester who is also in Finance sends the requester exactly one FINANCE_REQUEST_APPROVED and no payment-due row (both sends share one eventId)', async () => {
+    const { consumer, sent } = build({ 'finance_payment.record': ['u-eng', 'u-fin1'] });
+    await consumer.onApproved(envelope({ ...base }));
+    const mine = sent().filter((r) => r.recipientId === 'u-eng');
+    expect(mine.map((r) => r.type)).toEqual(['FINANCE_REQUEST_APPROVED']);
+    expect(sent().filter((r) => r.type === 'FINANCE_PAYMENT_DUE').map((r) => r.recipientId)).toEqual(['u-fin1']);
+    expect(new Set(sent().map((r) => r.eventId))).toEqual(new Set(['evt-1']));
+  });
+
+  it('onApproved does not notify the actor', async () => {
+    const { consumer, sent } = build({ 'finance_payment.record': ['u-actor', 'u-fin1'] });
+    await consumer.onApproved(envelope({ ...base }));
+    expect(sent().map((r) => r.recipientId)).not.toContain('u-actor');
+  });
+
+  it('onApprovedByPm does not notify the actor', async () => {
+    const { consumer, sent } = build({ 'finance_approval.director': ['u-actor', 'u-dir'] });
+    await consumer.onApprovedByPm(envelope({ ...base, approvedAmount: null }));
+    expect(sent().map((r) => r.recipientId)).toEqual(['u-dir']);
+  });
+
+  it('onPaid throws and writes nothing when iam fails', async () => {
+    const { consumer, notifications } = build({ 'finance_payment.record': new Error('iam down') });
+    await expect(consumer.onPaid(envelope({
+      ...base, approvers: { pmId: 'u-pm', directorId: 'u-dir' }, paidAmount: '40000.00',
+    }))).rejects.toThrow('iam down');
+    expect(notifications.createMany).not.toHaveBeenCalled();
+  });
+
+  it('onSubmitted with an unknown nextStep falls back to the project managers', async () => {
+    const { consumer, iam, sent } = build({ 'finance_approval.pm': ['u-pm1'] });
+    await consumer.onSubmitted(envelope({ ...base, approvedAmount: null, nextStep: 'BOGUS' as never }));
+    expect(iam.holders).toHaveBeenCalledWith('finance_approval.pm', 'p-1');
+    expect(sent().map((r) => r.recipientId)).toEqual(['u-pm1']);
+  });
+
+  it('skips a null payload without throwing or writing', async () => {
+    const { consumer, iam, notifications } = build();
+    await expect(consumer.onSubmitted(envelope(null as never))).resolves.toBeUndefined();
+    expect(iam.holders).not.toHaveBeenCalled();
+    expect(notifications.createMany).not.toHaveBeenCalled();
   });
 });
