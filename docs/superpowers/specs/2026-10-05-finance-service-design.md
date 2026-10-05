@@ -23,7 +23,7 @@ Out of scope (v1): mobile app, multi-currency, partial or instalment payments, i
 ## 3. Approval flow
 
 ```
-DRAFT -> PENDING_PM -> PENDING_DIRECTOR -> PENDING_FINANCE -> PAID
+DRAFT -> PENDING_PM -> PENDING_DIRECTOR -> PENDING_FINANCE -> PAID  (SETTLED for a settlement)
              |               |                   |
              +-- RETURNED ---+-------------------+   (requester edits, resubmits -> first approval step, revision+1)
              +-- REJECTED   (final)
@@ -73,7 +73,7 @@ Project Director and Finance also get `project.view` (and the Director `site.vie
 
 New `apps/finance` NestJS service in the existing pattern: own Postgres database, Prisma schema, outbox, and `finance.*` events on NATS consumed by `notification`. Added to `docker-compose.yml` and `docker-compose.prod.yml` with its own DB and memory limits.
 
-It owns categories, requests, invoices, approval history and payments. It references user, project and work order by ID only, with no cross-service DB reads. Scope comes from the token and IAM events, as `project` and `qc` do. Attachments use the `media` service.
+It owns categories, requests, invoices, approval history and payments. It references user, project and work order by ID only, with no cross-service DB reads. Project scope is looked up from the `project` service per request with the caller's own bearer token, as `qc` does. Attachments use the `media` service.
 
 ## 6. Data model
 
@@ -133,7 +133,7 @@ New `finance-notification.consumer.ts` in `apps/notification`, like the `qc` con
 | `finance.request.approved` (Director) | Finance; requester |
 | `finance.request.returned`, `.rejected` | requester, with comment |
 | `finance.request.cancelled` | approvers currently holding it |
-| `finance.request.paid`, `finance.settlement.paid` | requester, approving PM, approving Director, Finance |
+| `finance.request.paid`, `finance.settlement.settled` | requester, approving PM, approving Director, Finance |
 
 A finance JetStream stream is added to `libs/events/src/subjects.ts` with one durable consumer per subject (see the comment on the IAM stream). Every state change also emits an audit event.
 
