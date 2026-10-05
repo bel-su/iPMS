@@ -402,7 +402,7 @@ class _AppGuideModalState extends ConsumerState<AppGuideModal> {
                       Row(
                         children: [
                           Text(
-                            'IPMS MOBILE GUIDE',
+                            'IPMS GUIDE',
                             style: GoogleFonts.inter(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
@@ -419,7 +419,7 @@ class _AppGuideModalState extends ConsumerState<AppGuideModal> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              'Interactive',
+                              'Walkthrough',
                               style: GoogleFonts.inter(
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w700,
@@ -431,7 +431,7 @@ class _AppGuideModalState extends ConsumerState<AppGuideModal> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Field App Guide & Workflow',
+                        'Field Guide & Workflow',
                         style: AppTypography.titleLarge.copyWith(
                           fontWeight: FontWeight.bold,
                           color: AppColors.darkSlate,

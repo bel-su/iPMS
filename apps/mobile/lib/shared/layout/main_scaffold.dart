@@ -36,9 +36,9 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _checkFirstTimeGuide();
+      await _offerBiometricSignIn();
       if (mounted) {
-        _offerBiometricSignIn();
+        await _checkFirstTimeGuide();
       }
     });
   }
