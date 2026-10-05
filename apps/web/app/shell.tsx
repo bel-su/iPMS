@@ -105,7 +105,7 @@ function ProfileIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-type Section = 'overview' | 'projects' | 'checklists' | 'work-orders' | 'users' | 'docs' | 'profile' | 'advances' | 'audit' | 'finance';
+type Section = 'overview' | 'projects' | 'checklists' | 'work-orders' | 'users' | 'docs' | 'profile' | 'audit' | 'finance';
 
 function NavItem({
   section,
@@ -155,18 +155,42 @@ export async function Sidebar({ active }: { active: Section }) {
   const mayViewTemplates = viewer.state === 'ready' && hasPermission(viewer.data, 'qc_template.view');
   const mayViewTasks = viewer.state === 'ready' && hasPermission(viewer.data, 'task.view');
   const mayViewAudit = viewer.state === 'ready' && hasPermission(viewer.data, 'audit.view');
+  const mayViewFinance = viewer.state === 'ready' && hasPermission(viewer.data, 'finance_request.view');
+  const mayManageCategories = viewer.state === 'ready' && hasPermission(viewer.data, 'finance_category.manage');
+  const maySeeSpend = viewer.state === 'ready' && hasPermission(viewer.data, 'finance_request.view_all');
   const mayReadDocumentation = viewer.state === 'ready' && mayReadDocs(viewer.data);
   const collapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === SIDEBAR_COLLAPSED;
   const home = viewer.state === 'ready' ? homeFor(viewer.data.roles) : 'admin';
   const manager = home === 'manager';
-  // QC and field staff can ask for money but never see it, so their menu has a request and nothing else under Finance.
+  // QC and field staff share the manager's grouped menu; the cash-in-hand records are for everyone else.
   const staff = home === 'qc' || home === 'engineer';
+  // Finance and Directors live in the finance workspace, so their menu is only that and the docs.
+  const financeHome = home === 'finance';
   // A manager's or QC's home is a queue, so the menu says how long theirs is.
   const waiting = (manager || home === 'qc') && mayViewTasks ? await listWorkOrders({ status: 'REVIEWING', limit: 1 }) : null;
   const toReview = waiting?.state === 'ready' ? waiting.data.counts.REVIEWING : 0;
   const person = profile?.state === 'ready' ? profile.data : null;
   const name = person?.fullName ?? 'Account';
   const role = person?.roles[0]?.name ?? '';
+
+  const financeGroup = mayViewFinance ? (
+    <div className="nav-section" role="group" aria-labelledby="nav-finance">
+      <p className="nav-section-label" id="nav-finance">Finance</p>
+      <NavItem section="finance" active={active} href="/finance" icon={<CashIcon />}>
+        Requests
+      </NavItem>
+      {mayManageCategories ? (
+        <NavItem section="finance" active={active} href="/finance/categories" icon={<CashIcon />}>
+          Categories
+        </NavItem>
+      ) : null}
+      {maySeeSpend ? (
+        <NavItem section="finance" active={active} href="/finance/reports" icon={<CashIcon />}>
+          Spend report
+        </NavItem>
+      ) : null}
+    </div>
+  ) : null;
 
   return (
     <aside className={collapsed ? 'sidebar collapsed' : 'sidebar'}>
@@ -181,20 +205,38 @@ export async function Sidebar({ active }: { active: Section }) {
       </div>
 
       <nav aria-label="Primary navigation">
-        <NavItem section="overview" active={active} href="/" icon={<OverviewIcon />}>
-          Overview
-        </NavItem>
-        <NavItem section="projects" active={active} href="/projects" icon={<ProjectsIcon />}>
-          Projects
-        </NavItem>
-
-        {manager || staff ? (
+        {financeHome ? financeGroup : (
           <>
-            {mayViewTasks || mayViewTemplates ? (
-              <div className="nav-section" role="group" aria-labelledby="nav-quality">
-                <p className="nav-section-label" id="nav-quality">Quality &amp; EHS</p>
+            <NavItem section="overview" active={active} href="/" icon={<OverviewIcon />}>
+              Overview
+            </NavItem>
+            <NavItem section="projects" active={active} href="/projects" icon={<ProjectsIcon />}>
+              Projects
+            </NavItem>
+            {manager || staff ? (
+              <>
+                {mayViewTasks || mayViewTemplates ? (
+                  <div className="nav-section" role="group" aria-labelledby="nav-quality">
+                    <p className="nav-section-label" id="nav-quality">Quality &amp; EHS</p>
+                    {mayViewTasks ? (
+                      <NavItem section="work-orders" active={active} href="/quality/work-orders" icon={<WorkOrdersIcon />} badge={toReview}>
+                        Work orders
+                      </NavItem>
+                    ) : null}
+                    {mayViewTemplates ? (
+                      <NavItem section="checklists" active={active} href="/quality/templates" icon={<ChecklistsIcon />}>
+                        Checklist library
+                      </NavItem>
+                    ) : null}
+                  </div>
+                ) : null}
+                {financeGroup}
+              </>
+            ) : (
+              <div className="nav-section" role="group" aria-labelledby="nav-records">
+                <p className="nav-section-label" id="nav-records">Records</p>
                 {mayViewTasks ? (
-                  <NavItem section="work-orders" active={active} href="/quality/work-orders" icon={<WorkOrdersIcon />} badge={toReview}>
+                  <NavItem section="work-orders" active={active} href="/quality/work-orders" icon={<WorkOrdersIcon />}>
                     Work orders
                   </NavItem>
                 ) : null}
@@ -203,45 +245,15 @@ export async function Sidebar({ active }: { active: Section }) {
                     Checklist library
                   </NavItem>
                 ) : null}
+                {mayViewAudit ? (
+                  <NavItem section="audit" active={active} href="/#audit-log" icon={<AuditIcon />}>
+                    Audit log
+                  </NavItem>
+                ) : null}
               </div>
-            ) : null}
-            <div className="nav-section" role="group" aria-labelledby="nav-finance">
-              <p className="nav-section-label" id="nav-finance">Finance</p>
-              {/* Finance has no service yet: these land on the overview's panels. */}
-              {staff ? (
-                <NavItem section="advances" active={active} href="/#request-advance" icon={<CashIcon />}>
-                  Request advance
-                </NavItem>
-              ) : (
-                <NavItem section="advances" active={active} href="/#cash-advances" icon={<CashIcon />}>
-                  Cash advances
-                </NavItem>
-              )}
-            </div>
+            )}
+            {!(manager || staff) ? financeGroup : null}
           </>
-        ) : (
-          <div className="nav-section" role="group" aria-labelledby="nav-records">
-            <p className="nav-section-label" id="nav-records">Records</p>
-            {mayViewTasks ? (
-              <NavItem section="work-orders" active={active} href="/quality/work-orders" icon={<WorkOrdersIcon />}>
-                Work orders
-              </NavItem>
-            ) : null}
-            {mayViewTemplates ? (
-              <NavItem section="checklists" active={active} href="/quality/templates" icon={<ChecklistsIcon />}>
-                Checklist library
-              </NavItem>
-            ) : null}
-            {/* Finance has no service yet: this lands on the overview's sample panel. */}
-            <NavItem section="advances" active={active} href="/#cash-advances" icon={<CashIcon />}>
-              Cash advances
-            </NavItem>
-            {mayViewAudit ? (
-              <NavItem section="audit" active={active} href="/#audit-log" icon={<AuditIcon />}>
-                Audit log
-              </NavItem>
-            ) : null}
-          </div>
         )}
 
         {mayViewUsers ? (

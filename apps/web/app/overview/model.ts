@@ -69,7 +69,6 @@ export interface LogRow {
   actor: string;
   actorRole: string;
   ref: string;
-  sample: boolean;
 }
 
 const OBJECT_PREFIX: Record<string, string> = {
@@ -93,7 +92,7 @@ function sentence(action: string): string {
 export function auditRow(event: AuditEvent, actorName: string, actorRole: string): LogRow {
   const status = typeof event.newState.status === 'string' ? event.newState.status : undefined;
   const mapped = event.action === 'work_order.status_changed' && status ? WORK_ORDER_STATUS_ROW[status] : undefined;
-  const base = { key: event.id, at: new Date(event.timestamp), actor: actorName, actorRole, sample: false };
+  const base = { key: event.id, at: new Date(event.timestamp), actor: actorName, actorRole };
   const ref = `${OBJECT_PREFIX[event.objectType] ?? 'OBJ'}-${event.objectId.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
   if (mapped) return { ...base, ...mapped, ref };
   if (event.action === 'work_order.cancelled') return { ...base, tag: 'Cancelled', tone: 'red', group: 'other', text: 'Work order cancelled', ref };
@@ -128,7 +127,7 @@ export function workOrderRef(id: string): string {
   return `WO-${id.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
 }
 
-export type HomeView = 'admin' | 'manager' | 'qc' | 'engineer';
+export type HomeView = 'admin' | 'manager' | 'qc' | 'finance' | 'engineer';
 
 /**
  * Which home a signed-in person lands on. The most senior role wins, and
@@ -139,6 +138,7 @@ export function homeFor(roles: readonly string[]): HomeView {
   if (roles.includes('SUPER_ADMIN')) return 'admin';
   if (roles.includes('PROJECT_MANAGER')) return 'manager';
   if (roles.includes('QC_MANAGER')) return 'qc';
+  if (roles.includes('FINANCE') || roles.includes('PROJECT_DIRECTOR')) return 'finance';
   if (roles.includes('FIELD_ENGINEER')) return 'engineer';
   return 'admin';
 }

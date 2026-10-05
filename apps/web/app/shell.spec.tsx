@@ -108,7 +108,7 @@ describe('Sidebar', () => {
 });
 
 describe('Sidebar for a project manager', () => {
-  const manager = { state: 'ready', data: { id: 'u-1', roles: ['PROJECT_MANAGER'], permissions: ['task.view', 'qc_template.view'], tokenVersion: 0, isActive: true } };
+  const manager = { state: 'ready', data: { id: 'u-1', roles: ['PROJECT_MANAGER'], permissions: ['task.view', 'qc_template.view', 'finance_request.view'], tokenVersion: 0, isActive: true } };
 
   it('groups Quality & EHS and Finance, and counts what is waiting for review', async () => {
     getCurrentUser.mockResolvedValue(manager);
@@ -136,12 +136,13 @@ describe('Sidebar for a project manager', () => {
 describe('Sidebar for QC and field engineers', () => {
   const as = (role: string) => ({ state: 'ready', data: { id: 'u-1', roles: [role], permissions: ['task.view', 'qc_template.view', 'audit.view'], tokenVersion: 0, isActive: true } });
 
-  it.each(['QC_MANAGER', 'FIELD_ENGINEER'])('%s may request an advance but sees no cash advances or audit log', async (role) => {
-    getCurrentUser.mockResolvedValue(as(role));
+  it.each(['QC_MANAGER', 'FIELD_ENGINEER'])('%s sees the finance requests but no audit log', async (role) => {
+    getCurrentUser.mockResolvedValue({ state: 'ready', data: { ...as(role).data, permissions: [...as(role).data.permissions, 'finance_request.view'] } });
     listWorkOrders.mockResolvedValue({ state: 'ready', data: { counts: { REVIEWING: 2 } } });
     const links = hrefs(await Sidebar({ active: 'overview' }));
-    expect(links).toContain('/#request-advance');
-    expect(links).not.toContain('/#cash-advances');
+    expect(links).toContain('/finance');
+    expect(links).not.toContain('/finance/categories');
+    expect(links).not.toContain('/finance/reports');
     expect(links).not.toContain('/#audit-log');
   });
 
@@ -149,6 +150,36 @@ describe('Sidebar for QC and field engineers', () => {
     getCurrentUser.mockResolvedValue(as('FIELD_ENGINEER'));
     await Sidebar({ active: 'overview' });
     expect(listWorkOrders).not.toHaveBeenCalled();
+  });
+});
+
+describe('Sidebar Finance group', () => {
+  const as = (roles: string[], permissions: string[]) => ({ state: 'ready', data: { id: 'u-1', roles, permissions, tokenVersion: 0, isActive: true } });
+
+  it('is hidden without finance_request.view', async () => {
+    getCurrentUser.mockResolvedValue(as(['SUPER_ADMIN'], ['task.view']));
+    expect(hrefs(await Sidebar({ active: 'overview' })).some((href) => href.startsWith('/finance'))).toBe(false);
+  });
+
+  it('shows Categories and Spend report only to those who may use them', async () => {
+    getCurrentUser.mockResolvedValue(as(['SUPER_ADMIN'], ['finance_request.view']));
+    let links = hrefs(await Sidebar({ active: 'overview' }));
+    expect(links).toContain('/finance');
+    expect(links).not.toContain('/finance/categories');
+    expect(links).not.toContain('/finance/reports');
+    getCurrentUser.mockResolvedValue(as(['SUPER_ADMIN'], ['finance_request.view', 'finance_category.manage', 'finance_request.view_all']));
+    links = hrefs(await Sidebar({ active: 'overview' }));
+    expect(links).toEqual(expect.arrayContaining(['/finance', '/finance/categories', '/finance/reports']));
+  });
+
+  it('leaves Finance and Project Directors with the Finance group only', async () => {
+    getCurrentUser.mockResolvedValue(as(['FINANCE'], ['finance_request.view', 'finance_request.view_all', 'finance_category.manage', 'project.view', 'task.view']));
+    const links = hrefs(await Sidebar({ active: 'finance' }));
+    expect(links).toEqual(expect.arrayContaining(['/finance', '/finance/categories', '/finance/reports']));
+    expect(links).not.toContain('/projects');
+    expect(JSON.stringify(await Sidebar({ active: 'finance' }))).not.toContain('Overview');
+    expect(links.some((href) => href.startsWith('/quality'))).toBe(false);
+    expect(links).not.toContain('/#audit-log');
   });
 });
 

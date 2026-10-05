@@ -7,7 +7,7 @@ import { getMyProfile, listUsers } from '../lib/user-api';
 import { listWorkOrders } from '../lib/work-order-api';
 import { WORK_ORDERS_PATH, WORK_ORDER_TYPE_LABEL, dueText } from '../quality/work-orders/labels';
 import { auditRow, dayLabel, firstName, greeting, percent, statusBreakdown, whenLabel, workOrderRef } from './model';
-import { CheckIcon, Kpi, RequestAdvancePanel, SignInPage, newWorkOrderHref } from './parts';
+import { CheckIcon, Kpi, SignInPage, newWorkOrderHref } from './parts';
 import { Sidebar, TopActions } from '../shell';
 
 /** The QC manager's home: submissions waiting on a review, and the health of the checklists behind them. */
@@ -142,43 +142,40 @@ export async function QcOverview() {
             </section>
           </div>
 
-          <div className="ov-pair">
-            {projects.length > 0 ? (
-              <section className="ov-card ov-panel" id="projects">
-                <header className="ov-panel-head">
-                  <div><h2>Projects</h2><p>Work order status by project</p></div>
-                  <a className="ov-link" href="/projects">All <span aria-hidden="true">→</span></a>
-                </header>
-                <ul className="mg-projects">
-                  {projects.map((project, index) => {
-                    const result = perProject[index];
-                    const parts = result?.state === 'ready' ? statusBreakdown(result.data.counts) : null;
-                    const by = (status: string) => parts?.segments.find((s) => s.status === status)?.count ?? 0;
-                    return (
-                      <li key={project.id}>
-                        <div className="mg-project-head">
-                          <div><a className="ov-project" href={`/projects/${project.id}`}>{project.name}</a><span className="ov-sub">{project.code}</span></div>
-                          <b>{parts ? `${percent(by('COMPLETED'), parts.total)}%` : '—'}</b>
-                        </div>
-                        {parts && parts.total > 0 ? (
-                          <>
-                            <div className="ov-stack" role="img" aria-label="Work orders by status">
-                              {parts.segments.filter((s) => s.count > 0).map((s) => <i key={s.status} className={s.tone} style={{ width: `${s.width}%` }} />)}
-                            </div>
-                            <p className="mg-project-legend">
-                              <span>{by('COMPLETED')} approved</span><span>{by('REVIEWING')} in review</span>
-                              {by('RECTIFYING') > 0 ? <span className="red">{by('RECTIFYING')} in rework</span> : <span className="green">No rework</span>}
-                            </p>
-                          </>
-                        ) : <p className="ov-sub">{parts ? 'No work orders yet' : 'Work orders unavailable'}</p>}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            ) : null}
-            <RequestAdvancePanel />
-          </div>
+          {projects.length > 0 ? (
+            <section className="ov-card ov-panel" id="projects">
+              <header className="ov-panel-head">
+                <div><h2>Projects</h2><p>Work order status by project</p></div>
+                <a className="ov-link" href="/projects">All <span aria-hidden="true">→</span></a>
+              </header>
+              <ul className="mg-projects">
+                {projects.map((project, index) => {
+                  const result = perProject[index];
+                  const parts = result?.state === 'ready' ? statusBreakdown(result.data.counts) : null;
+                  const by = (status: string) => parts?.segments.find((s) => s.status === status)?.count ?? 0;
+                  return (
+                    <li key={project.id}>
+                      <div className="mg-project-head">
+                        <div><a className="ov-project" href={`/projects/${project.id}`}>{project.name}</a><span className="ov-sub">{project.code}</span></div>
+                        <b>{parts ? `${percent(by('COMPLETED'), parts.total)}%` : '—'}</b>
+                      </div>
+                      {parts && parts.total > 0 ? (
+                        <>
+                          <div className="ov-stack" role="img" aria-label="Work orders by status">
+                            {parts.segments.filter((s) => s.count > 0).map((s) => <i key={s.status} className={s.tone} style={{ width: `${s.width}%` }} />)}
+                          </div>
+                          <p className="mg-project-legend">
+                            <span>{by('COMPLETED')} approved</span><span>{by('REVIEWING')} in review</span>
+                            {by('RECTIFYING') > 0 ? <span className="red">{by('RECTIFYING')} in rework</span> : <span className="green">No rework</span>}
+                          </p>
+                        </>
+                      ) : <p className="ov-sub">{parts ? 'No work orders yet' : 'Work orders unavailable'}</p>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
 
           {activity.length > 0 ? (
             <section className="ov-card ov-panel" id="activity">
