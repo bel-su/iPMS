@@ -37,6 +37,10 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
       // they can be made responsible for its work orders. ScopesService limits
       // this to projects the manager reaches and users they may manage.
       'scope.grant', 'scope.revoke',
+      // Finance: raise advances and reimbursements, settle them, and approve the
+      // first step for requests on the projects they run.
+      'finance_request.view', 'finance_request.view_all', 'finance_request.create', 'finance_request.cancel',
+      'finance_settlement.submit', 'finance_approval.pm',
     ],
   },
   {
@@ -57,6 +61,24 @@ const SYSTEM_ROLES: Array<{ code: string; name: string; description: string; per
       'project.view', 'site.view', 'task.view', 'task.update',
       'qc_submission.view', 'qc_submission.create',
       'qc_submission.update', 'qc_submission.submit', 'qc_evidence.upload',
+      'finance_request.view', 'finance_request.create', 'finance_request.cancel', 'finance_settlement.submit',
+    ],
+  },
+  {
+    code: 'PROJECT_DIRECTOR', name: 'Project Director',
+    description: 'Second approval step for finance requests on the projects they oversee. Read-only elsewhere.',
+    permissions: [
+      'project.view', 'site.view', 'milestone.view', 'task.view', 'task.view_all',
+      'finance_request.view', 'finance_request.view_all', 'finance_approval.director',
+    ],
+  },
+  {
+    code: 'FINANCE', name: 'Finance',
+    description: 'Pays approved finance requests, records returned cash, maintains expense categories. Global scope.',
+    permissions: [
+      // project.view and task.view let finance call project's scope lookup, as qc does.
+      'project.view', 'task.view',
+      'finance_request.view', 'finance_request.view_all', 'finance_payment.record', 'finance_category.manage',
     ],
   },
   {
@@ -99,10 +121,14 @@ const DEMO_USERS = [
   { email: 'manager@ipms.local',  fullName: 'Project Manager',      role: 'PROJECT_MANAGER' },
   { email: 'qc@ipms.local',       fullName: 'QC Manager',           role: 'QC_MANAGER' },
   { email: 'engineer@ipms.local', fullName: 'Field Engineer',       role: 'FIELD_ENGINEER' },
+  { email: 'director@ipms.local', fullName: 'Project Director',     role: 'PROJECT_DIRECTOR' },
+  { email: 'finance@ipms.local',  fullName: 'Finance Officer',      role: 'FINANCE' },
 ];
 
+const GLOBAL_SCOPE_ROLES: ReadonlySet<string> = new Set(['SUPER_ADMIN', 'FINANCE']);
+
 /**
- * Development and E2E only. Creates four accounts, one per system role, all
+ * Development and E2E only. Creates six accounts, one per role that people actually sign in as, all
  * sharing the password in `IAM_DEMO_PASSWORD`.
  *
  * Two deliberate choices here, both the opposite of the obvious one:
@@ -174,12 +200,12 @@ export async function seedDemoUsers(prisma: PrismaClient): Promise<void> {
      * account with every permission and no scope row sees nothing at all — so
      * without this the seeded administrator cannot administer anything.
      *
-     * Deliberately only `admin`. The other three demo accounts are left
+     * Deliberately only `admin` and `finance` (which pays across every project). The other demo accounts are left
      * unscoped, which is the correct default and the whole point of the
      * change: a PM is granted the projects they run, explicitly, through
      * `POST /users/:id/projects`. They will see empty lists until someone does.
      */
-    if (demo.role === 'SUPER_ADMIN') {
+    if (GLOBAL_SCOPE_ROLES.has(demo.role)) {
       /**
        * Create-if-absent rather than upsert, because the row is only half the
        * job: other services learn about scope from `iam.scope.granted`, never

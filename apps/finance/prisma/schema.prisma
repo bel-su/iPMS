@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma-clients/finance"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ExpenseCategory {
+  id         String           @id @db.Uuid
+  code       String           @unique @db.VarChar(30)
+  name       String           @db.VarChar(100)
+  disabledAt DateTime?        @db.Timestamptz(6)
+  createdAt  DateTime         @default(now()) @db.Timestamptz(6)
+  requests   FinanceRequest[]
+
+  @@map("expense_category")
+}
+
+/// One row per advance, settlement or reimbursement. `kind` and `status` are
+/// strings validated by the service (see src/workflow.ts), as elsewhere in this repo.
+model FinanceRequest {
+  id              String            @id @db.Uuid
+  number          String            @unique @db.VarChar(30)
+  kind            String            @db.VarChar(20)
+  status          String            @db.VarChar(30)
+  /// Bumped each time a returned request is resubmitted; part of every conditional update.
+  revision        Int               @default(1)
+  /// Where the request enters on submit (PENDING_PM, or PENDING_DIRECTOR when a PM raised it). Set at first submit.
+  entryStatus     String?           @db.VarChar(30)
+  projectId       String            @db.Uuid
+  projectCode     String            @db.VarChar(50)
+  projectName     String            @db.VarChar(200)
+  workOrderId     String?           @db.Uuid
+  categoryId      String            @db.Uuid
+  requesterId     String            @db.Uuid
+  /// SETTLEMENT only: the advance being settled.
+  advanceId       String?           @db.Uuid
+  purpose         String            @db.VarChar(500)
+  requestedAmount Decimal           @db.Decimal(14, 2)
+  approvedAmount  Decimal?          @db.Decimal(14, 2)
+  /// SETTLEMENT only, set when settled: the part set against the advance (the rest was paid out).
+  appliedAmount   Decimal?          @db.Decimal(14, 2)
+  submittedAt     DateTime?         @db.Timestamptz(6)
+  createdAt       DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(6)
+  category        ExpenseCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  advance         FinanceRequest?   @relation("AdvanceSettlements", fields: [advanceId], references: [id], onDelete: Restrict)
+  settlements     FinanceRequest[]  @relation("AdvanceSettlements")
+  invoices        RequestInvoice[]
+  actions         ApprovalAction[]
+  payments        Payment[]
+
+  @@index([projectId, status])
+  @@index([requesterId, status])
+  @@index([advanceId])
+  @@index([status])
+  @@map("finance_request")
+}
+
+model RequestInvoice {
+  id            String         @id @db.Uuid
+  requestId     String         @db.Uuid
+  vendor        String         @db.VarChar(200)
+  invoiceNumber String         @db.VarChar(100)
+  invoiceDate   DateTime       @db.Date
+  amount        Decimal        @db.Decimal(14, 2)
+  mediaId       String?        @db.Uuid
+  request       FinanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@map("request_invoice")
+}
+
+/// Append-only history. Never updated or deleted by the service.
+model ApprovalAction {
+  id        String         @id @db.Uuid
+  requestId String         @db.Uuid
+  revision  Int
+  /// REQUESTER | PM | DIRECTOR | FINANCE
+  step      String         @db.VarChar(20)
+  /// SUBMITTED | APPROVED | RETURNED | REJECTED | CANCELLED | PAID | CASH_RETURNED (FINANCE step, on an advance)
+  action    String         @db.VarChar(20)
+  actorId   String         @db.Uuid
+  amount    Decimal?       @db.Decimal(14, 2)
+  comment   String?        @db.VarChar(1000)
+  at        DateTime       @default(now()) @db.Timestamptz(6)
+  request   FinanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, at])
+  @@map("approval_action")
+}
+
+model Payment {
+  id           String         @id @db.Uuid
+  requestId    String         @db.Uuid
+  /// PAYOUT (money to the requester) | CASH_RETURN (unspent advance returned to the company)
+  kind         String         @db.VarChar(20)
+  mode         String         @db.VarChar(20)
+  reference    String         @db.VarChar(100)
+  paidOn       DateTime       @db.Date
+  amount       Decimal        @db.Decimal(14, 2)
+  note         String?        @db.VarChar(500)
+  proofMediaId String?        @db.Uuid
+  recordedBy   String         @db.Uuid
+  createdAt    DateTime       @default(now()) @db.Timestamptz(6)
+  request      FinanceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+
+  @@index([requestId, kind])
+  // Also a partial unique index "payment_one_payout_per_request" on (requestId) WHERE kind = 'PAYOUT', so a
+  // request is paid out at most once. Prisma cannot express it; see migration 20261006000100_payment_one_payout.
+  @@map("payment")
+}
+
+/// One row per `ADV-2026` style key; `value` is the last number handed out.
+model NumberCounter {
+  key   String @id @db.VarChar(20)
+  value Int
+
+  @@map("number_counter")
+}
+
+model OutboxEvent {
+  id            String    @id @db.Uuid
+  subject       String    @db.VarChar(100)
+  payload       Json
+  correlationId String    @db.VarChar(64)
+  actorId       String?   @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  publishedAt   DateTime? @db.Timestamptz(6)
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_event")
+}

@@ -67,3 +67,24 @@ describe('QC stream', () => {
     expect(STREAMS.QC.subjects).toEqual(['qc.>']);
   });
 });
+
+describe('finance stream', () => {
+  it('captures every finance subject', () => {
+    expect(STREAMS.FINANCE.subjects).toEqual(['finance.>']);
+    for (const subject of Object.values(SUBJECTS).filter((s) => s.startsWith('finance.'))) {
+      expect(subject).toMatch(/^finance\./);
+    }
+  });
+
+  it('gives notification one durable per finance subject', () => {
+    const financeSubjects = Object.values(SUBJECTS).filter((s) => s.startsWith('finance.'));
+    expect(STREAMS.FINANCE.durableConsumers).toHaveLength(financeSubjects.length);
+    expect(new Set(STREAMS.FINANCE.durableConsumers).size).toBe(financeSubjects.length);
+  });
+
+  it('announces cash returned against an advance, with its own durable', () => {
+    expect(SUBJECTS.FINANCE_ADVANCE_CASH_RETURNED).toBe('finance.advance.cash_returned');
+    expect(SUBJECTS.FINANCE_ADVANCE_CASH_RETURNED).toMatch(/^[a-z]+\.[a-z_]+\.[a-z_]+$/);
+    expect(STREAMS.FINANCE.durableConsumers).toContain('notification-finance-cash-returned');
+  });
+});

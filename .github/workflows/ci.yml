@@ -40,7 +40,7 @@ jobs:
       # value is irrelevant here: `generate` emits types and never connects.
       - name: Generate Prisma clients
         run: |
-          for service in audit docs iam media notification project qc; do
+          for service in audit docs finance iam media notification project qc; do
             (cd "apps/$service" && DATABASE_URL=postgresql://codegen:codegen@127.0.0.1:5432/codegen pnpm exec prisma generate)
           done
 

@@ -3,7 +3,7 @@ import { getMyProfile } from '../lib/user-api';
 import { listWorkOrders } from '../lib/work-order-api';
 import { STATUS_TEXT, WORK_ORDERS_PATH, WORK_ORDER_TYPE_LABEL, dueText } from '../quality/work-orders/labels';
 import { dayLabel, firstName, greeting, statusBreakdown, workOrderRef } from './model';
-import { CheckIcon, Kpi, RequestAdvancePanel, SignInPage } from './parts';
+import { CheckIcon, Kpi, SignInPage } from './parts';
 import { Sidebar, TopActions } from '../shell';
 
 /** A field engineer's home: their own work orders, rework first. The API already narrows every read to what is assigned to them. */
@@ -44,6 +44,9 @@ export async function EngineerOverview() {
                       : `${todo} work order${todo === 1 ? '' : 's'} to do${late > 0 ? `, ${late} overdue` : ''}.`}
               </p>
             </div>
+            <div className="ov-head-actions">
+              <a className="secondary-button" href="/finance">Finance requests</a>
+            </div>
           </section>
 
           <section className="ov-kpis ov-kpis-4" aria-label="Your work">
@@ -82,22 +85,19 @@ export async function EngineerOverview() {
             </ul>
           </section>
 
-          <div className="ov-pair">
-            <section className="ov-card ov-panel" id="work-order-status">
-              <header className="ov-panel-head"><div><h2>Your progress</h2><p>{breakdown ? `${breakdown.total} work orders assigned to you` : 'Unavailable'}</p></div></header>
-              {breakdown && breakdown.total > 0 ? (
-                <>
-                  <div className="ov-stack" role="img" aria-label="Your work orders by status">
-                    {breakdown.segments.filter((s) => s.count > 0).map((s) => <i key={s.status} className={s.tone} style={{ width: `${s.width}%` }} />)}
-                  </div>
-                  <ul className="ov-legend">
-                    {breakdown.segments.map((s) => <li key={s.status}><i className={s.tone} aria-hidden="true" /><span>{s.label}</span><b>{s.count}</b><em>{s.share}%</em></li>)}
-                  </ul>
-                </>
-              ) : <div className="ov-empty"><strong>No work orders yet</strong></div>}
-            </section>
-            <RequestAdvancePanel />
-          </div>
+          <section className="ov-card ov-panel" id="work-order-status">
+            <header className="ov-panel-head"><div><h2>Your progress</h2><p>{breakdown ? `${breakdown.total} work orders assigned to you` : 'Unavailable'}</p></div></header>
+            {breakdown && breakdown.total > 0 ? (
+              <>
+                <div className="ov-stack" role="img" aria-label="Your work orders by status">
+                  {breakdown.segments.filter((s) => s.count > 0).map((s) => <i key={s.status} className={s.tone} style={{ width: `${s.width}%` }} />)}
+                </div>
+                <ul className="ov-legend">
+                  {breakdown.segments.map((s) => <li key={s.status}><i className={s.tone} aria-hidden="true" /><span>{s.label}</span><b>{s.count}</b><em>{s.share}%</em></li>)}
+                </ul>
+              </>
+            ) : <div className="ov-empty"><strong>No work orders yet</strong></div>}
+          </section>
         </div>
       </section>
     </main>

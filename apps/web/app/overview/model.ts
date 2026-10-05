@@ -7,11 +7,6 @@ export function percent(part: number, whole: number): number {
   return whole > 0 ? Math.round((part / whole) * 100) : 0;
 }
 
-/** "NPR 12,86,000" — Nepali digit grouping. */
-export function formatNpr(amount: number): string {
-  return `NPR ${amount.toLocaleString('en-IN')}`;
-}
-
 type Counts = Partial<Record<TaskStatus | 'ALL' | 'OVERDUE', number>>;
 
 export const STATUS_SEGMENTS = [
@@ -69,11 +64,26 @@ export interface LogRow {
   actor: string;
   actorRole: string;
   ref: string;
-  sample: boolean;
 }
 
 const OBJECT_PREFIX: Record<string, string> = {
   WorkOrder: 'WO', Project: 'PRJ', Site: 'SITE', Task: 'TASK', TaskType: 'TYPE', QcTemplate: 'TPL', Role: 'ROLE', Media: 'MEDIA',
+  FinanceRequest: 'FIN', ExpenseCategory: 'CAT', Payment: 'PAY',
+};
+
+const FINANCE_OBJECTS = new Set(['FinanceRequest', 'ExpenseCategory', 'Payment']);
+
+const FINANCE_VERB_ROW: Record<string, Pick<LogRow, 'tag' | 'tone'>> = {
+  created: { tag: 'Created', tone: 'blue' },
+  submitted: { tag: 'Submitted', tone: 'blue' },
+  approved: { tag: 'Approved', tone: 'green' },
+  approved_by_pm: { tag: 'Approved', tone: 'green' },
+  paid: { tag: 'Paid', tone: 'green' },
+  settled: { tag: 'Settled', tone: 'green' },
+  cash_returned: { tag: 'Returned', tone: 'green' },
+  rejected: { tag: 'Rejected', tone: 'red' },
+  cancelled: { tag: 'Cancelled', tone: 'red' },
+  returned: { tag: 'Returned', tone: 'amber' },
 };
 
 const WORK_ORDER_STATUS_ROW: Partial<Record<string, Pick<LogRow, 'tag' | 'tone' | 'group'> & { text: string }>> = {
@@ -93,9 +103,16 @@ function sentence(action: string): string {
 export function auditRow(event: AuditEvent, actorName: string, actorRole: string): LogRow {
   const status = typeof event.newState.status === 'string' ? event.newState.status : undefined;
   const mapped = event.action === 'work_order.status_changed' && status ? WORK_ORDER_STATUS_ROW[status] : undefined;
-  const base = { key: event.id, at: new Date(event.timestamp), actor: actorName, actorRole, sample: false };
+  const base = { key: event.id, at: new Date(event.timestamp), actor: actorName, actorRole };
   const ref = `${OBJECT_PREFIX[event.objectType] ?? 'OBJ'}-${event.objectId.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
   if (mapped) return { ...base, ...mapped, ref };
+  if (FINANCE_OBJECTS.has(event.objectType)) {
+    // "finance.request.paid" → "Request paid"; the verb picks the tag.
+    const rest = event.action.replace(/^finance\./, '');
+    const verb = rest.split('.').pop() ?? '';
+    const row = FINANCE_VERB_ROW[verb] ?? { tag: 'Updated', tone: 'slate' as const };
+    return { ...base, ...row, group: 'finance', text: sentence(rest), ref };
+  }
   if (event.action === 'work_order.cancelled') return { ...base, tag: 'Cancelled', tone: 'red', group: 'other', text: 'Work order cancelled', ref };
   if (event.action === 'media.rejected') return { ...base, tag: 'Rejected', tone: 'red', group: 'other', text: 'Evidence photo rejected', ref };
   if (event.action.endsWith('.created')) return { ...base, tag: 'Created', tone: 'blue', group: 'other', text: sentence(event.action), ref };
@@ -128,7 +145,7 @@ export function workOrderRef(id: string): string {
   return `WO-${id.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
 }
 
-export type HomeView = 'admin' | 'manager' | 'qc' | 'engineer';
+export type HomeView = 'admin' | 'manager' | 'qc' | 'finance' | 'engineer';
 
 /**
  * Which home a signed-in person lands on. The most senior role wins, and
@@ -139,6 +156,7 @@ export function homeFor(roles: readonly string[]): HomeView {
   if (roles.includes('SUPER_ADMIN')) return 'admin';
   if (roles.includes('PROJECT_MANAGER')) return 'manager';
   if (roles.includes('QC_MANAGER')) return 'qc';
+  if (roles.includes('FINANCE') || roles.includes('PROJECT_DIRECTOR')) return 'finance';
   if (roles.includes('FIELD_ENGINEER')) return 'engineer';
   return 'admin';
 }

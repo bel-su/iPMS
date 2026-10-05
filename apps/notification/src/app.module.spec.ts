@@ -4,6 +4,9 @@ import { AuthzGuard, JwtUserGuard, OVERRIDE_PROVIDER, SCOPE_PROVIDER } from '@ip
 import { AppModule } from './app.module.js';
 import { NotificationController } from './notifications/notification.controller.js';
 import { NotificationService } from './notifications/notification.service.js';
+import { EventBus } from '@ipms/events';
+import { IamDirectoryClient } from './directory/iam-directory.client.js';
+import { FinanceNotificationConsumer } from './events/finance-notification.consumer.js';
 import { QcNotificationConsumer } from './events/qc-notification.consumer.js';
 
 interface ClassProvider {
@@ -67,5 +70,12 @@ describe('AppModule guard registration', () => {
   // and the service would start without ever subscribing.
   it('provides the QC consumer so it subscribes at startup', () => {
     expect(providers.filter(isClassProvider).some((p) => p.provide === QcNotificationConsumer)).toBe(true);
+  });
+
+  it('registers the finance notification consumer with the services it needs', () => {
+    const provider = providers.filter(isClassProvider).find((p) => p.provide === FinanceNotificationConsumer) as
+      { inject?: unknown[] } | undefined;
+    expect(provider).toBeDefined();
+    expect(provider?.inject).toEqual([NotificationService, IamDirectoryClient, EventBus]);
   });
 });
