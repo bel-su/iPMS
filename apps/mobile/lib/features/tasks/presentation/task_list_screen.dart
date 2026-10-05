@@ -9,6 +9,7 @@ import 'task_detail_screen.dart';
 import 'widgets/status_filter_bar.dart';
 import 'widgets/task_card.dart';
 import '../../../shared/layout/main_scaffold.dart';
+import '../../guide/presentation/app_guide_modal.dart';
 
 class TaskListScreen extends ConsumerStatefulWidget {
   const TaskListScreen({super.key});
@@ -121,6 +122,24 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                               ),
                             ),
                           ),
+                        ),
+                        // Project Guide Trigger Button
+                        IconButton.filledTonal(
+                          style: IconButton.styleFrom(
+                            backgroundColor: const Color(0xFFEFF6FF),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              side: const BorderSide(color: Color(0xFFBFDBFE), width: 1),
+                            ),
+                            padding: const EdgeInsets.all(12),
+                          ),
+                          icon: const Icon(
+                            Icons.explore_rounded,
+                            size: 22,
+                            color: Color(0xFF1D4ED8),
+                          ),
+                          tooltip: 'Field App Guide & Workflow',
+                          onPressed: () => AppGuideModal.show(context),
                         ),
                         const SizedBox(width: 8),
                         // Search Button on Right Side of Profile (Borderless)

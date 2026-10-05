@@ -9,6 +9,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../auth/providers/biometric_provider.dart';
 import '../../projects/providers/project_providers.dart';
 import '../../tasks/providers/task_providers.dart';
+import '../../guide/presentation/app_guide_modal.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -402,6 +403,37 @@ class ProfileScreen extends ConsumerWidget {
                         trailingText: 'Disabled',
                         enabled: false,
                         onTap: null,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            // Field App & Project Guide Card
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    children: [
+                      _buildSettingsTile(
+                        icon: Icons.explore_rounded,
+                        iconColor: const Color(0xFF2563EB),
+                        title: 'Field App & Project Guide',
+                        trailingText: 'Walkthrough',
+                        onTap: () => AppGuideModal.show(context),
+                      ),
+                      const Divider(height: 1, color: AppColors.subtleDivider),
+                      _buildSettingsTile(
+                        icon: Icons.help_outline_rounded,
+                        iconColor: const Color(0xFF10B981),
+                        title: 'Inspection Lifecycle Guide',
+                        trailingText: '5 Steps',
+                        onTap: () => AppGuideModal.show(context),
                       ),
                     ],
                   ),
