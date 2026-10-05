@@ -80,7 +80,7 @@ model ApprovalAction {
   revision  Int
   /// REQUESTER | PM | DIRECTOR | FINANCE
   step      String         @db.VarChar(20)
-  /// SUBMITTED | APPROVED | RETURNED | REJECTED | CANCELLED | PAID
+  /// SUBMITTED | APPROVED | RETURNED | REJECTED | CANCELLED | PAID | CASH_RETURNED (FINANCE step, on an advance)
   action    String         @db.VarChar(20)
   actorId   String         @db.Uuid
   amount    Decimal?       @db.Decimal(14, 2)

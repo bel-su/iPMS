@@ -49,3 +49,13 @@ export interface FinanceSettlementSettled extends FinanceEventBase {
   appliedAmount: string;
   payoutAmount: string;
 }
+
+/**
+ * Finance recorded cash the requester handed back out of a paid advance.
+ * `returnedAmount` is this return; `outstandingAfter` is the advance's balance
+ * once it is counted ("0.00" closes the advance).
+ */
+export interface FinanceAdvanceCashReturned extends FinanceEventBase {
+  returnedAmount: string;
+  outstandingAfter: string;
+}

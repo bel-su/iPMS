@@ -81,4 +81,10 @@ describe('finance stream', () => {
     expect(STREAMS.FINANCE.durableConsumers).toHaveLength(financeSubjects.length);
     expect(new Set(STREAMS.FINANCE.durableConsumers).size).toBe(financeSubjects.length);
   });
+
+  it('announces cash returned against an advance, with its own durable', () => {
+    expect(SUBJECTS.FINANCE_ADVANCE_CASH_RETURNED).toBe('finance.advance.cash_returned');
+    expect(SUBJECTS.FINANCE_ADVANCE_CASH_RETURNED).toMatch(/^[a-z]+\.[a-z_]+\.[a-z_]+$/);
+    expect(STREAMS.FINANCE.durableConsumers).toContain('notification-finance-cash-returned');
+  });
 });

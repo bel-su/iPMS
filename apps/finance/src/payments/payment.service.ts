@@ -1,14 +1,14 @@
 import { ConflictException, ForbiddenException, UnprocessableEntityException } from '@nestjs/common';
 import type { AuthzScope } from '@ipms/authz';
 import { PaymentDetailsSchema, uuidv7, type CashReturnDto, type PaymentDetailsDto } from '@ipms/contracts';
-import { SUBJECTS, type FinanceApprovers } from '@ipms/events';
+import { SUBJECTS, type FinanceAdvanceCashReturned, type FinanceApprovers } from '@ipms/events';
 import type { PrismaClient } from '@prisma-clients/finance';
 import { planSettlement } from '../balance.js';
 import { recordAudit } from '../audit.js';
 import { inScope, notFound, requireNoEarlierApproval, requirePermission, type Actor, type Tx } from '../common.js';
 import { emit, factsOf, recordAction } from '../events.js';
 import { loadBalance, lockAdvance } from '../ledger.js';
-import { compareMoney } from '../money.js';
+import { compareMoney, fromMinor, toMinor } from '../money.js';
 import { serializeDetail } from '../serialize.js';
 import { finalStatus } from '../workflow.js';
 
@@ -72,7 +72,7 @@ export class PaymentService {
     return this.detail(id);
   }
 
-  /** Cash an engineer hands back out of an advance. Lowers the balance; never more than is outstanding. */
+  /** Cash an engineer hands back out of an advance. Lowers the balance; never more than is outstanding. Recorded in the advance's history and announced. */
   async returnCash(advanceId: string, dto: CashReturnDto, actor: Actor, scope: AuthzScope) {
     requirePermission(actor, FINANCE);
     await this.prisma.$transaction(async (tx) => {
@@ -86,7 +86,11 @@ export class PaymentService {
       if (compareMoney(dto.amount, balance.outstanding) > 0) throw new UnprocessableEntityException('That is more than is outstanding on this advance');
 
       await this.writePayment(tx, advanceId, 'CASH_RETURN', dto.amount, dto, actor);
-      await recordAudit(tx, { actorId: actor.id, action: 'finance.advance.cash_returned', objectId: advanceId, previousState: { outstanding: balance.outstanding }, newState: { returned: dto.amount } });
+      await recordAction(tx, { requestId: advanceId, revision: advance.revision, step: 'FINANCE', action: 'CASH_RETURNED', actorId: actor.id, amount: dto.amount });
+      const outstandingAfter = (await loadBalance(tx, advanceId)).outstanding;
+      const returned: FinanceAdvanceCashReturned = { ...factsOf(advance, actor.id, null), returnedAmount: fromMinor(toMinor(dto.amount)), outstandingAfter };
+      await emit(tx, SUBJECTS.FINANCE_ADVANCE_CASH_RETURNED, returned, actor.id);
+      await recordAudit(tx, { actorId: actor.id, action: 'finance.advance.cash_returned', objectId: advanceId, previousState: { outstanding: balance.outstanding }, newState: { returned: dto.amount, outstanding: outstandingAfter } });
     });
     return this.detail(advanceId);
   }

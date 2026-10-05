@@ -18,6 +18,7 @@ export const SUBJECTS = {
   FINANCE_REQUEST_CANCELLED: 'finance.request.cancelled',
   FINANCE_REQUEST_PAID: 'finance.request.paid',
   FINANCE_SETTLEMENT_SETTLED: 'finance.settlement.settled',
+  FINANCE_ADVANCE_CASH_RETURNED: 'finance.advance.cash_returned',
 } as const;
 
 export type Subject = (typeof SUBJECTS)[keyof typeof SUBJECTS];
@@ -84,6 +85,7 @@ export const STREAMS: Record<'IAM' | 'AUDIT' | 'QC' | 'FINANCE', StreamDefinitio
       'notification-finance-cancelled',
       'notification-finance-paid',
       'notification-finance-settled',
+      'notification-finance-cash-returned',
     ],
   },
 };
