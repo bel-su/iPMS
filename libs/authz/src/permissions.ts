@@ -82,6 +82,20 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   def('qc_evidence', 'upload', 'Upload photo evidence', ['qc_submission.view']),
   def('qc_evidence', 'export', 'Download a photo package', ['qc_submission.view']),
 
+  // Finance. `view` is the caller's own requests; `view_all` is every request
+  // in the caller's project scope, the same split as task.view / task.view_all.
+  // The approval and payment verbs are checked by FinanceService against the
+  // request's project, because one route serves both approval steps.
+  def('finance_request', 'view', 'View your own finance requests'),
+  def('finance_request', 'view_all', 'View every finance request in your project scope', ['finance_request.view']),
+  def('finance_request', 'create', 'Raise an advance or reimbursement request', ['finance_request.view']),
+  def('finance_request', 'cancel', 'Cancel your own pending finance request', ['finance_request.view']),
+  def('finance_settlement', 'submit', 'Submit invoices to settle an advance', ['finance_request.view']),
+  def('finance_approval', 'pm', 'Approve finance requests as project manager', ['finance_request.view', 'finance_request.view_all']),
+  def('finance_approval', 'director', 'Approve finance requests as project director', ['finance_request.view', 'finance_request.view_all']),
+  def('finance_payment', 'record', 'Record payments and returned cash', ['finance_request.view', 'finance_request.view_all']),
+  def('finance_category', 'manage', 'Manage expense categories', ['finance_request.view']),
+
   // Audit — deliberately no update or delete. The ledger is append-only.
   def('audit', 'view', 'View the audit ledger'),
   def('audit', 'verify', 'Verify audit chain integrity', ['audit.view']),

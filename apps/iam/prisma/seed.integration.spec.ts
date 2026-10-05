@@ -36,11 +36,37 @@ describe('seedIam', () => {
     expect(await prisma.permission.count()).toBe(PERMISSIONS.length);
   });
 
-  it('creates the five system roles', async () => {
+  it('creates the seven system roles', async () => {
     const roles = await prisma.role.findMany({ where: { isSystemRole: true } });
     expect(roles.map((r) => r.code).sort()).toEqual(
-      ['FIELD_ENGINEER', 'PROJECT_MANAGER', 'QC_MANAGER', 'SUPER_ADMIN', 'VIEWER'],
+      ['FIELD_ENGINEER', 'FINANCE', 'PROJECT_DIRECTOR', 'PROJECT_MANAGER', 'QC_MANAGER', 'SUPER_ADMIN', 'VIEWER'],
     );
+  });
+
+  it('splits the finance chain across roles', async () => {
+    const codesOf = async (code: string) => (await prisma.role.findUniqueOrThrow({
+      where: { code }, include: { permissions: { include: { permission: true } } },
+    })).permissions.map((rp) => rp.permission.code);
+
+    const engineer = await codesOf('FIELD_ENGINEER');
+    expect(engineer).toEqual(expect.arrayContaining(['finance_request.create', 'finance_request.cancel', 'finance_settlement.submit']));
+    expect(engineer).not.toContain('finance_approval.pm');
+    expect(engineer).not.toContain('finance_request.view_all');
+
+    const pm = await codesOf('PROJECT_MANAGER');
+    expect(pm).toEqual(expect.arrayContaining(['finance_request.create', 'finance_approval.pm', 'finance_request.view_all']));
+    expect(pm).not.toContain('finance_approval.director');
+    expect(pm).not.toContain('finance_payment.record');
+
+    const director = await codesOf('PROJECT_DIRECTOR');
+    expect(director).toEqual(expect.arrayContaining(['finance_approval.director', 'finance_request.view_all', 'project.view', 'task.view']));
+    expect(director).not.toContain('finance_request.create');
+    expect(director).not.toContain('finance_payment.record');
+
+    const finance = await codesOf('FINANCE');
+    expect(finance).toEqual(expect.arrayContaining(['finance_payment.record', 'finance_category.manage', 'finance_request.view_all', 'project.view', 'task.view']));
+    expect(finance).not.toContain('finance_request.create');
+    expect(finance).not.toContain('finance_approval.director');
   });
 
   it('gives SUPER_ADMIN every permission except ledger mutation', async () => {
@@ -155,7 +181,7 @@ describe('seedIam', () => {
   it('is idempotent', async () => {
     await seedIam(prisma);
     expect(await prisma.permission.count()).toBe(PERMISSIONS.length);
-    expect(await prisma.role.count()).toBe(5);
+    expect(await prisma.role.count()).toBe(7);
   });
 });
 
@@ -179,25 +205,29 @@ describe('seedDemoUsers global scope replication', () => {
     expect(await prisma.userGlobalScope.findUnique({ where: { userId: admin.id } })).not.toBeNull();
   });
 
-  it('emits iam.scope.granted at level GLOBAL so other services learn about it', async () => {
+  it('emits iam.scope.granted at level GLOBAL for each globally scoped account', async () => {
     const admin = await prisma.user.findUniqueOrThrow({ where: { email: 'admin@ipms.local' } });
+    const finance = await prisma.user.findUniqueOrThrow({ where: { email: 'finance@ipms.local' } });
     const events = await prisma.outboxEvent.findMany({ where: { subject: 'iam.scope.granted' } });
-    expect(events).toHaveLength(1);
-    expect(events[0]?.payload).toEqual({
-      userId: admin.id, level: 'GLOBAL', projectId: null, siteId: null,
-    });
+    expect(events).toHaveLength(2);
+    expect(events.map((e) => e.payload)).toEqual(expect.arrayContaining([
+      { userId: admin.id, level: 'GLOBAL', projectId: null, siteId: null },
+      { userId: finance.id, level: 'GLOBAL', projectId: null, siteId: null },
+    ]));
   });
 
-  it('grants nobody else global scope', async () => {
-    // Only the administrator. A PM is granted the projects they run, explicitly,
-    // which is the whole point of enforcing scope.
-    expect(await prisma.userGlobalScope.count()).toBe(1);
+  it('grants global scope to the administrator and to finance, nobody else', async () => {
+    // A PM or Director is granted the projects they run, explicitly. Finance
+    // pays across every project, so it is global like the administrator.
+    const finance = await prisma.user.findUniqueOrThrow({ where: { email: 'finance@ipms.local' } });
+    expect(await prisma.userGlobalScope.findUnique({ where: { userId: finance.id } })).not.toBeNull();
+    expect(await prisma.userGlobalScope.count()).toBe(2);
   });
 
   it('is idempotent: a second seed adds no row and no second event', async () => {
     await seedDemoUsers(prisma);
-    expect(await prisma.userGlobalScope.count()).toBe(1);
-    expect(await prisma.outboxEvent.count({ where: { subject: 'iam.scope.granted' } })).toBe(1);
+    expect(await prisma.userGlobalScope.count()).toBe(2);
+    expect(await prisma.outboxEvent.count({ where: { subject: 'iam.scope.granted' } })).toBe(2);
   });
 
   it('refuses a demo password the password policy would reject', async () => {
