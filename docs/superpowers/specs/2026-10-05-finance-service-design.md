@@ -32,6 +32,8 @@ DRAFT -> PENDING_PM -> PENDING_DIRECTOR -> PENDING_FINANCE -> PAID
 
 A request raised by a Project Manager skips `PENDING_PM` and enters at `PENDING_DIRECTOR` (see the no-self-approval rule below). After a return, resubmission re-enters at the same first step the request originally had.
 
+Project Directors and Finance do not raise requests, so the requester is always a Field Engineer or a PM.
+
 Field Engineer submits, Project Manager approves, Project Director approves, Finance pays.
 
 Rules:
