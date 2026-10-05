@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+const toastState = { pending: false };
 vi.mock('../components/toast', () => ({
-  useActionStateWithToast: (_action: unknown, initial: unknown) => [initial, () => undefined],
+  useActionStateWithToast: (_action: unknown, initial: unknown) => [initial, () => undefined, toastState.pending],
 }));
 vi.mock('./actions', () => ({ saveRequestAction: vi.fn() }));
 
@@ -56,5 +57,27 @@ describe('RequestForm', () => {
     expect(out).not.toContain('name="projectId"');
     expect(out).not.toContain('name="workOrderId"');
     expect(out).not.toContain('mediaId');
+  });
+
+  it('disables both submit buttons while a save is pending, and not otherwise', () => {
+    toastState.pending = true;
+    const busy = renderToStaticMarkup(<RequestForm kind="ADVANCE" projects={projects} categories={categories} />);
+    expect(busy).toMatch(/<button[^>]*disabled[^>]*value="draft"|<button[^>]*value="draft"[^>]*disabled/);
+    expect(busy).toMatch(/<button[^>]*disabled[^>]*value="submit"|<button[^>]*value="submit"[^>]*disabled/);
+    expect(busy).toContain('Working…');
+    toastState.pending = false;
+    const idle = renderToStaticMarkup(<RequestForm kind="ADVANCE" projects={projects} categories={categories} />);
+    expect(idle).not.toMatch(/<button[^>]*disabled/);
+  });
+
+  it('labels each invoice Remove button with its row number', () => {
+    const out = renderToStaticMarkup(
+      <RequestForm kind="REIMBURSEMENT" projects={projects} categories={categories}
+        initial={{ id: 'r-9', categoryId: 'c-1', purpose: 'x', requestedAmount: '1.00', invoices: [
+          { vendor: 'A', invoiceNumber: '1', invoiceDate: '2026-10-01', amount: '1' },
+          { vendor: 'B', invoiceNumber: '2', invoiceDate: '2026-10-02', amount: '2' }] }} />,
+    );
+    expect(out).toContain('aria-label="Remove invoice 1"');
+    expect(out).toContain('aria-label="Remove invoice 2"');
   });
 });

@@ -89,3 +89,17 @@ describe('describeEntry', () => {
     expect(describeEntry({ step: 'REQUESTER', action: 'CANCELLED' })).toBe('Cancelled');
   });
 });
+
+describe('availableActions: closed advances', () => {
+  it('offers no settle or cash return once the balance is CLOSED', () => {
+    expect(availableActions(req({ status: 'PAID' }), ENG, [], { status: 'CLOSED' })).not.toContain('settle');
+    expect(availableActions(req({ status: 'PAID' }), FIN, [], { status: 'CLOSED' })).not.toContain('cashReturn');
+  });
+
+  it('is unchanged for open balances or no balance', () => {
+    expect(availableActions(req({ status: 'PAID' }), ENG, [], { status: 'PAID' })).toEqual(['settle']);
+    expect(availableActions(req({ status: 'PAID' }), ENG, [], { status: 'PARTIALLY_SETTLED' })).toEqual(['settle']);
+    expect(availableActions(req({ status: 'PAID' }), FIN, [], null)).toEqual(['cashReturn']);
+    expect(availableActions(req({ status: 'PAID' }), FIN, [])).toEqual(['cashReturn']);
+  });
+});

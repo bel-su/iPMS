@@ -3,12 +3,19 @@ import { KIND_LABEL, STATUS_LABEL, STATUS_TONE, formatMoney, personName } from '
 
 const DATE = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' });
 
-function pageHref(view: RequestView, page: number): string {
-  return `/finance?view=${view}&page=${page}`;
+export interface TableQuery { status?: string; kind?: string }
+
+/** A workspace link that keeps the view and any filter that is set. */
+export function financeHref(view: RequestView, query: TableQuery = {}, page?: number): string {
+  const params = new URLSearchParams({ view });
+  if (query.status) params.set('status', query.status);
+  if (query.kind) params.set('kind', query.kind);
+  if (page !== undefined) params.set('page', String(page));
+  return `/finance?${params.toString()}`;
 }
 
 /** The finance workspace's list: one row per request, newest first, linking to the request. */
-export function RequestsTable({ page, names, view }: { page: RequestPage; names: ReadonlyMap<string, string>; view: RequestView }) {
+export function RequestsTable({ page, names, view, query = {} }: { page: RequestPage; names: ReadonlyMap<string, string>; view: RequestView; query?: TableQuery }) {
   if (page.items.length === 0) return <p className="finance-empty">Nothing here yet.</p>;
   const last = Math.max(1, Math.ceil(page.total / page.limit));
   return (
@@ -16,7 +23,7 @@ export function RequestsTable({ page, names, view }: { page: RequestPage; names:
       <div className="finance-table-wrap">
         <table className="finance-table">
           <thead>
-            <tr><th>Request</th><th>Project</th><th>For</th><th>Requested by</th><th className="num">Amount</th><th>Status</th><th>Updated</th></tr>
+            <tr><th>Request</th><th>Project</th><th>For</th><th>Requested by</th><th className="finance-num">Amount</th><th>Status</th><th>Updated</th></tr>
           </thead>
           <tbody>
             {page.items.map((request: FinanceRequest) => (
@@ -25,12 +32,12 @@ export function RequestsTable({ page, names, view }: { page: RequestPage; names:
                 <td>{request.projectName}<span className="subtle">{request.projectCode}</span></td>
                 <td>{request.purpose}<span className="subtle">{request.category?.name ?? ''}</span></td>
                 <td>{personName(request.requesterId, names)}</td>
-                <td className="num">
+                <td className="finance-num">
                   {formatMoney(request.approvedAmount ?? request.requestedAmount)}
                   {request.approvedAmount !== null && request.approvedAmount !== request.requestedAmount
                     ? <span className="subtle">asked {formatMoney(request.requestedAmount)}</span> : null}
                 </td>
-                <td><span className={`pill ${STATUS_TONE[request.status]}`}>{STATUS_LABEL[request.status]}</span></td>
+                <td><span className={`finance-pill ${STATUS_TONE[request.status]}`}>{STATUS_LABEL[request.status]}</span></td>
                 <td>{DATE.format(new Date(request.updatedAt))}</td>
               </tr>
             ))}
@@ -39,9 +46,9 @@ export function RequestsTable({ page, names, view }: { page: RequestPage; names:
       </div>
       {last > 1 ? (
         <nav className="pager" aria-label="Pages">
-          {page.page > 1 ? <a className="ghost-button" href={pageHref(view, page.page - 1)}>Previous</a> : <span />}
+          {page.page > 1 ? <a className="ghost-button" href={financeHref(view, query, page.page - 1)}>Previous</a> : <span />}
           <span className="subtle">Page {page.page} of {last}</span>
-          {page.page < last ? <a className="ghost-button" href={pageHref(view, page.page + 1)}>Next</a> : <span />}
+          {page.page < last ? <a className="ghost-button" href={financeHref(view, query, page.page + 1)}>Next</a> : <span />}
         </nav>
       ) : null}
     </>

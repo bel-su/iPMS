@@ -59,13 +59,16 @@ export function availableActions(
   request: Pick<FinanceRequest, 'status' | 'kind' | 'requesterId'>,
   viewer: Viewer,
   approvedEarlier: readonly string[],
+  balance?: { status: string } | null,
 ): RequestAction[] {
   const can = (permission: string): boolean => viewer.permissions.includes(permission);
+  /** A fully settled advance stays PAID; only its balance says CLOSED, and the service then refuses settlements and cash returns. */
+  const open = balance?.status !== 'CLOSED';
 
   if (request.requesterId === viewer.id) {
     if (request.status === 'DRAFT' || request.status === 'RETURNED') return ['edit', 'submit'];
     if (PENDING.has(request.status)) return ['cancel'];
-    if (isSettleable(request) && can('finance_settlement.submit')) return ['settle'];
+    if (open && isSettleable(request) && can('finance_settlement.submit')) return ['settle'];
     return [];
   }
 
@@ -73,7 +76,7 @@ export function availableActions(
   if (request.status === 'PENDING_PM' && can('finance_approval.pm')) return ['approve', 'return', 'reject'];
   if (request.status === 'PENDING_DIRECTOR' && can('finance_approval.director')) return ['approve', 'return', 'reject'];
   if (request.status === 'PENDING_FINANCE' && can('finance_payment.record')) return ['pay', 'return', 'reject'];
-  if (isSettleable(request) && can('finance_payment.record')) return ['cashReturn'];
+  if (open && isSettleable(request) && can('finance_payment.record')) return ['cashReturn'];
   return [];
 }
 

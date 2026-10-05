@@ -8,7 +8,7 @@ import {
 } from '../../model';
 
 const WHEN = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-const DAY = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+const DAY = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const MODE: Record<string, string> = { BANK_TRANSFER: 'Bank transfer', CASH: 'Cash', CHEQUE: 'Cheque', MOBILE_WALLET: 'Mobile wallet' };
 
 export default async function FinanceRequestPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,7 +25,7 @@ export default async function FinanceRequestPage({ params }: { params: Promise<{
   const names = new Map(directory.state === 'ready' ? directory.data.map((p) => [p.id, p.fullName]) : []);
   const who = (userId: string) => personName(userId, names);
   const approvedEarlier = request.actions.filter((a) => a.revision === request.revision && a.action === 'APPROVED').map((a) => a.actorId);
-  const actions = availableActions(request, viewer.data, approvedEarlier);
+  const actions = availableActions(request, viewer.data, approvedEarlier, request.balance);
   const advance = request.kind === 'SETTLEMENT' && request.advanceId ? await getAdvance(request.advanceId) : null;
   const waiting = waitingOn(request.status);
 
@@ -41,7 +41,7 @@ export default async function FinanceRequestPage({ params }: { params: Promise<{
           <div className="toolbar">
             <div>
               <p className="eyebrow">{KIND_LABEL[request.kind].toUpperCase()}</p>
-              <h1>{request.number} <span className={`pill ${STATUS_TONE[request.status]}`}>{STATUS_LABEL[request.status]}</span></h1>
+              <h1>{request.number} <span className={`finance-pill ${STATUS_TONE[request.status]}`}>{STATUS_LABEL[request.status]}</span></h1>
               <p className="subtle">{request.projectCode} — {request.projectName}{waiting ? ` · ${waiting}` : ''}</p>
             </div>
           </div>
@@ -77,12 +77,12 @@ export default async function FinanceRequestPage({ params }: { params: Promise<{
               <h2>Invoices</h2>
               <div className="finance-table-wrap">
                 <table className="finance-table">
-                  <thead><tr><th>Vendor</th><th>Invoice no.</th><th>Date</th><th className="num">Amount</th><th>File</th></tr></thead>
+                  <thead><tr><th>Vendor</th><th>Invoice no.</th><th>Date</th><th className="finance-num">Amount</th><th>File</th></tr></thead>
                   <tbody>
                     {request.invoices.map((invoice) => (
                       <tr key={invoice.id}>
                         <td>{invoice.vendor}</td><td>{invoice.invoiceNumber}</td>
-                        <td>{DAY.format(new Date(invoice.invoiceDate))}</td><td className="num">{formatMoney(invoice.amount)}</td>
+                        <td>{DAY.format(new Date(invoice.invoiceDate))}</td><td className="finance-num">{formatMoney(invoice.amount)}</td>
                         <td>{invoice.mediaId ? 'File attached' : '—'}</td>
                       </tr>
                     ))}
@@ -97,12 +97,12 @@ export default async function FinanceRequestPage({ params }: { params: Promise<{
               <h2>Payments</h2>
               <div className="finance-table-wrap">
                 <table className="finance-table">
-                  <thead><tr><th>Type</th><th>How</th><th>Reference</th><th>Date</th><th className="num">Amount</th><th>Recorded by</th></tr></thead>
+                  <thead><tr><th>Type</th><th>How</th><th>Reference</th><th>Date</th><th className="finance-num">Amount</th><th>Recorded by</th></tr></thead>
                   <tbody>
                     {request.payments.map((p) => (
                       <tr key={p.id}>
                         <td>{p.kind === 'PAYOUT' ? 'Paid out' : 'Cash returned'}</td><td>{MODE[p.mode] ?? p.mode}</td><td>{p.reference}</td>
-                        <td>{DAY.format(new Date(p.paidOn))}</td><td className="num">{formatMoney(p.amount)}</td><td>{who(p.recordedBy)}</td>
+                        <td>{DAY.format(new Date(p.paidOn))}</td><td className="finance-num">{formatMoney(p.amount)}</td><td>{who(p.recordedBy)}</td>
                       </tr>
                     ))}
                   </tbody>

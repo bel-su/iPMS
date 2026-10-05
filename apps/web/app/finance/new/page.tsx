@@ -13,8 +13,12 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
   const { kind: rawKind, advanceId } = await searchParams;
   const viewer = await getCurrentUser();
   if (viewer.state === 'unauthenticated') return <StatePage title="Sign in to raise a request"><a className="primary-button" href="/login">Sign in</a></StatePage>;
-  if (viewer.state !== 'ready' || !hasPermission(viewer.data, 'finance_request.create')) {
-    return <StatePage title="You cannot raise requests"><p>Only field engineers and project managers raise advances and reimbursements.</p></StatePage>;
+  const back = <a className="primary-button" href="/finance">Back to finance</a>;
+  if (viewer.state !== 'ready') {
+    return <StatePage title="Finance is not available"><p>Your account could not be checked. Try again shortly.</p>{back}</StatePage>;
+  }
+  if (!hasPermission(viewer.data, 'finance_request.create')) {
+    return <StatePage title="You cannot raise requests"><p>Only field engineers and project managers raise advances and reimbursements.</p>{back}</StatePage>;
   }
 
   const kind = asKind(rawKind);
@@ -46,12 +50,12 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
       'What do you need?',
     );
   }
-  if (categories.state !== 'ready' || projects.state !== 'ready') {
-    return <StatePage title="The form is not available"><p>{categories.state === 'ready' ? 'Projects could not be loaded.' : 'Categories could not be loaded.'}</p></StatePage>;
+  if (categories.state !== 'ready' || (kind !== 'SETTLEMENT' && projects.state !== 'ready')) {
+    return <StatePage title="The form is not available"><p>{categories.state === 'ready' ? 'Projects could not be loaded.' : 'Categories could not be loaded.'}</p>{back}</StatePage>;
   }
   if (kind === 'SETTLEMENT') {
-    if (!advance || advance.state !== 'ready' || !advance.data.balance) {
-      return <StatePage title="That advance cannot be settled"><p>Only a paid advance with money outstanding can be settled.</p><a className="primary-button" href="/finance">Back to finance</a></StatePage>;
+    if (!advance || advance.state !== 'ready' || !advance.data.balance || advance.data.balance.status === 'CLOSED') {
+      return <StatePage title="That advance cannot be settled"><p>Only a paid advance with money outstanding can be settled.</p>{back}</StatePage>;
     }
     const { advance: adv, balance } = advance.data;
     return shell(
@@ -61,7 +65,7 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
     );
   }
   return shell(
-    <RequestForm kind={kind} projects={projects.data.filter((p) => p.status !== 'CANCELLED').map((p) => ({ id: p.id, code: p.code, name: p.name }))}
+    <RequestForm kind={kind} projects={(projects.state === 'ready' ? projects.data : []).filter((p) => p.status !== 'CANCELLED').map((p) => ({ id: p.id, code: p.code, name: p.name }))}
       categories={categories.data.filter((c) => !c.disabledAt)} />,
     kind === 'ADVANCE' ? 'Request an advance' : 'Claim a reimbursement',
   );

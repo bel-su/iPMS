@@ -7,7 +7,7 @@ export default async function EditRequestPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const viewer = await getCurrentUser();
   if (viewer.state === 'unauthenticated') return <StatePage title="Sign in to edit a request"><a className="primary-button" href="/login">Sign in</a></StatePage>;
-  if (viewer.state !== 'ready') return <StatePage title="Editing is not available"><p>Your account could not be loaded.</p></StatePage>;
+  if (viewer.state !== 'ready') return <StatePage title="Editing is not available"><p>Your account could not be loaded.</p><a className="primary-button" href="/finance">Back to finance</a></StatePage>;
 
   const [found, categories] = await Promise.all([getRequest(id), listCategories()]);
   if (found.state === 'unauthenticated') return <StatePage title="Sign in to edit a request"><a className="primary-button" href="/login">Sign in</a></StatePage>;
@@ -23,7 +23,7 @@ export default async function EditRequestPage({ params }: { params: Promise<{ id
     return <StatePage title="This request can no longer be edited"><p>Only a draft or a returned request can be changed.</p>{back}</StatePage>;
   }
   if (categories.state !== 'ready') {
-    return <StatePage title="The form is not available"><p>Categories could not be loaded.</p></StatePage>;
+    return <StatePage title="The form is not available"><p>Categories could not be loaded.</p><a className="primary-button" href="/finance">Back to finance</a></StatePage>;
   }
 
   let advance: AdvanceContext | undefined;

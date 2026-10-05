@@ -31,7 +31,7 @@ export function RequestForm({
 }: {
   kind: RequestKind; projects: ProjectChoice[]; categories: CategoryChoice[]; advance?: AdvanceContext; initial?: RequestInitial;
 }) {
-  const [state, action] = useActionStateWithToast(saveRequestAction, EMPTY, 'Saved');
+  const [state, action, pending] = useActionStateWithToast(saveRequestAction, EMPTY, 'Saved');
   const [rows, setRows] = useState<Row[]>(() => (initial && initial.invoices.length > 0 ? initial.invoices : [BLANK]).map((row, key) => ({ ...row, key })));
   const [nextKey, setNextKey] = useState(rows.length);
   const editing = initial !== undefined;
@@ -77,14 +77,14 @@ export function RequestForm({
       {kind !== 'ADVANCE' ? (
         <fieldset className="invoice-rows">
           <legend>Invoices</legend>
-          {rows.map((row) => (
+          {rows.map((row, index) => (
             <div className="form-grid" key={row.key}>
               <label className="field">Vendor<input name="invoiceVendor" defaultValue={row.vendor} maxLength={200} /></label>
               <label className="field">Invoice no.<input name="invoiceNumber" defaultValue={row.invoiceNumber} maxLength={100} /></label>
               <label className="field">Date<input name="invoiceDate" type="date" defaultValue={row.invoiceDate.slice(0, 10)} /></label>
               <label className="field">Amount (NPR)<input name="invoiceAmount" inputMode="decimal" defaultValue={row.amount} /></label>
               {rows.length > 1 ? (
-                <button type="button" className="ghost-button" onClick={() => setRows(rows.filter((r) => r.key !== row.key))}>Remove</button>
+                <button type="button" className="ghost-button" aria-label={`Remove invoice ${index + 1}`} onClick={() => setRows(rows.filter((r) => r.key !== row.key))}>Remove</button>
               ) : null}
             </div>
           ))}
@@ -101,8 +101,8 @@ export function RequestForm({
 
       <FormError state={state} />
       <div className="form-actions">
-        <button className="ghost-button" type="submit" name="intent" value="draft">Save draft</button>
-        <button className="primary-button" type="submit" name="intent" value="submit">Submit for approval</button>
+        <button className="ghost-button" type="submit" name="intent" value="draft" disabled={pending}>{pending ? 'Working…' : 'Save draft'}</button>
+        <button className="primary-button" type="submit" name="intent" value="submit" disabled={pending}>{pending ? 'Working…' : 'Submit for approval'}</button>
       </div>
     </form>
   );

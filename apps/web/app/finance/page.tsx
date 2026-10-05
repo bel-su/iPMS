@@ -1,42 +1,36 @@
-import type { RequestKind, RequestStatus, RequestView } from '../lib/finance-api';
+import type { RequestView } from '../lib/finance-api';
 import { listRequests } from '../lib/finance-api';
 import { getCurrentUser, hasPermission } from '../lib/iam-api';
 import { listUserDirectory } from '../lib/user-api';
 import { Sidebar, StatePage, TopActions } from '../shell';
-import { RequestsTable } from './requests-table';
+import { RequestsTable, financeHref } from './requests-table';
+import { resolveSearch, type RawSearch } from './search';
 
-interface Search { view?: string; status?: string; kind?: string; page?: string }
+const LABEL: Record<RequestView, string> = { awaiting: 'Waiting for me', mine: 'My requests', all: 'All requests' };
 
-const VIEWS: Array<{ view: RequestView; label: string }> = [
-  { view: 'awaiting', label: 'Waiting for me' }, { view: 'mine', label: 'My requests' }, { view: 'all', label: 'All requests' },
-];
-
-const asView = (value: string | undefined): RequestView | undefined => (value === 'awaiting' || value === 'mine' || value === 'all' ? value : undefined);
-
-export default async function FinancePage({ searchParams }: { searchParams: Promise<Search> }) {
+export default async function FinancePage({ searchParams }: { searchParams: Promise<RawSearch> }) {
   const search = await searchParams;
   const viewer = await getCurrentUser();
   if (viewer.state === 'unauthenticated') {
     return <StatePage title="Sign in to see finance"><a className="primary-button" href="/login">Sign in</a></StatePage>;
   }
   if (viewer.state !== 'ready' || !hasPermission(viewer.data, 'finance_request.view')) {
-    return <StatePage title="Finance is not available"><p>Your role does not include finance requests.</p></StatePage>;
+    return <StatePage title="Finance is not available"><p>Your role does not include finance requests.</p><a className="primary-button" href="/">Back to workspace</a></StatePage>;
   }
 
   const user = viewer.data;
   const mayAct = ['finance_approval.pm', 'finance_approval.director', 'finance_payment.record'].some((p) => hasPermission(user, p));
   const mayRaise = hasPermission(user, 'finance_request.create');
   const seeAll = hasPermission(user, 'finance_request.view_all');
-  const tabs = VIEWS.filter(({ view }) => (view === 'awaiting' ? mayAct : view === 'all' ? seeAll : true));
-  const view = asView(search.view) ?? (mayAct ? 'awaiting' : 'mine');
-  const page = Math.max(1, Number(search.page) || 1);
+  const { view, status, kind, page, tabs } = resolveSearch(search, { mayAct, seeAll });
+  const query = { ...(status ? { status } : {}), ...(kind ? { kind } : {}) };
 
   const [result, directory] = await Promise.all([
-    listRequests({ view, page, ...(search.status ? { status: search.status as RequestStatus } : {}), ...(search.kind ? { kind: search.kind as RequestKind } : {}) }),
+    listRequests({ view, page, ...query }),
     listUserDirectory(),
   ]);
   if (result.state !== 'ready') {
-    return <StatePage title="Finance is not available"><p>{result.state === 'unauthenticated' ? 'Sign in again to continue.' : result.message}</p></StatePage>;
+    return <StatePage title="Finance is not available"><p>{result.state === 'unauthenticated' ? 'Sign in again to continue.' : result.message}</p><a className="primary-button" href="/finance">Back to finance</a></StatePage>;
   }
   const names = new Map(directory.state === 'ready' ? directory.data.map((person) => [person.id, person.fullName]) : []);
 
@@ -59,10 +53,10 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
           <section className="panel">
             <nav className="finance-tabs" aria-label="Views">
               {tabs.map((tab) => (
-                <a key={tab.view} href={`/finance?view=${tab.view}`} aria-current={tab.view === view ? 'page' : undefined}>{tab.label}</a>
+                <a key={tab} href={financeHref(tab, query)} aria-current={tab === view ? 'page' : undefined}>{LABEL[tab]}</a>
               ))}
             </nav>
-            <RequestsTable page={result.data} names={names} view={view} />
+            <RequestsTable page={result.data} names={names} view={view} query={query} />
           </section>
         </div>
       </section>

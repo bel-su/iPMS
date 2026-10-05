@@ -33,6 +33,22 @@ describe('RequestsTable', () => {
     expect(html([])).toContain('Nothing here yet.');
   });
 
+  it('uses scoped class names', () => {
+    const out = html([row()]);
+    expect(out).toContain('finance-pill');
+    expect(out).toContain('finance-num');
+  });
+
+  it('keeps the view and filters in the next-page link', () => {
+    const out = renderToStaticMarkup(
+      <RequestsTable page={page([row()], { total: 45 })} names={names} view="all" query={{ status: 'PAID', kind: 'ADVANCE' }} />,
+    );
+    const href = /href="([^"]*page=2[^"]*)"/.exec(out)?.[1] ?? '';
+    expect(href).toContain('view=all');
+    expect(href).toContain('status=PAID');
+    expect(href).toContain('kind=ADVANCE');
+  });
+
   it('offers the next page when there is one', () => {
     expect(html([row()], { total: 45 })).toContain('page=2');
   });

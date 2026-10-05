@@ -34,6 +34,10 @@ describe('ActionPanels', () => {
     expect(html(['approve', 'return', 'reject'], { status: 'PENDING_PM' })).not.toContain('name="amount"');
   });
 
+  it('carries the request id as a hidden field', () => {
+    expect(html(['approve', 'return', 'reject'])).toMatch(/<input[^>]*type="hidden"[^>]*name="id"[^>]*value="r-1"|<input[^>]*name="id"[^>]*value="r-1"/);
+  });
+
   it('asks for a reason on return and reject', () => {
     const out = html(['approve', 'return', 'reject']);
     expect(out).toContain('Return to requester');
@@ -47,6 +51,7 @@ describe('ActionPanels', () => {
     expect(out).toContain('name="mode"');
     expect(out).toContain('name="reference"');
     expect(out).toContain('name="paidOn"');
+    expect(out).not.toContain('name="amount"');
   });
 
   it('explains that a settlement only needs payment details when money is paid out', () => {
