@@ -15,9 +15,12 @@ type Outcome = 'APPROVED' | 'RETURNED' | 'REJECTED';
 const VIEW_ALL = 'finance_request.view_all';
 
 /**
- * The PM and Director steps. One route serves both, so the step is read from
- * the request's status and the permission it needs is checked here, together
- * with scope and the no-self-approval rule. Finance's step is PaymentService.
+ * Approve, return and reject. One route per outcome serves every step, so the
+ * step is read from the request's status and the permission it needs is checked
+ * here, together with visibility, scope, no-self-approval and segregation of
+ * duties. The PM and Director approve; at the Finance step only return and
+ * reject happen here (holding finance_payment.record), since paying is
+ * PaymentService.
  */
 export class ApprovalService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -43,7 +46,9 @@ export class ApprovalService {
       if (row.requesterId !== actor.id && !actor.permissions.includes(VIEW_ALL)) throw notFound('Request');
 
       const step = stepOf(row.status);
-      if (step === null || step === 'FINANCE') throw new ConflictException('This request is not waiting for an approval');
+      if (step === null) throw new ConflictException('This request is not waiting for an approval');
+      // Finance may send a request back or refuse it, but never "approve" it: paying is Finance's approval (PaymentService).
+      if (step === 'FINANCE' && outcome === 'APPROVED') throw new ConflictException('This request is waiting for payment, not an approval');
       if (!actor.permissions.includes(STEP_PERMISSION[step])) throw new ForbiddenException(`This step needs the ${STEP_PERMISSION[step]} permission`);
       if (row.requesterId === actor.id) throw new ForbiddenException('You cannot act on your own request');
       await requireNoEarlierApproval(tx, row, actor);
@@ -66,7 +71,8 @@ export class ApprovalService {
       const next = outcome === 'APPROVED' ? statusAfterApproval(row.status as 'PENDING_PM' | 'PENDING_DIRECTOR') : outcome;
       const moved = await tx.financeRequest.updateMany({
         where: { id, status: row.status, revision: row.revision },
-        data: { status: next, ...(approvedAmount === undefined ? {} : { approvedAmount }) },
+        // Leaving the Finance step without paying drops the Director's amount: a resubmission goes back through the Director, who sets it again.
+        data: { status: next, ...(approvedAmount === undefined ? {} : { approvedAmount }), ...(step === 'FINANCE' ? { approvedAmount: null } : {}) },
       });
       if (moved.count !== 1) throw new ConflictException('The request changed; reload and try again');
 
@@ -75,7 +81,8 @@ export class ApprovalService {
       await emit(tx, subjectFor(outcome, step), factsOf(after, actor.id, comment), actor.id);
       await recordAudit(tx, {
         actorId: actor.id, action: `finance.request.${outcome.toLowerCase()}`, objectId: id,
-        previousState: { status: row.status }, newState: { status: next, step, ...(approvedAmount === undefined ? {} : { approvedAmount }) },
+        previousState: { status: row.status, ...(step === 'FINANCE' ? { approvedAmount: row.approvedAmount?.toFixed(2) ?? null } : {}) },
+        newState: { status: next, step, ...(approvedAmount === undefined ? {} : { approvedAmount }), ...(step === 'FINANCE' ? { approvedAmount: null } : {}) },
       });
     });
     return serializeDetail(await this.prisma.financeRequest.findUniqueOrThrow({

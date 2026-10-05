@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma-clients/finance';
-import { uuidv7 } from '@ipms/contracts';
+import { CommentSchema, uuidv7 } from '@ipms/contracts';
 import { startTestDb } from '../../prisma/test-db.js';
 import { ACTORS, PROJECT, aCategory, resetDb, scopes } from '../../prisma/fixtures.js';
+import { PaymentService } from '../payments/payment.service.js';
 import { RequestService } from '../requests/request.service.js';
 import { ApprovalService } from './approval.service.js';
 
@@ -195,5 +196,75 @@ describe('segregation of duties', () => {
     await approvals.approve(r.id, {}, ACTORS.pm, scopes.project);
     // pmAndDirector approved revision 1 as PM; revision 2 is a fresh chain.
     expect((await approvals.approve(r.id, {}, pmAndDirector, scopes.project)).status).toBe('PENDING_FINANCE');
+  });
+});
+
+describe('Finance returns or rejects at the payment step', () => {
+  const bank = { mode: 'BANK_TRANSFER' as const, reference: 'TXN-1', paidOn: new Date('2026-10-05') };
+  const payments = () => new PaymentService(prisma);
+
+  async function atFinance(directorAmount = '40000') {
+    const r = await submitted();
+    await approvals.approve(r.id, {}, ACTORS.pm, scopes.project);
+    await approvals.approve(r.id, { amount: directorAmount }, ACTORS.director, scopes.project);
+    return r.id;
+  }
+
+  it('returns to the requester, clearing the approved amount; the resubmission needs a new Director amount', async () => {
+    const id = await atFinance('40000');
+    const after = await approvals.returnToRequester(id, 'Wrong bank account', ACTORS.finance, scopes.global);
+    expect(after).toMatchObject({ status: 'RETURNED', approvedAmount: null });
+    expect((after.actions ?? []).at(-1)).toMatchObject({ step: 'FINANCE', action: 'RETURNED', actorId: ACTORS.finance.id, comment: 'Wrong bank account' });
+    const event = await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.request.returned' } });
+    expect(event.payload).toMatchObject({ requestId: id, actorId: ACTORS.finance.id, approvedAmount: null, comment: 'Wrong bank account' });
+
+    const again = await requests.submit(id, ACTORS.engineer);
+    expect(again).toMatchObject({ status: 'PENDING_PM', revision: 2, approvedAmount: null });
+    await expect(payments().pay(id, bank, ACTORS.finance, scopes.global)).rejects.toThrow(/not waiting for payment/);
+    await approvals.approve(id, {}, ACTORS.pm, scopes.project);
+    await approvals.approve(id, { amount: '30000' }, ACTORS.director, scopes.project);
+    const paid = await payments().pay(id, bank, ACTORS.finance, scopes.global);
+    expect(paid).toMatchObject({ status: 'PAID', approvedAmount: '30000.00' });
+    expect(paid.payments?.[0]).toMatchObject({ amount: '30000.00' });
+  });
+
+  it('rejects for good, clearing the approved amount', async () => {
+    const id = await atFinance();
+    const after = await approvals.reject(id, 'Duplicate of ADV-0003', ACTORS.finance, scopes.global);
+    expect(after).toMatchObject({ status: 'REJECTED', approvedAmount: null });
+    expect((after.actions ?? []).at(-1)).toMatchObject({ step: 'FINANCE', action: 'REJECTED' });
+    expect((await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.request.rejected' } })).payload).toMatchObject({ approvedAmount: null, comment: 'Duplicate of ADV-0003' });
+    await expect(requests.submit(id, ACTORS.engineer)).rejects.toThrow(/draft or returned/);
+    await expect(payments().pay(id, bank, ACTORS.finance, scopes.global)).rejects.toThrow(/not waiting for payment/);
+  });
+
+  it('refuses a PM or Director at the Finance step', async () => {
+    const id = await atFinance();
+    await expect(approvals.returnToRequester(id, 'x', ACTORS.otherPm, scopes.project)).rejects.toThrow(expect.objectContaining({ status: 403, message: expect.stringMatching(/finance_payment\.record/) }));
+    await expect(approvals.reject(id, 'x', ACTORS.director, scopes.project)).rejects.toThrow(expect.objectContaining({ status: 403 }));
+    expect((await prisma.financeRequest.findUniqueOrThrow({ where: { id } })).status).toBe('PENDING_FINANCE');
+  });
+
+  it('hides the request from Finance outside its project', async () => {
+    const id = await atFinance();
+    await expect(approvals.returnToRequester(id, 'x', ACTORS.finance, scopes.otherProject)).rejects.toThrow(/not found/);
+  });
+
+  it('requires a comment (the route\'s contract)', () => {
+    expect(CommentSchema.safeParse({ comment: '  ' }).success).toBe(false);
+    expect(CommentSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('still has no approve at the Finance step: paying is the approval', async () => {
+    const id = await atFinance();
+    await expect(approvals.approve(id, {}, ACTORS.finance, scopes.global)).rejects.toThrow(expect.objectContaining({ status: 409 }));
+  });
+
+  it('refuses Finance returning a request they approved at an earlier step', async () => {
+    const financeAndDirector = { id: uuidv7(), permissions: [...ACTORS.finance.permissions, 'finance_approval.director'] };
+    const r = await submitted();
+    await approvals.approve(r.id, {}, ACTORS.pm, scopes.project);
+    await approvals.approve(r.id, {}, financeAndDirector, scopes.global);
+    await expect(approvals.returnToRequester(r.id, 'x', financeAndDirector, scopes.global)).rejects.toThrow(/already approved an earlier step/);
   });
 });
