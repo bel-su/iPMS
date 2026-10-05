@@ -1,4 +1,5 @@
 'use server';
+import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import {
   approveRequest, cancelRequest, createCategory, createRequest, payRequest, rejectRequest, returnCash, returnRequest,
@@ -15,6 +16,10 @@ const isMode = (value: string | undefined): value is PaymentMode => value !== un
 
 /** Every page a change to one request shows on: the workspace and the request itself. */
 const pages = (id: string): string[] => ['/finance', `/finance/requests/${id}`];
+
+/** The trimmed request id a form carries, or undefined when it has none. */
+const requiredId = (form: FormData): string | undefined => optional(form, 'id');
+const MISSING_REQUEST: FormState = { error: 'Missing request.' };
 
 /**
  * Creates or edits a request and, when asked, submits it. `id` present means
@@ -65,24 +70,30 @@ export async function saveRequestAction(_previous: FormState, form: FormData): P
   const requestId = id ?? saved.data.id;
 
   if (submit) {
-    const submitted = await settle(await submitRequest(requestId), pages(requestId));
-    if (submitted.error) return submitted;
+    // The draft is saved either way. A failed submit must not leave the form
+    // without an id (a retry would create a duplicate), so the draft's own page
+    // opens instead and its Submit button shows the reason if it fails again.
+    await settle(await submitRequest(requestId), pages(requestId));
+    for (const path of pages(requestId)) revalidatePath(path);
   }
   redirect(`/finance/requests/${requestId}`);
 }
 
 export async function submitAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const id = String(form.get('id'));
+  const id = requiredId(form);
+  if (!id) return MISSING_REQUEST;
   return settle(await submitRequest(id), pages(id));
 }
 
 export async function cancelAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const id = String(form.get('id'));
+  const id = requiredId(form);
+  if (!id) return MISSING_REQUEST;
   return settle(await cancelRequest(id, optional(form, 'comment')), pages(id));
 }
 
 export async function approveAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const id = String(form.get('id'));
+  const id = requiredId(form);
+  if (!id) return MISSING_REQUEST;
   const typed = optional(form, 'amount');
   const amount = typed === undefined ? undefined : parseMoney(typed);
   if (amount === null) return { error: MONEY_ERROR };
@@ -91,14 +102,16 @@ export async function approveAction(_previous: FormState, form: FormData): Promi
 }
 
 export async function returnAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const id = String(form.get('id'));
+  const id = requiredId(form);
+  if (!id) return MISSING_REQUEST;
   const comment = optional(form, 'comment');
   if (!comment) return { error: 'Say why.' };
   return settle(await returnRequest(id, comment), pages(id));
 }
 
 export async function rejectAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const id = String(form.get('id'));
+  const id = requiredId(form);
+  if (!id) return MISSING_REQUEST;
   const comment = optional(form, 'comment');
   if (!comment) return { error: 'Say why.' };
   return settle(await rejectRequest(id, comment), pages(id));
@@ -106,7 +119,8 @@ export async function rejectAction(_previous: FormState, form: FormData): Promis
 
 /** Blank details are sent as nothing: the service wants them only when money actually moves. */
 export async function payAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const id = String(form.get('id'));
+  const id = requiredId(form);
+  if (!id) return MISSING_REQUEST;
   const mode = optional(form, 'mode');
   if (mode !== undefined && !isMode(mode)) return { error: 'Choose how it was paid.' };
   const reference = optional(form, 'reference');
@@ -119,7 +133,8 @@ export async function payAction(_previous: FormState, form: FormData): Promise<F
 }
 
 export async function cashReturnAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const id = String(form.get('id'));
+  const id = requiredId(form);
+  if (!id) return MISSING_REQUEST;
   const amount = parseMoney(optional(form, 'amount'));
   if (amount === null) return { error: MONEY_ERROR };
   const mode = optional(form, 'mode');
@@ -139,7 +154,8 @@ export async function createCategoryAction(_previous: FormState, form: FormData)
 }
 
 export async function updateCategoryAction(_previous: FormState, form: FormData): Promise<FormState> {
-  const id = String(form.get('id'));
+  const id = requiredId(form);
+  if (!id) return { error: 'Missing category.' };
   const name = optional(form, 'name');
   const disabled = optional(form, 'disabled');
   return settle(

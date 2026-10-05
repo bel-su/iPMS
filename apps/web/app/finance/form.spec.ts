@@ -13,9 +13,10 @@ const form = (rows: Array<[string, string, string, string]>) => {
 describe('parseMoney', () => {
   it.each([
     ['1500', '1500.00'], ['1,50,000.5', '150000.50'], [' 40000.25 ', '40000.25'], ['0.5', '0.50'], ['7.', '7.00'],
+    ['999999999999.99', '999999999999.99'], ['00.5', '0.50'],
   ])('reads %s as %s', (input, expected) => expect(parseMoney(input)).toBe(expected));
 
-  it.each(['', '  ', 'abc', '-5', '0', '0.00', '1.234', '12e3', undefined])('refuses %s', (input) => expect(parseMoney(input as never)).toBeNull());
+  it.each(['', '  ', 'abc', '-5', '0', '0.00', '1.234', '12e3', undefined, '1234567890123', '.5', '1,,5', '1 000', '1,2 3.4', ',5', '1,.5', '1.,5'])('refuses %s', (input) => expect(parseMoney(input as never)).toBeNull());
 });
 
 describe('parseInvoices', () => {
@@ -42,5 +43,19 @@ describe('parseInvoices', () => {
     expect(parseInvoices(form([['Himal Fuel', '', '2026-10-01', '100']]))).toEqual({ error: 'Invoice 1: enter the vendor, invoice number, date and amount.' });
     expect(parseInvoices(form([['A', '1', '2026-10-01', '100'], ['B', '2', '2026-10-01', '1.234']]))).toEqual({ error: 'Invoice 2: enter an amount in NPR with at most two decimals.' });
     expect(parseInvoices(form([['A', '1', 'not-a-date', '100']]))).toEqual({ error: 'Invoice 1: enter a valid date.' });
+  });
+
+  it.each(['2026-02-31', '2026-04-31', '0000-01-01', '1899-12-31'])('refuses the impossible date %s', (date) => {
+    expect(parseInvoices(form([['A', '1', date, '100']]))).toEqual({ error: 'Invoice 1: enter a valid date.' });
+  });
+
+  it('accepts a real leap day', () => {
+    expect(parseInvoices(form([['A', '1', '2028-02-29', '100']]))).toEqual({ invoices: [{ vendor: 'A', invoiceNumber: '1', invoiceDate: '2028-02-29', amount: '100.00' }] });
+  });
+
+  it('does not drop the extra entries of a longer list', () => {
+    const data = form([['A', '1', '2026-10-01', '100']]);
+    data.append('invoiceAmount', '50');
+    expect(parseInvoices(data)).toEqual({ error: 'Invoice 2: enter the vendor, invoice number, date and amount.' });
   });
 });

@@ -71,7 +71,77 @@ describe('saveRequestAction', () => {
   });
 });
 
+describe('saveRequestAction after a successful save', () => {
+  const advance = { kind: 'ADVANCE', projectId: 'p-1', categoryId: 'c-1', purpose: 'Site travel', amount: '50,000', intent: 'submit' };
+
+  it('opens the saved draft instead of returning the error when the submit fails on create', async () => {
+    api.submitRequest.mockResolvedValue({ state: 'forbidden', message: 'x' });
+    await expect(actions.saveRequestAction(EMPTY, form(advance))).rejects.toThrow('NEXT_REDIRECT:/finance/requests/r-1');
+    expect(api.createRequest).toHaveBeenCalledTimes(1);
+    expect(revalidatePath).toHaveBeenCalledWith('/finance');
+    expect(revalidatePath).toHaveBeenCalledWith('/finance/requests/r-1');
+  });
+
+  it('does the same when editing', async () => {
+    api.submitRequest.mockResolvedValue({ state: 'unavailable', message: 'x' });
+    await expect(actions.saveRequestAction(EMPTY, form({ ...advance, id: 'r-9' }))).rejects.toThrow('NEXT_REDIRECT:/finance/requests/r-9');
+    expect(api.updateRequest).toHaveBeenCalledTimes(1);
+    expect(revalidatePath).toHaveBeenCalledWith('/finance/requests/r-9');
+  });
+
+  it('still sends an unauthenticated submit to the login page', async () => {
+    api.submitRequest.mockResolvedValue({ state: 'unauthenticated' });
+    await expect(actions.saveRequestAction(EMPTY, form(advance))).rejects.toThrow('NEXT_REDIRECT:/login');
+  });
+});
+
+describe('saveRequestAction coverage', () => {
+  const base = { categoryId: 'c-1', purpose: 'Fuel', intent: 'draft' };
+  const rows = { invoiceVendor: ['V'], invoiceNumber: ['I-1'], invoiceDate: ['2026-10-01'], invoiceAmount: ['100'] };
+
+  it('edits a reimbursement with category, purpose and invoices only', async () => {
+    await expect(actions.saveRequestAction(EMPTY, form({ ...base, ...rows, kind: 'REIMBURSEMENT', id: 'r-5', projectId: 'p-1' }))).rejects.toThrow('NEXT_REDIRECT:/finance/requests/r-5');
+    expect(api.updateRequest).toHaveBeenCalledWith('r-5', {
+      categoryId: 'c-1', purpose: 'Fuel', invoices: [{ vendor: 'V', invoiceNumber: 'I-1', invoiceDate: '2026-10-01', amount: '100.00' }],
+    });
+  });
+
+  it('asks for a project and for an advance to settle', async () => {
+    expect(await actions.saveRequestAction(EMPTY, form({ ...base, kind: 'ADVANCE', amount: '10' }))).toEqual({ error: 'Choose a project.' });
+    expect(await actions.saveRequestAction(EMPTY, form({ ...base, ...rows, kind: 'REIMBURSEMENT' }))).toEqual({ error: 'Choose a project.' });
+    expect(await actions.saveRequestAction(EMPTY, form({ ...base, ...rows, kind: 'SETTLEMENT' }))).toEqual({ error: 'Choose the advance to settle.' });
+    expect(api.createRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('actions without a request id', () => {
+  const cases: Array<[string, (f: FormData) => Promise<unknown>, string, Record<string, string>]> = [
+    ['submit', (f) => actions.submitAction(EMPTY, f), 'submitRequest', {}],
+    ['cancel', (f) => actions.cancelAction(EMPTY, f), 'cancelRequest', {}],
+    ['approve', (f) => actions.approveAction(EMPTY, f), 'approveRequest', {}],
+    ['return', (f) => actions.returnAction(EMPTY, f), 'returnRequest', { comment: 'why' }],
+    ['reject', (f) => actions.rejectAction(EMPTY, f), 'rejectRequest', { comment: 'why' }],
+    ['pay', (f) => actions.payAction(EMPTY, f), 'payRequest', {}],
+    ['cashReturn', (f) => actions.cashReturnAction(EMPTY, f), 'returnCash', { amount: '5', mode: 'CASH', reference: 'R', paidOn: '2026-10-05' }],
+  ];
+  it.each(cases)('%s reports the missing request without calling the API', async (_name, run, apiName, extra) => {
+    expect(await run(form(extra))).toEqual({ error: 'Missing request.' });
+    expect(await run(form({ ...extra, id: '  ' }))).toEqual({ error: 'Missing request.' });
+    expect(api[apiName as keyof typeof api]).not.toHaveBeenCalled();
+  });
+
+  it('updateCategory reports the missing category', async () => {
+    expect(await actions.updateCategoryAction(EMPTY, form({ name: 'X' }))).toEqual({ error: 'Missing category.' });
+    expect(api.updateCategory).not.toHaveBeenCalled();
+  });
+});
+
 describe('request actions', () => {
+  it('sends an unauthenticated result to the login page', async () => {
+    api.submitRequest.mockResolvedValue({ state: 'unauthenticated' });
+    await expect(actions.submitAction(EMPTY, form({ id: 'r-1' }))).rejects.toThrow('NEXT_REDIRECT:/login');
+  });
+
   it('submits and cancels, refreshing the workspace and the request page', async () => {
     expect(await actions.submitAction(EMPTY, form({ id: 'r-1' }))).toEqual(EMPTY);
     expect(api.submitRequest).toHaveBeenCalledWith('r-1');
@@ -115,6 +185,14 @@ describe('payment actions', () => {
     expect(await actions.payAction(EMPTY, form({ id: 'r-1', mode: 'BITCOIN', reference: 'x', paidOn: '2026-10-05' }))).toEqual({ error: 'Choose how it was paid.' });
   });
 
+  it('needs the reference, the date and the mode to record returned cash', async () => {
+    const full = { id: 'a-1', amount: '3,000', mode: 'CASH', reference: 'V-1', paidOn: '2026-10-05' };
+    expect(await actions.cashReturnAction(EMPTY, form({ ...full, reference: '' }))).toEqual({ error: 'Enter the reference and the date.' });
+    expect(await actions.cashReturnAction(EMPTY, form({ ...full, paidOn: '' }))).toEqual({ error: 'Enter the reference and the date.' });
+    expect(await actions.cashReturnAction(EMPTY, form({ ...full, mode: '' }))).toEqual({ error: 'Choose how it was returned.' });
+    expect(api.returnCash).not.toHaveBeenCalled();
+  });
+
   it('records returned cash against an advance', async () => {
     await actions.cashReturnAction(EMPTY, form({ id: 'a-1', amount: '3,000', mode: 'CASH', reference: 'V-1', paidOn: '2026-10-05' }));
     expect(api.returnCash).toHaveBeenCalledWith('a-1', { amount: '3000.00', mode: 'CASH', reference: 'V-1', paidOn: '2026-10-05' });
@@ -129,6 +207,8 @@ describe('category actions', () => {
     expect(revalidatePath).toHaveBeenCalledWith('/finance/categories');
     await actions.updateCategoryAction(EMPTY, form({ id: 'c-1', disabled: 'true' }));
     expect(api.updateCategory).toHaveBeenCalledWith('c-1', { disabled: true });
+    await actions.updateCategoryAction(EMPTY, form({ id: 'c-1', disabled: 'false' }));
+    expect(api.updateCategory).toHaveBeenLastCalledWith('c-1', { disabled: false });
     await actions.updateCategoryAction(EMPTY, form({ id: 'c-1', name: 'Permits and fees' }));
     expect(api.updateCategory).toHaveBeenLastCalledWith('c-1', { name: 'Permits and fees' });
   });
