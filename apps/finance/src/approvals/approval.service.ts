@@ -78,7 +78,8 @@ export class ApprovalService {
 
       await recordAction(tx, { requestId: id, revision: row.revision, step, action: outcome, actorId: actor.id, amount: approvedAmount ?? null, comment });
       const after = await tx.financeRequest.findUniqueOrThrow({ where: { id } });
-      await emit(tx, subjectFor(outcome, step), factsOf(after, actor.id, comment), actor.id);
+      const facts = factsOf(after, actor.id, comment);
+      await emit(tx, subjectFor(outcome, step), outcome === 'APPROVED' ? facts : { ...facts, step }, actor.id);
       await recordAudit(tx, {
         actorId: actor.id, action: `finance.request.${outcome.toLowerCase()}`, objectId: id,
         previousState: { status: row.status, ...(step === 'FINANCE' ? { approvedAmount: row.approvedAmount?.toFixed(2) ?? null } : {}) },

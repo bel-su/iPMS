@@ -15,7 +15,7 @@ export interface FinanceEventBase {
   projectName: string;
   requesterId: string;
   requestedAmount: string;
-  /** Set once the Director has approved. */
+  /** Set once the Director approves; cleared to null when Finance returns or rejects. */
   approvedAmount: string | null;
   actorId: string;
   /** ISO-8601. */
@@ -28,8 +28,9 @@ export interface FinanceRequestSubmitted extends FinanceEventBase { nextStep: 'P
 export type FinanceRequestApprovedByPm = FinanceEventBase;
 /** The Director approved; Finance holds it now. */
 export type FinanceRequestApproved = FinanceEventBase;
-export type FinanceRequestReturned = FinanceEventBase;
-export type FinanceRequestRejected = FinanceEventBase;
+/** `step` is the step that acted: PM, DIRECTOR or FINANCE. */
+export interface FinanceRequestReturned extends FinanceEventBase { step: FinanceStep }
+export interface FinanceRequestRejected extends FinanceEventBase { step: FinanceStep }
 /** `heldBy` is the step the request was waiting at when the requester cancelled it. */
 export interface FinanceRequestCancelled extends FinanceEventBase { heldBy: FinanceStep }
 

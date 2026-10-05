@@ -135,7 +135,7 @@ describe('return and reject', () => {
     const after = await approvals.returnToRequester(r.id, 'Attach the quotation', ACTORS.pm, scopes.project);
     expect(after.status).toBe('RETURNED');
     const event = await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.request.returned' } });
-    expect(event.payload).toMatchObject({ requesterId: ACTORS.engineer.id, comment: 'Attach the quotation' });
+    expect(event.payload).toMatchObject({ requesterId: ACTORS.engineer.id, comment: 'Attach the quotation', step: 'PM' });
   });
 
   it('lets the engineer resubmit a returned request, restarting at the PM', async () => {
@@ -152,6 +152,13 @@ describe('return and reject', () => {
     expect(after.status).toBe('REJECTED');
     expect(await prisma.outboxEvent.count({ where: { subject: 'finance.request.rejected' } })).toBe(1);
     await expect(requests.submit(r.id, ACTORS.engineer)).rejects.toThrow(/draft or returned/);
+  });
+
+  it('says which step acted when the Director rejects', async () => {
+    const r = await submitted();
+    await approvals.approve(r.id, {}, ACTORS.pm, scopes.project);
+    await approvals.reject(r.id, 'Not in budget', ACTORS.director, scopes.project);
+    expect((await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.request.rejected' } })).payload).toMatchObject({ step: 'DIRECTOR' });
   });
 
   it('applies the same step, scope and self-approval rules as approve', async () => {
@@ -216,7 +223,7 @@ describe('Finance returns or rejects at the payment step', () => {
     expect(after).toMatchObject({ status: 'RETURNED', approvedAmount: null });
     expect((after.actions ?? []).at(-1)).toMatchObject({ step: 'FINANCE', action: 'RETURNED', actorId: ACTORS.finance.id, comment: 'Wrong bank account' });
     const event = await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.request.returned' } });
-    expect(event.payload).toMatchObject({ requestId: id, actorId: ACTORS.finance.id, approvedAmount: null, comment: 'Wrong bank account' });
+    expect(event.payload).toMatchObject({ requestId: id, actorId: ACTORS.finance.id, approvedAmount: null, comment: 'Wrong bank account', step: 'FINANCE' });
 
     const again = await requests.submit(id, ACTORS.engineer);
     expect(again).toMatchObject({ status: 'PENDING_PM', revision: 2, approvedAmount: null });
@@ -233,7 +240,7 @@ describe('Finance returns or rejects at the payment step', () => {
     const after = await approvals.reject(id, 'Duplicate of ADV-0003', ACTORS.finance, scopes.global);
     expect(after).toMatchObject({ status: 'REJECTED', approvedAmount: null });
     expect((after.actions ?? []).at(-1)).toMatchObject({ step: 'FINANCE', action: 'REJECTED' });
-    expect((await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.request.rejected' } })).payload).toMatchObject({ approvedAmount: null, comment: 'Duplicate of ADV-0003' });
+    expect((await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.request.rejected' } })).payload).toMatchObject({ approvedAmount: null, comment: 'Duplicate of ADV-0003', step: 'FINANCE' });
     await expect(requests.submit(id, ACTORS.engineer)).rejects.toThrow(/draft or returned/);
     await expect(payments().pay(id, bank, ACTORS.finance, scopes.global)).rejects.toThrow(/not waiting for payment/);
   });

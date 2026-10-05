@@ -133,7 +133,7 @@ New `finance-notification.consumer.ts` in `apps/notification`, like the `qc` con
 | `finance.request.submitted` (including resubmit) | PMs scoped to the project; Directors instead when the requester is a PM |
 | `finance.request.approved_by_pm` | Directors scoped to the project |
 | `finance.request.approved` (Director) | Finance; requester |
-| `finance.request.returned`, `.rejected` (by the PM, the Director or Finance) | requester, with comment |
+| `finance.request.returned`, `.rejected` (by the PM, the Director or Finance) | requester, with comment; the event carries the acting `step` |
 | `finance.request.cancelled` | approvers currently holding it |
 | `finance.request.paid`, `finance.settlement.settled` | requester, approving PM, approving Director, Finance |
 | `finance.advance.cash_returned` | requester, with the amount returned and what is still outstanding |
