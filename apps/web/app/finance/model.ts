@@ -1,0 +1,88 @@
+import type { FinanceRequest, FinanceStep } from '../lib/finance-api';
+
+/** What the finance screens show and which buttons they offer. Pure, so it is testable; the service enforces every rule again. */
+
+export const KIND_LABEL: Record<FinanceRequest['kind'], string> = { ADVANCE: 'Advance', SETTLEMENT: 'Settlement', REIMBURSEMENT: 'Reimbursement' };
+
+export const STATUS_LABEL: Record<FinanceRequest['status'], string> = {
+  DRAFT: 'Draft', PENDING_PM: 'With project manager', PENDING_DIRECTOR: 'With project director', PENDING_FINANCE: 'Ready to pay',
+  PAID: 'Paid', SETTLED: 'Settled', RETURNED: 'Returned', REJECTED: 'Rejected', CANCELLED: 'Cancelled',
+};
+
+export type Tone = 'green' | 'amber' | 'red' | 'blue' | 'slate';
+export const STATUS_TONE: Record<FinanceRequest['status'], Tone> = {
+  DRAFT: 'slate', PENDING_PM: 'amber', PENDING_DIRECTOR: 'amber', PENDING_FINANCE: 'blue',
+  PAID: 'green', SETTLED: 'green', RETURNED: 'red', REJECTED: 'red', CANCELLED: 'slate',
+};
+
+const STEP_NAME: Record<FinanceStep, string> = {
+  REQUESTER: '', PM: 'the project manager', DIRECTOR: 'the project director', FINANCE: 'finance',
+};
+export const STEP_LABEL = STEP_NAME;
+
+/** "NPR 1,50,000.00": two decimals, Indian grouping. A missing amount is a dash. */
+export function formatMoney(amount: string | null): string {
+  if (amount === null) return '—';
+  return `NPR ${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** A known person's name, otherwise the front of their id. */
+export function personName(id: string, names: ReadonlyMap<string, string>): string {
+  return names.get(id) ?? `${id.slice(0, 8)}…`;
+}
+
+export function waitingOn(status: FinanceRequest['status']): string | null {
+  switch (status) {
+    case 'PENDING_PM': return 'Waiting for the project manager';
+    case 'PENDING_DIRECTOR': return 'Waiting for the project director';
+    case 'PENDING_FINANCE': return 'Waiting for finance to pay';
+    default: return null;
+  }
+}
+
+export interface Viewer { id: string; permissions: readonly string[] }
+export type RequestAction = 'edit' | 'submit' | 'cancel' | 'approve' | 'return' | 'reject' | 'pay' | 'settle' | 'cashReturn';
+
+const PENDING = new Set(['PENDING_PM', 'PENDING_DIRECTOR', 'PENDING_FINANCE']);
+
+/** An advance that has been paid can be settled and can take returned cash. */
+export const isSettleable = (request: Pick<FinanceRequest, 'kind' | 'status'>): boolean => request.kind === 'ADVANCE' && request.status === 'PAID';
+
+/**
+ * The buttons to offer, in display order.
+ *
+ * `approvedEarlier` is the ids of everyone who approved an earlier step of the
+ * request's current revision: the service refuses them a later step, so the
+ * button is not offered. Hiding is a courtesy; the service is the gate.
+ */
+export function availableActions(
+  request: Pick<FinanceRequest, 'status' | 'kind' | 'requesterId'>,
+  viewer: Viewer,
+  approvedEarlier: readonly string[],
+): RequestAction[] {
+  const can = (permission: string): boolean => viewer.permissions.includes(permission);
+
+  if (request.requesterId === viewer.id) {
+    if (request.status === 'DRAFT' || request.status === 'RETURNED') return ['edit', 'submit'];
+    if (PENDING.has(request.status)) return ['cancel'];
+    if (isSettleable(request) && can('finance_settlement.submit')) return ['settle'];
+    return [];
+  }
+
+  if (approvedEarlier.includes(viewer.id)) return [];
+  if (request.status === 'PENDING_PM' && can('finance_approval.pm')) return ['approve', 'return', 'reject'];
+  if (request.status === 'PENDING_DIRECTOR' && can('finance_approval.director')) return ['approve', 'return', 'reject'];
+  if (request.status === 'PENDING_FINANCE' && can('finance_payment.record')) return ['pay', 'return', 'reject'];
+  if (isSettleable(request) && can('finance_payment.record')) return ['cashReturn'];
+  return [];
+}
+
+const VERB: Record<string, string> = { APPROVED: 'Approved', RETURNED: 'Returned', REJECTED: 'Rejected', PAID: 'Paid' };
+
+/** One row of the history as a phrase: "Approved by the project manager". */
+export function describeEntry(entry: { step: FinanceStep; action: string }): string {
+  if (entry.action === 'SUBMITTED') return 'Submitted';
+  if (entry.action === 'CANCELLED') return 'Cancelled';
+  if (entry.action === 'CASH_RETURNED') return 'Cash return recorded by finance';
+  return `${VERB[entry.action] ?? entry.action} by ${STEP_NAME[entry.step]}`;
+}
