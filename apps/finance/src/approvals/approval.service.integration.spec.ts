@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma-clients/finance';
-import { uuidv7 } from '@ipms/contracts';
 import { startTestDb } from '../../prisma/test-db.js';
 import { ACTORS, PROJECT, aCategory, resetDb, scopes } from '../../prisma/fixtures.js';
 import { RequestService } from '../requests/request.service.js';
@@ -51,10 +50,19 @@ describe('approve', () => {
     expect(action).toMatchObject({ action: 'APPROVED', amount: '40000.00', comment: 'Cut travel days' });
   });
 
-  it('refuses a Director amount above the request, or of zero', async () => {
+  it('refuses a Director amount above the request', async () => {
     const r = await submitted();
     await approvals.approve(r.id, {}, ACTORS.pm, scopes.project);
     await expect(approvals.approve(r.id, { amount: '50000.01' }, ACTORS.director, scopes.project)).rejects.toThrow(/more than was requested/);
+  });
+
+  it.each(['0', '0.00', '-5'])('refuses a Director amount of %s and leaves the request untouched', async (amount) => {
+    const r = await submitted();
+    await approvals.approve(r.id, {}, ACTORS.pm, scopes.project);
+    await expect(approvals.approve(r.id, { amount }, ACTORS.director, scopes.project)).rejects.toThrow(/greater than zero/i);
+    const row = await prisma.financeRequest.findUniqueOrThrow({ where: { id: r.id } });
+    expect(row.status).toBe('PENDING_DIRECTOR');
+    expect(row.approvedAmount).toBeNull();
   });
 
   it('refuses a PM who tries to change the amount', async () => {

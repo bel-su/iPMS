@@ -49,6 +49,9 @@ export class ApprovalService {
           if (amount !== undefined) throw new UnprocessableEntityException('Only the project director can change the amount');
         } else {
           approvedAmount = amount ?? row.requestedAmount.toFixed(2);
+          if (compareMoney(approvedAmount, '0') <= 0) {
+            throw new UnprocessableEntityException('The approved amount must be greater than zero');
+          }
           if (compareMoney(approvedAmount, row.requestedAmount.toFixed(2)) > 0) {
             throw new UnprocessableEntityException('The approved amount cannot be more than was requested');
           }
