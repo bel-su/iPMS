@@ -20,8 +20,9 @@ export default async function NewWorkOrdersPage({ searchParams }: { searchParams
       </StatePage>
     );
   }
+  // Work is assigned on live projects only: not one still being drafted, nor one already finished or cancelled.
   const choices = projects.state === 'ready'
-    ? projects.data.filter((p) => p.status !== 'CANCELLED' && p.status !== 'COMPLETED').map((p) => ({ id: p.id, code: p.code, name: p.name }))
+    ? projects.data.filter((p) => p.status !== 'DRAFT' && p.status !== 'COMPLETED' && p.status !== 'CANCELLED').map((p) => ({ id: p.id, code: p.code, name: p.name }))
     : [];
   const initialProject = choices.find((p) => p.id === projectId)?.id ?? (choices.length === 1 ? choices[0]!.id : '');
   const initialContext = initialProject ? await loadProjectAction(initialProject) : null;
