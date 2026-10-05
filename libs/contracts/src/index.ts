@@ -14,3 +14,4 @@ export * from './qc/template.js';
 export * from './qc/work-order.js';
 export * from './media/media.js';
 export * from './notification/notification.js';
+export * from './finance/finance.js';
