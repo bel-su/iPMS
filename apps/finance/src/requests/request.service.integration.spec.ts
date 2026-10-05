@@ -97,6 +97,31 @@ describe('update', () => {
     await expect(service.update(r.id, { purpose: 'y' }, ACTORS.engineer)).rejects.toThrow(/draft or returned/);
   });
 
+  it('refuses to edit a request that was submitted while the edit was in flight', async () => {
+    for (let round = 0; round < 5; round++) {
+      const r = await service.create({ kind: 'REIMBURSEMENT', projectId: PROJECT.id, categoryId, purpose: 'Fuel', invoices: [invoice('100')] }, ACTORS.engineer, scopes.project, PROJECT);
+      const [, edit] = await Promise.allSettled([
+        service.submit(r.id, ACTORS.engineer),
+        service.update(r.id, { purpose: 'late edit', invoices: [invoice('999')] }, ACTORS.engineer),
+      ]);
+      const row = await prisma.financeRequest.findUniqueOrThrow({ where: { id: r.id }, include: { invoices: true } });
+      const invoiceAmounts = row.invoices.map((i) => i.amount.toFixed(2));
+      if (row.status === 'DRAFT') {
+        // submit lost the race (conflict); the edit must have been applied whole
+        expect(edit.status).toBe('fulfilled');
+        continue;
+      }
+      expect(row.status).toBe('PENDING_PM');
+      expect(row.invoices).toHaveLength(1);
+      if (edit.status === 'fulfilled') {
+        expect([row.purpose, row.requestedAmount.toFixed(2), invoiceAmounts]).toEqual(['late edit', '999.00', ['999.00']]);
+      } else {
+        expect(String(edit.reason)).toMatch(/draft or returned|changed/);
+        expect([row.purpose, row.requestedAmount.toFixed(2), invoiceAmounts]).toEqual(['Fuel', '100.00', ['100.00']]);
+      }
+    }
+  });
+
   it('refuses an amount on a request that has invoices, and invoices on an advance', async () => {
     const adv = await service.create(advanceDto(), ACTORS.engineer, scopes.project, PROJECT);
     await expect(service.update(adv.id, { invoices: [invoice('1')] }, ACTORS.engineer)).rejects.toThrow(/advance has no invoices/i);

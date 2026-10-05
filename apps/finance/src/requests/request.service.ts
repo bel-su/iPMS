@@ -75,13 +75,10 @@ export class RequestService {
 
       let requestedAmount = row.requestedAmount.toFixed(2);
       if (dto.amount) requestedAmount = dto.amount;
-      if (dto.invoices) {
-        await tx.requestInvoice.deleteMany({ where: { requestId: id } });
-        await this.writeInvoices(tx, id, dto.invoices);
-        requestedAmount = sumMoney(dto.invoices.map((i) => i.amount));
-      }
-      await tx.financeRequest.update({
-        where: { id },
+      if (dto.invoices) requestedAmount = sumMoney(dto.invoices.map((i) => i.amount));
+      // Conditional write first: it takes the row lock, so a concurrent submit waits for this transaction (and vice versa).
+      const moved = await tx.financeRequest.updateMany({
+        where: { id, status: row.status, revision: row.revision },
         data: {
           requestedAmount,
           ...(dto.categoryId ? { categoryId: dto.categoryId } : {}),
@@ -89,6 +86,11 @@ export class RequestService {
           ...(dto.workOrderId !== undefined ? { workOrderId: dto.workOrderId } : {}),
         },
       });
+      if (moved.count !== 1) throw new ConflictException('The request changed; reload and try again');
+      if (dto.invoices) {
+        await tx.requestInvoice.deleteMany({ where: { requestId: id } });
+        await this.writeInvoices(tx, id, dto.invoices);
+      }
       await recordAudit(tx, { actorId: actor.id, action: 'finance.request.updated', objectId: id, previousState: asJson({ requestedAmount: row.requestedAmount, purpose: row.purpose }), newState: asJson({ requestedAmount, purpose: dto.purpose ?? row.purpose }) });
     });
     return this.detail(id);
