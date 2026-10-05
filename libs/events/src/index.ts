@@ -3,6 +3,7 @@ export { SUBJECTS, STREAMS, type Subject, type StreamDefinition } from './subjec
 export * from './payloads/iam.js';
 export * from './payloads/audit.js';
 export * from './payloads/qc.js';
+export * from './payloads/finance.js';
 export { EventBus } from './bus.service.js';
 export { DurableConsumer, type Handler } from './consumer.js';
 export { InMemoryDedupeStore, RedisDedupeStore, type DedupeStore, type RedisLike } from './dedupe.js';
