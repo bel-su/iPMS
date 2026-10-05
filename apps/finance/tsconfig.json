@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "declaration": false,
+    "types": ["node"],
+    // The `@ipms/*` libraries are consumed as built packages through
+    // node_modules, the same way this service would consume them if it moved
+    // to its own repository. The workspace path aliases would instead compile
+    // each library's source into this service's output.
+    "paths": {}
+  },
+  "include": ["src/**/*.ts", "prisma/**/*.ts"]
+}
