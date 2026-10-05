@@ -57,7 +57,7 @@ describe('finance schema', () => {
     it('refuses a second payout for the same request', async () => {
       const row = await request({ status: 'PAID' });
       await payment(row.id, 'PAYOUT');
-      await expect(payment(row.id, 'PAYOUT')).rejects.toThrow();
+      await expect(payment(row.id, 'PAYOUT')).rejects.toMatchObject({ code: 'P2002' });
       expect(await prisma.payment.count({ where: { requestId: row.id } })).toBe(1);
     });
 

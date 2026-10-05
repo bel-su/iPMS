@@ -233,6 +233,8 @@ describe('Finance returns or rejects at the payment step', () => {
     const paid = await payments().pay(id, bank, ACTORS.finance, scopes.global);
     expect(paid).toMatchObject({ status: 'PAID', approvedAmount: '30000.00' });
     expect(paid.payments?.[0]).toMatchObject({ amount: '30000.00' });
+    expect((await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.request.paid' } })).payload)
+      .toMatchObject({ approvers: { pmId: ACTORS.pm.id, directorId: ACTORS.director.id } });
   });
 
   it('rejects for good, clearing the approved amount', async () => {
