@@ -5,7 +5,7 @@ import { SUBJECTS, type FinanceApprovers } from '@ipms/events';
 import type { PrismaClient } from '@prisma-clients/finance';
 import { planSettlement } from '../balance.js';
 import { recordAudit } from '../audit.js';
-import { inScope, notFound, requirePermission, type Actor, type Tx } from '../common.js';
+import { inScope, notFound, requireNoEarlierApproval, requirePermission, type Actor, type Tx } from '../common.js';
 import { emit, factsOf, recordAction } from '../events.js';
 import { loadBalance, lockAdvance } from '../ledger.js';
 import { compareMoney } from '../money.js';
@@ -32,6 +32,7 @@ export class PaymentService {
       if (!row || !inScope(scope, row.projectId)) throw notFound('Request');
       if (row.status !== 'PENDING_FINANCE') throw new ConflictException('This request is not waiting for payment');
       if (row.requesterId === actor.id) throw new ForbiddenException('You cannot act on your own request');
+      await requireNoEarlierApproval(tx, row, actor);
 
       const approved = row.approvedAmount!.toFixed(2);
       let applied: string | null = null;

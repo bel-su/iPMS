@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma-clients/finance';
+import { uuidv7 } from '@ipms/contracts';
 import { startTestDb } from '../../prisma/test-db.js';
 import { ACTORS, PROJECT, aCategory, resetDb, scopes } from '../../prisma/fixtures.js';
 import { RequestService } from '../requests/request.service.js';
@@ -156,5 +157,43 @@ describe('return and reject', () => {
     const r = await submitted(ACTORS.pm);
     await expect(approvals.reject(r.id, 'no', ACTORS.director, scopes.otherProject)).rejects.toThrow(/not found/);
     await expect(approvals.returnToRequester(r.id, 'no', ACTORS.otherPm, scopes.project)).rejects.toThrow(/finance_approval\.director/);
+  });
+});
+
+describe('segregation of duties', () => {
+  const ALREADY = 'You already approved an earlier step of this request';
+  const pmAndDirector = { id: uuidv7(), permissions: [...ACTORS.pm.permissions, 'finance_approval.director'] };
+  const superAdmin = { id: uuidv7(), permissions: [...ACTORS.pm.permissions, 'finance_approval.director', 'finance_payment.record', 'finance_category.manage'] };
+
+  it('refuses a PM-and-Director who approved as PM when they try to act as Director', async () => {
+    const r = await submitted();
+    await approvals.approve(r.id, {}, pmAndDirector, scopes.project);
+    await expect(approvals.approve(r.id, {}, pmAndDirector, scopes.project)).rejects.toThrow(expect.objectContaining({ status: 403, message: ALREADY }));
+    await expect(approvals.returnToRequester(r.id, 'x', pmAndDirector, scopes.project)).rejects.toThrow(expect.objectContaining({ status: 403, message: ALREADY }));
+    await expect(approvals.reject(r.id, 'x', pmAndDirector, scopes.project)).rejects.toThrow(expect.objectContaining({ status: 403, message: ALREADY }));
+    expect((await prisma.financeRequest.findUniqueOrThrow({ where: { id: r.id } })).status).toBe('PENDING_DIRECTOR');
+    expect(await prisma.outboxEvent.count({ where: { subject: 'finance.request.approved' } })).toBe(0);
+  });
+
+  it('refuses an all-permissions actor the second step after approving the first', async () => {
+    const r = await submitted();
+    await approvals.approve(r.id, {}, superAdmin, scopes.global);
+    await expect(approvals.approve(r.id, {}, superAdmin, scopes.global)).rejects.toThrow(ALREADY);
+  });
+
+  it('lets a different person take the next step', async () => {
+    const r = await submitted();
+    await approvals.approve(r.id, {}, superAdmin, scopes.global);
+    expect((await approvals.approve(r.id, {}, ACTORS.director, scopes.project)).status).toBe('PENDING_FINANCE');
+  });
+
+  it('only counts approvals of the current revision', async () => {
+    const r = await submitted();
+    await approvals.approve(r.id, {}, pmAndDirector, scopes.project);
+    await approvals.returnToRequester(r.id, 'Fix it', ACTORS.director, scopes.project);
+    await requests.submit(r.id, ACTORS.engineer);
+    await approvals.approve(r.id, {}, ACTORS.pm, scopes.project);
+    // pmAndDirector approved revision 1 as PM; revision 2 is a fresh chain.
+    expect((await approvals.approve(r.id, {}, pmAndDirector, scopes.project)).status).toBe('PENDING_FINANCE');
   });
 });

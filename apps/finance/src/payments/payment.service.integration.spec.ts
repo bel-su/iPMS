@@ -101,6 +101,17 @@ describe('pay an advance or reimbursement', () => {
     expect(await prisma.payment.count()).toBe(0);
   });
 
+  it('refuses to let whoever approved an earlier step also pay', async () => {
+    const superAdmin = { id: uuidv7(), permissions: [...ACTORS.pm.permissions, 'finance_approval.director', 'finance_payment.record'] };
+    const r = await requests.create({ kind: 'ADVANCE', projectId: PROJECT.id, categoryId, purpose: 'Travel', amount: '1000' }, ACTORS.engineer, scopes.project, PROJECT);
+    await requests.submit(r.id, ACTORS.engineer);
+    await approvals.approve(r.id, {}, ACTORS.pm, scopes.project);
+    await approvals.approve(r.id, {}, superAdmin, scopes.global);
+    await expect(payments.pay(r.id, bank, superAdmin, scopes.global)).rejects.toThrow(expect.objectContaining({ status: 403, message: 'You already approved an earlier step of this request' }));
+    expect(await prisma.payment.count()).toBe(0);
+    expect((await payments.pay(r.id, bank, ACTORS.finance, scopes.global)).status).toBe('PAID');
+  });
+
   it('refuses Finance whose scope does not reach the project', async () => {
     const id = await advance();
     await expect(payments.pay(id, bank, ACTORS.finance, scopes.otherProject)).rejects.toThrow(/not found/);

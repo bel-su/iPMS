@@ -4,7 +4,7 @@ import type { ApproveDto } from '@ipms/contracts';
 import { SUBJECTS } from '@ipms/events';
 import type { PrismaClient } from '@prisma-clients/finance';
 import { recordAudit } from '../audit.js';
-import { inScope, notFound, type Actor } from '../common.js';
+import { inScope, notFound, requireNoEarlierApproval, type Actor } from '../common.js';
 import { emit, factsOf, recordAction } from '../events.js';
 import { compareMoney } from '../money.js';
 import { serializeDetail } from '../serialize.js';
@@ -46,6 +46,7 @@ export class ApprovalService {
       if (step === null || step === 'FINANCE') throw new ConflictException('This request is not waiting for an approval');
       if (!actor.permissions.includes(STEP_PERMISSION[step])) throw new ForbiddenException(`This step needs the ${STEP_PERMISSION[step]} permission`);
       if (row.requesterId === actor.id) throw new ForbiddenException('You cannot act on your own request');
+      await requireNoEarlierApproval(tx, row, actor);
 
       let approvedAmount: string | undefined;
       if (outcome === 'APPROVED') {
