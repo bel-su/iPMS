@@ -50,17 +50,22 @@ New system roles seeded in `apps/iam/prisma/seed.ts` (with demo users):
 - `PROJECT_DIRECTOR`: project-scoped, approves step 2.
 - `FINANCE`: global, processes payments, manages categories.
 
-New permissions in the `libs/authz` catalog:
+New permissions in the `libs/authz` catalog. Codes are `module.action` with a single dot, like the rest of the catalog, so the finance modules are `finance_request`, `finance_settlement`, `finance_approval`, `finance_payment` and `finance_category`.
 
 | Permission | Held by |
 |---|---|
-| `finance.request.create`, `finance.request.cancel` (own) | Field Engineer, Project Manager |
-| `finance.settlement.submit` (own) | Field Engineer, Project Manager |
-| `finance.approve.pm` | Project Manager (project-scoped) |
-| `finance.approve.director` | Project Director (project-scoped) |
-| `finance.pay` | Finance |
-| `finance.view` | engineers: own requests; PM and Director: their projects; Finance and Super Admin: all |
-| `finance.category.manage` | Finance |
+| `finance_request.view` (own requests) | Field Engineer, Project Manager, Project Director, Finance |
+| `finance_request.view_all` (every request in scope, as `task.view_all` does for tasks) | Project Manager, Project Director, Finance |
+| `finance_request.create` (advance and reimbursement), `finance_request.cancel` (own) | Field Engineer, Project Manager |
+| `finance_settlement.submit` (settlement against an advance) | Field Engineer, Project Manager |
+| `finance_approval.pm` (project-scoped) | Project Manager |
+| `finance_approval.director` (project-scoped) | Project Director |
+| `finance_payment.record` (pay, record returned cash) | Finance |
+| `finance_category.manage` | Finance |
+
+Visibility follows the existing scope model: `view` shows the caller's own requests; `view_all` shows every request in the caller's project scope. Finance sees everything because the seeded Finance user is granted **global scope**, as `SUPER_ADMIN` is. Approval and payment additionally require the request's project to be inside the caller's scope.
+
+Project Director and Finance also get `project.view` (and the Director `site.view`, `task.view`, `task.view_all`) so they can read project names and so the scope lookup that `qc` uses works for them.
 
 `SUPER_ADMIN` gets all. `ROLE_ASSIGNMENT` is unchanged: only an administrator can create Directors and Finance users.
 
