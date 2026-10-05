@@ -76,7 +76,7 @@ export class RequestController {
 
   @Post('requests/:id/pay') @RequirePermission('finance_payment.record')
   async pay(@Param('id') id: string, @Body() body: unknown, @Req() req: Authed) {
-    return this.payments.pay(UuidSchema.parse(id), PayRequestSchema.parse(body ?? {}) as Parameters<PaymentService['pay']>[1], req.user, await this.scope(req));
+    return this.payments.pay(UuidSchema.parse(id), PayRequestSchema.parse(body ?? {}), req.user, await this.scope(req));
   }
 
   @Post('advances/:id/cash-return') @RequirePermission('finance_payment.record')

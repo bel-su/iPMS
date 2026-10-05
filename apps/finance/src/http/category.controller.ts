@@ -15,6 +15,6 @@ export class CategoryController {
 
   @Patch(':id') @RequirePermission('finance_category.manage')
   update(@Param('id') id: string, @Body() body: unknown, @Req() req: { user: AuthzUser }) {
-    return this.categories.update(UuidSchema.parse(id), CategoryUpdateSchema.parse(body) as { name?: string; disabled?: boolean }, req.user);
+    return this.categories.update(UuidSchema.parse(id), CategoryUpdateSchema.parse(body), req.user);
   }
 }

@@ -14,6 +14,9 @@ import { finalStatus } from '../workflow.js';
 
 const FINANCE = 'finance_payment.record';
 
+/** The pay route's body: every payment detail optional (a settlement with no payout needs none), and present-but-undefined allowed. */
+type PayBody = Partial<{ [K in keyof PaymentDetailsDto]: PaymentDetailsDto[K] | undefined }>;
+
 /**
  * Finance's step: pay an approved advance or reimbursement, settle a
  * settlement against its advance, and record cash an engineer hands back.
@@ -22,7 +25,7 @@ const FINANCE = 'finance_payment.record';
 export class PaymentService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async pay(id: string, body: Partial<PaymentDetailsDto>, actor: Actor, scope: AuthzScope) {
+  async pay(id: string, body: PayBody, actor: Actor, scope: AuthzScope) {
     requirePermission(actor, FINANCE);
     await this.prisma.$transaction(async (tx) => {
       const row = await tx.financeRequest.findUnique({ where: { id } });

@@ -29,7 +29,7 @@ export interface StreamDefinition {
   durableConsumers: string[];
 }
 
-export const STREAMS: Record<'IAM' | 'AUDIT' | 'QC' | 'FINANCE',StreamDefinition> = {
+export const STREAMS: Record<'IAM' | 'AUDIT' | 'QC' | 'FINANCE', StreamDefinition> = {
   IAM: {
     name: 'IAM',
     subjects: ['iam.>'],
