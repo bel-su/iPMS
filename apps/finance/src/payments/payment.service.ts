@@ -56,7 +56,7 @@ export class PaymentService {
 
       await recordAction(tx, { requestId: id, revision: row.revision, step: 'FINANCE', action: 'PAID', actorId: actor.id, amount: payout });
       const after = await tx.financeRequest.findUniqueOrThrow({ where: { id } });
-      const approvers = await this.approversOf(tx, id);
+      const approvers = await this.approversOf(tx, id, row.revision);
       const facts = factsOf(after, actor.id, null);
       if (row.kind === 'SETTLEMENT') {
         await emit(tx, SUBJECTS.FINANCE_SETTLEMENT_SETTLED, { ...facts, approvers, advanceId: row.advanceId, appliedAmount: applied, payoutAmount: payout }, actor.id);
@@ -75,6 +75,7 @@ export class PaymentService {
       const advance = await tx.financeRequest.findUnique({ where: { id: advanceId } });
       if (!advance || advance.kind !== 'ADVANCE' || !inScope(scope, advance.projectId)) throw notFound('Advance');
       if (advance.status !== 'PAID') throw new UnprocessableEntityException('Cash can only be returned against a paid advance');
+      if (advance.requesterId === actor.id) throw new ConflictException('You cannot act on your own request');
 
       await lockAdvance(tx, advanceId);
       const balance = await loadBalance(tx, advanceId);
@@ -95,9 +96,9 @@ export class PaymentService {
     });
   }
 
-  /** Who approved at each step, read from the request's own history. */
-  private async approversOf(tx: Tx, requestId: string): Promise<FinanceApprovers> {
-    const approvals = await tx.approvalAction.findMany({ where: { requestId, action: 'APPROVED' }, orderBy: { at: 'desc' } });
+  /** Who approved at each step in the current revision, read from the request's own history. */
+  private async approversOf(tx: Tx, requestId: string, revision: number): Promise<FinanceApprovers> {
+    const approvals = await tx.approvalAction.findMany({ where: { requestId, action: 'APPROVED', revision }, orderBy: { at: 'desc' } });
     return {
       pmId: approvals.find((a) => a.step === 'PM')?.actorId ?? null,
       directorId: approvals.find((a) => a.step === 'DIRECTOR')!.actorId,

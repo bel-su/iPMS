@@ -99,6 +99,27 @@ describe('pay an advance or reimbursement', () => {
     await expect(payments.pay(id, bank, ACTORS.finance, scopes.otherProject)).rejects.toThrow(/not found/);
   });
 
+  it('reports approvers from the current revision only', async () => {
+    const id = await advance();
+    // Build: revision 1 had a PM approval; revision 2 was approved by the Director alone.
+    await prisma.approvalAction.updateMany({ where: { requestId: id, step: 'DIRECTOR', action: 'APPROVED' }, data: { revision: 2 } });
+    await prisma.financeRequest.update({ where: { id }, data: { revision: 2 } });
+    await payments.pay(id, bank, ACTORS.finance, scopes.global);
+    expect((await prisma.outboxEvent.findFirstOrThrow({ where: { subject: 'finance.request.paid' } })).payload).toMatchObject({ approvers: { pmId: null, directorId: ACTORS.director.id } });
+  });
+
+  it('lets only one of two concurrent payments of the same request through', async () => {
+    const id = await advance();
+    const results = await Promise.allSettled([
+      payments.pay(id, bank, ACTORS.finance, scopes.global),
+      payments.pay(id, bank, ACTORS.finance, scopes.global),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+    expect(await prisma.payment.count()).toBe(1);
+    expect(await prisma.outboxEvent.count({ where: { subject: 'finance.request.paid' } })).toBe(1);
+  });
+
   it('pays a reimbursement', async () => {
     const r = await requests.create({ kind: 'REIMBURSEMENT', projectId: PROJECT.id, categoryId, purpose: 'Fuel', invoices: [invoice('800')] }, ACTORS.engineer, scopes.project, PROJECT);
     await requests.submit(r.id, ACTORS.engineer);
@@ -159,6 +180,13 @@ describe('return unspent cash', () => {
     await payments.returnCash(advanceId, { ...bank, amount: '3000' }, ACTORS.finance, scopes.global);
     expect(await loadBalance(prisma, advanceId)).toMatchObject({ cashReturned: '3000.00', outstanding: '47000.00' });
     expect(await prisma.payment.findFirstOrThrow({ where: { kind: 'CASH_RETURN' } })).toMatchObject({ recordedBy: ACTORS.finance.id });
+  });
+
+  it('refuses Finance returning cash against their own advance', async () => {
+    const advanceId = await paidAdvance('1000');
+    const self = { id: ACTORS.engineer.id, permissions: [...ACTORS.finance.permissions] };
+    await expect(payments.returnCash(advanceId, { ...bank, amount: '10' }, self, scopes.global)).rejects.toThrow(/your own request/);
+    expect(await prisma.payment.count({ where: { kind: 'CASH_RETURN' } })).toBe(0);
   });
 
   it('closes the advance when the rest of it is returned', async () => {
