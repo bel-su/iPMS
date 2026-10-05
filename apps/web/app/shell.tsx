@@ -105,7 +105,7 @@ function ProfileIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-type Section = 'overview' | 'projects' | 'checklists' | 'work-orders' | 'users' | 'docs' | 'profile' | 'advances' | 'audit';
+type Section = 'overview' | 'projects' | 'checklists' | 'work-orders' | 'users' | 'docs' | 'profile' | 'advances' | 'audit' | 'finance';
 
 function NavItem({
   section,

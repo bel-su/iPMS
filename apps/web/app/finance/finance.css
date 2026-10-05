@@ -1,0 +1,42 @@
+/* Finance pages. Tokens come from app/styles.css (--ink --muted --line --blue --green --amber --red); the app has no dark theme. */
+.finance-table-wrap { overflow-x: auto; max-width: 100%; margin-top: 4px; }
+.finance-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 760px; }
+.finance-table th { text-align: left; font-weight: 600; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding: 10px 12px; white-space: nowrap; }
+.finance-table td { padding: 12px; border-top: 1px solid var(--line); vertical-align: top; }
+.finance-table tr:hover td { background: color-mix(in srgb, var(--blue) 4%, transparent); }
+.finance-table td a { color: var(--blue); }
+.finance-table td .subtle, .finance-facts .subtle { display: block; margin: 3px 0 0; font-size: 12px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.finance-empty { margin: 28px 0; text-align: center; color: var(--muted); }
+
+.finance-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 12px; overflow-x: auto; }
+.finance-tabs a { padding: 10px 14px; font-size: 14px; white-space: nowrap; color: var(--muted); border-bottom: 2px solid transparent; }
+.finance-tabs a[aria-current='page'] { color: var(--ink); font-weight: 600; border-bottom-color: var(--blue); }
+
+.pill { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
+.pill.green { background: color-mix(in srgb, var(--green) 15%, transparent); color: var(--green); }
+.pill.amber { background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber); }
+.pill.red { background: color-mix(in srgb, var(--red) 15%, transparent); color: var(--red); }
+.pill.blue { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
+.pill.slate { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
+
+.finance-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.finance-facts { margin: 0; display: grid; }
+.finance-facts > div { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.finance-facts > div:first-child { border-top: 0; }
+.finance-facts dt { color: var(--muted); }
+.finance-facts dd { margin: 0; overflow-wrap: anywhere; }
+
+.finance-timeline { list-style: none; margin: 0; padding: 0 0 0 16px; border-left: 2px solid var(--line); display: grid; gap: 14px; }
+.finance-timeline li { position: relative; font-size: 13px; }
+.finance-timeline li::before { content: ''; position: absolute; left: -22px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); }
+.finance-timeline time { display: block; color: var(--muted); font-size: 12px; }
+
+.finance-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.finance-action { display: grid; gap: 10px; flex: 1 1 260px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; }
+
+.invoice-rows { display: grid; gap: 10px; }
+.invoice-rows > * { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+
+@media (max-width: 900px) { .finance-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .finance-facts > div { grid-template-columns: 1fr; gap: 4px; } }
