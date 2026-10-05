@@ -29,6 +29,8 @@ services:
     <<: *pg
   postgres-docs:
     <<: *pg
+  postgres-finance:
+    <<: *pg
   iam:
     <<: *node
     mem_limit: 320m
@@ -51,6 +53,8 @@ services:
   notification:
     <<: *node
   docs:
+    <<: *node
+  finance:
     <<: *node
   gateway:
     <<: *node

@@ -82,6 +82,17 @@ describe('resolveUpstream — allowlist', () => {
     expect(isPublicPath('/api/v1/docs/getting-started')).toBe(false);
   });
 
+  it('routes the finance prefix to the finance service', () => {
+    const upstream = resolveUpstream('/api/v1/finance/requests');
+    expect(upstream?.service).toBe('finance');
+    expect(upstream?.port).toBe(3009);
+  });
+
+  it('keeps the finance prefix authenticated, and its internals private', () => {
+    expect(isPublicPath('/api/v1/finance/requests')).toBe(false);
+    expect(resolveUpstream('/api/v1/finance/internal/anything')).toBeUndefined();
+  });
+
   it('refuses a path on no declared prefix', () => {
     expect(resolveUpstream('/api/v1/billing')).toBeUndefined();
   });
