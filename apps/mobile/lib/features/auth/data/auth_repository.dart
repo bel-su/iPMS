@@ -170,6 +170,20 @@ class AuthRepository {
   static const String biometricSessionExpired =
       'Your biometric sign-in has expired. Sign in with your password once to turn it back on.';
 
+  /// Changes the signed-in user's own password. The server ends every session
+  /// of the account when it succeeds, this one included, so the caller must
+  /// sign in again afterwards.
+  Future<void> changePassword({required String currentPassword, required String newPassword}) async {
+    try {
+      await apiClient.dio.post<void>(
+        ApiEndpoints.changePassword,
+        data: {'currentPassword': currentPassword, 'newPassword': newPassword},
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, fallbackMessage: 'Could not change the password.');
+    }
+  }
+
   Future<AuthUser> updateProfile({
     String? fullName,
     String? email,
