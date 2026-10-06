@@ -12,12 +12,13 @@ import '../../features/tasks/domain/models/task_evidence.dart';
 /// One file per account, next to the photos in app-private storage.
 class EvidenceStore {
   EvidenceStore({Future<Directory> Function()? directory})
-      : _directory = directory ?? _defaultDirectory;
+      : _directory = directory ?? defaultDirectory;
 
   final Future<Directory> Function() _directory;
   Future<void> _lastWrite = Future.value();
 
-  static Future<Directory> _defaultDirectory() async {
+  /// Where photos and the saved index live, in app-private storage.
+  static Future<Directory> defaultDirectory() async {
     final docs = await getApplicationDocumentsDirectory();
     return Directory('${docs.path}/app_session_evidence');
   }

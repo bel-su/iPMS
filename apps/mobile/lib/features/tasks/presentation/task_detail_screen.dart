@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -8,11 +9,12 @@ import '../../../core/config/env.dart';
 import '../../../core/network/api_exceptions.dart';
 import '../../../core/services/background_watermark_service.dart';
 import '../../../core/services/geofence_service.dart';
-import '../../../core/storage/na_store.dart';
+import '../../../core/storage/checklist_marks_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../map/presentation/site_map_screen.dart';
+import '../../media/providers/evidence_sync_provider.dart';
 import '../../media/providers/evidence_upload_provider.dart';
 import 'continuous_camera_screen.dart';
 import '../data/demo_checklists.dart';
@@ -60,7 +62,12 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
   /// response cannot create a second attempt; cleared once it succeeds.
   String? _submissionKey;
   StreamSubscription<TaskEvidence>? _watermarkSub;
-  final NaStore _naStore = NaStore();
+  final ChecklistMarksStore _marksStore = ChecklistMarksStore();
+
+  /// The remark typed on each item, by item id, with the field that edits it.
+  final Map<String, String> _remarks = {};
+  final Map<String, TextEditingController> _remarkControllers = {};
+  Timer? _saveDebounce;
 
   @override
   void initState() {
@@ -102,6 +109,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
   @override
   void dispose() {
     _watermarkSub?.cancel();
+    _saveDebounce?.cancel();
+    for (final c in _remarkControllers.values) {
+      c.dispose();
+    }
     _tabController.dispose();
     super.dispose();
   }
@@ -117,13 +128,46 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       // Photos saved from an earlier session count towards their items.
       await ref.read(taskEvidenceProvider.notifier).restored;
       if (!mounted) return;
-      final evidence = ref.read(taskEvidenceListProvider(widget.task.id));
-      // Items marked N/A on an earlier visit stay N/A.
-      final owner = ref.read(sessionOwnerProvider);
-      final naIds = owner == null ? <String>{} : await _naStore.load(owner, widget.task.id);
+
+      // The work order as the server has it now: the list this screen was
+      // opened from can be stale, and a submission made on another phone is
+      // only known from here.
+      var task = widget.task;
+      try {
+        task = await ref.read(taskDetailProvider(widget.task.id).future);
+      } catch (_) {}
+      final submission = await _loadSubmission(task);
       if (!mounted) return;
+
+      // N/A marks and remarks: this phone's own if it has any for this work
+      // order, otherwise what the last submission says (a rework picked up on
+      // a different phone).
+      final owner = ref.read(sessionOwnerProvider);
+      var local = owner == null ? null : await _marksStore.load(owner, widget.task.id);
+      if (!mounted) return;
+      // A submission made after this phone last touched them (from here or
+      // another phone) is the newer record.
+      final submittedAt = submission?.submittedAt;
+      if (local != null && submittedAt != null && !local.savedAt.isAfter(submittedAt)) local = null;
+      final naIds = local?.na ?? {
+        for (final e in (submission?.answers ?? const <String, SubmittedAnswer>{}).entries)
+          if (e.value.isNa) e.key,
+      };
+      final remarks = local?.remarks ?? {
+        for (final e in (submission?.answers ?? const <String, SubmittedAnswer>{}).entries)
+          if ((e.value.remark ?? '').isNotEmpty) e.key: e.value.remark!,
+      };
+
+      final evidence = ref.read(taskEvidenceListProvider(widget.task.id));
       setState(() {
         _serverChecklist = checklist;
+        _review = submission;
+        _remarks
+          ..clear()
+          ..addAll(remarks);
+        for (final entry in remarks.entries) {
+          _remarkController(entry.key).text = entry.value;
+        }
         _checklist = checklist.items.map((item) {
           if (naIds.contains(item.id) && item.allowsNa) {
             return item.copyWith(isCompleted: true, verdict: 'NA');
@@ -133,12 +177,12 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
         }).toList();
         _loadingChecklist = false;
       });
-      unawaited(_loadReview());
       // Pick up where an earlier session stopped: send what has not gone
       // yet, and ask about what the server was still checking.
       final uploader = ref.read(evidenceUploaderProvider);
       unawaited(uploader.uploadPending(widget.task.id));
       unawaited(uploader.refreshStatuses(widget.task.id).catchError((_) {}));
+      unawaited(_pullRemotePhotos(task, checklist));
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -148,16 +192,52 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     }
   }
 
-  Future<void> _loadReview() async {
-    final task = ref.read(taskDetailProvider(widget.task.id)).value ?? widget.task;
+  /// The work order's latest submission, which holds the answers and the
+  /// reviewer's feedback; null when there is none or it cannot be read.
+  Future<ReviewFeedback?> _loadSubmission(TaskItem task) async {
     final submissionId = task.currentSubmissionId;
-    if (task.status != 'RECTIFYING' || submissionId == null) return;
+    if (submissionId == null) return null;
     try {
-      final review = await ref.read(taskRepositoryProvider).getReviewFeedback(submissionId);
-      if (mounted) setState(() => _review = review);
+      return await ref.read(taskRepositoryProvider).getReviewFeedback(submissionId);
     } catch (_) {
       // The checklist is still usable without the reviewer's notes.
+      return null;
     }
+  }
+
+  /// Photos taken or uploaded on another phone arrive here, so the work can be
+  /// carried on from any device.
+  Future<void> _pullRemotePhotos(TaskItem task, TaskChecklist checklist) async {
+    try {
+      final titles = {for (final i in checklist.items) i.id: '${i.itemNumber} ${i.title}'};
+      final gained = await ref.read(evidenceSyncProvider).pull(task, titles);
+      if (!mounted || gained.isEmpty) return;
+      setState(() {
+        for (var i = 0; i < _checklist.length; i++) {
+          final item = _checklist[i];
+          if (gained.contains(item.id) && item.verdict != 'NA' && !item.isCompleted) {
+            _checklist[i] = item.copyWith(isCompleted: true, verdict: 'PASS');
+          }
+        }
+      });
+    } catch (_) {
+      // Offline or the media service is down: this phone's own photos still
+      // work, and the next visit tries again.
+    }
+  }
+
+  TextEditingController _remarkController(String itemId) =>
+      _remarkControllers.putIfAbsent(itemId, () => TextEditingController());
+
+  void _onRemarkChanged(String itemId, String text) {
+    final value = text.trim();
+    if (value.isEmpty) {
+      _remarks.remove(itemId);
+    } else {
+      _remarks[itemId] = text;
+    }
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 600), _saveMarks);
   }
 
   /// Evidence can be added or removed only while the work order is waiting on
@@ -229,16 +309,22 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
         );
       }
     });
-    _saveNaMarks();
+    _saveMarks();
   }
 
-  void _saveNaMarks() {
+  /// Keeps this phone's N/A marks and remarks, so they are still there when
+  /// the task is reopened.
+  void _saveMarks() {
     final owner = ref.read(sessionOwnerProvider);
     if (owner == null) return;
-    unawaited(_naStore.save(owner, widget.task.id, {
-      for (final i in _checklist)
-        if (i.verdict == 'NA') i.id,
-    }));
+    unawaited(_marksStore.save(
+      owner,
+      widget.task.id,
+      ChecklistMarks(
+        na: {for (final i in _checklist) if (i.verdict == 'NA') i.id},
+        remarks: Map.of(_remarks),
+      ),
+    ));
   }
 
   void _openSessionPhotoBrowser(TaskItem task, ChecklistItem item) {
@@ -396,10 +482,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
             .where((e) => e.checklistItemId == item.id && toSend.contains(e.id))
             .map((e) => e.mediaId)
             .toList();
+        final remark = _remarks[item.id]?.trim();
         if (item.verdict == 'NA') {
-          responses.add(ItemResponse(itemId: item.id, result: 'NA'));
-        } else if (item.isRequired || photos.isNotEmpty || item.verdict == 'PASS') {
-          responses.add(ItemResponse(itemId: item.id, result: 'PASS', photoMediaIds: photos));
+          responses.add(ItemResponse(itemId: item.id, result: 'NA', description: remark));
+        } else if (item.isRequired || photos.isNotEmpty || item.verdict == 'PASS' || (remark ?? '').isNotEmpty) {
+          responses.add(ItemResponse(itemId: item.id, result: 'PASS', photoMediaIds: photos, description: remark));
         }
       }
 
@@ -415,10 +502,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       _submissionKey = null;
 
       ref.read(taskEvidenceProvider.notifier).submitEvidence(task.id);
-      // The N/A answers are on the server now; a rework starts from what the
-      // reviewer sees, so the saved marks are no longer needed.
+      // The N/A answers and remarks are on the server now; a rework starts
+      // from that submission, on this phone or another, so the saved marks are
+      // no longer needed.
       final owner = ref.read(sessionOwnerProvider);
-      if (owner != null) unawaited(_naStore.save(owner, task.id, {}));
+      if (owner != null) unawaited(_marksStore.save(owner, task.id, null));
       if (mounted) setState(() => _justSubmitted = true);
       ref.invalidate(taskDetailProvider(task.id));
       ref.invalidate(assignedTasksProvider);
@@ -1323,6 +1411,33 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                         fontStyle: FontStyle.italic,
                         fontSize: 11,
                       ),
+                    ),
+                  ],
+
+                  // Remark: anything the QC reviewer should know about this item.
+                  if (canWork || (_remarks[item.id] ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _remarkController(item.id),
+                      enabled: canWork,
+                      minLines: 1,
+                      maxLines: 4,
+                      textCapitalization: TextCapitalization.sentences,
+                      inputFormatters: [LengthLimitingTextInputFormatter(5000)],
+                      style: const TextStyle(fontSize: 13),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: AppColors.searchFieldBackground,
+                        labelText: 'Remark',
+                        hintText: 'Add a remark for this item (optional)',
+                        prefixIcon: const Icon(Icons.edit_note_rounded, size: 20),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: (text) => _onRemarkChanged(item.id, text),
                     ),
                   ],
 

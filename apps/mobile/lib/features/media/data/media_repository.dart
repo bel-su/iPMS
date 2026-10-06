@@ -59,6 +59,10 @@ class RemoteMedia {
     this.checklistItemId,
     this.capturedAt,
     this.thumbnailUrl,
+    this.kind = 'PHOTO',
+    this.latitude,
+    this.longitude,
+    this.uploadedBy,
   });
 
   factory RemoteMedia.fromJson(Map<String, dynamic> json) => RemoteMedia(
@@ -66,6 +70,10 @@ class RemoteMedia {
         status: json['status'] as String? ?? 'UNKNOWN',
         checklistItemId: json['checklistItemId'] as String?,
         capturedAt: json['capturedAt'] != null ? DateTime.tryParse(json['capturedAt'].toString()) : null,
+        kind: json['kind'] as String? ?? 'PHOTO',
+        latitude: (json['latitude'] as num?)?.toDouble(),
+        longitude: (json['longitude'] as num?)?.toDouble(),
+        uploadedBy: json['uploadedBy'] as String?,
         thumbnailUrl: (json['thumbnail'] as Map<String, dynamic>?)?['signedUrl'] as String?,
       );
 
@@ -74,6 +82,13 @@ class RemoteMedia {
   final String? checklistItemId;
   final DateTime? capturedAt;
   final String? thumbnailUrl;
+  final String kind;
+  final double? latitude;
+  final double? longitude;
+  final String? uploadedBy;
+
+  /// Past verification, so there are bytes to download.
+  bool get isViewable => status == 'READY' || status == 'ATTACHED';
 }
 
 /// The phone's side of the media service's upload protocol
@@ -203,6 +218,24 @@ class MediaRepository {
           .toList();
     } on DioException catch (e) {
       throw ApiException.fromDio(e, fallbackMessage: 'Could not load evidence.');
+    }
+  }
+
+  /// Downloads a file from a signed URL. Like uploads, it goes to the bucket
+  /// directly and carries no bearer token.
+  Future<Uint8List> download(String signedUrl) async {
+    try {
+      final response = await _storageDio.get<List<int>>(
+        signedUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return Uint8List.fromList(response.data ?? const []);
+    } on DioException catch (e) {
+      if (ApiException.isConnectionIssue(e)) throw const NetworkException();
+      throw ApiException(
+        message: 'The storage server refused the download (${e.response?.statusCode}).',
+        statusCode: e.response?.statusCode,
+      );
     }
   }
 

@@ -188,8 +188,25 @@ class TaskChecklist {
 
 /// What the QC reviewer said about the latest submission: the overall
 /// comment and, per checklist item, the result and note.
+/// What the engineer answered on one item of a submission.
+class SubmittedAnswer {
+  const SubmittedAnswer({required this.result, this.remark});
+
+  /// PASS, FAIL or NA.
+  final String result;
+  final String? remark;
+
+  bool get isNa => result == 'NA';
+}
+
 class ReviewFeedback {
-  const ReviewFeedback({this.decision, this.comment, this.items = const {}});
+  const ReviewFeedback({
+    this.decision,
+    this.comment,
+    this.items = const {},
+    this.answers = const {},
+    this.submittedAt,
+  });
 
   factory ReviewFeedback.fromSubmission(Map<String, dynamic> json) {
     final decisions = List<Map<String, dynamic>>.from(
@@ -197,8 +214,17 @@ class ReviewFeedback {
       ..sort((a, b) => (a['decidedAt']?.toString() ?? '').compareTo(b['decidedAt']?.toString() ?? ''));
     final latest = decisions.isEmpty ? null : decisions.last;
     return ReviewFeedback(
+      submittedAt: DateTime.tryParse(json['submittedAt']?.toString() ?? ''),
       decision: latest?['decision'] as String?,
       comment: latest?['comment'] as String?,
+      answers: {
+        for (final r in (json['responses'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>())
+          if (r['itemId'] != null)
+            r['itemId'] as String: SubmittedAnswer(
+              result: r['selfCheckResult'] as String? ?? 'PASS',
+              remark: r['selfCheckDescription'] as String?,
+            ),
+      },
       items: {
         for (final r in (json['responses'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>())
           if (r['itemId'] != null)
@@ -210,9 +236,13 @@ class ReviewFeedback {
     );
   }
 
+  final DateTime? submittedAt;
   final String? decision;
   final String? comment;
   final Map<String, ItemReview> items;
+
+  /// The engineer's own answers in the submission, by item id.
+  final Map<String, SubmittedAnswer> answers;
 
   int get rejectedCount => items.values.where((r) => r.isRejected).length;
 }
