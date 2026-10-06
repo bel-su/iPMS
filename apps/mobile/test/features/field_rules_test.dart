@@ -8,6 +8,7 @@ import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/core/security/token_storage.dart';
 import 'package:mobile/core/services/geofence_service.dart';
 import 'package:mobile/features/tasks/data/task_repository.dart';
+import 'package:mobile/features/tasks/domain/models/checklist_item.dart';
 import 'package:mobile/features/tasks/domain/models/task_item.dart';
 
 class _Server implements HttpClientAdapter {
@@ -92,6 +93,24 @@ void main() {
       );
       final tasks = await TaskRepository(apiClient: api).getAssignedTasks(assignedToMe: false);
       expect(tasks.map((t) => t.id), ['a', 'c']);
+    });
+  });
+
+  group('a submission read on another phone', () {
+    test('carries the answers, remarks and when it was submitted', () {
+      final feedback = ReviewFeedback.fromSubmission({
+        'submittedAt': '2026-10-05T10:00:00.000Z',
+        'decisions': [],
+        'responses': [
+          {'itemId': 'a', 'selfCheckResult': 'NA', 'selfCheckDescription': 'Sector B not worked'},
+          {'itemId': 'b', 'selfCheckResult': 'PASS', 'selfCheckDescription': null},
+        ],
+      });
+      expect(feedback.submittedAt, DateTime.utc(2026, 10, 5, 10));
+      expect(feedback.answers['a']!.isNa, isTrue);
+      expect(feedback.answers['a']!.remark, 'Sector B not worked');
+      expect(feedback.answers['b']!.isNa, isFalse);
+      expect(feedback.answers['b']!.remark, isNull);
     });
   });
 
