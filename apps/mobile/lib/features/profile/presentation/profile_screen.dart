@@ -68,7 +68,7 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   Future<void> _showChangePassword(BuildContext context, WidgetRef ref) async {
-    final changed = await showModalBottomSheet<bool>(
+    final changed = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -76,7 +76,7 @@ class ProfileScreen extends ConsumerWidget {
       ),
       builder: (_) => const ChangePasswordSheet(),
     );
-    if (changed != true || !context.mounted) return;
+    if (changed == null || !context.mounted) return;
     // The server ended every session when the password changed.
     await showDialog<void>(
       context: context,

@@ -22,18 +22,26 @@ class PasswordRule {
   ];
 }
 
-/// Bottom sheet for changing the signed-in user's own password. Pops with true
-/// once it is changed, after which the caller signs the user out (the server
-/// has ended every session).
+/// Bottom sheet for changing a user's own password. Pops with the new password
+/// once it is changed; the server has then ended every session, so the caller
+/// signs the user out, or back in with it.
+///
+/// With [forced] it is the step between signing in with a password an
+/// administrator set and using the app: [currentPassword] is the one just
+/// typed (so it is not asked again) and [accessToken] is what sign-in returned.
 class ChangePasswordSheet extends ConsumerStatefulWidget {
-  const ChangePasswordSheet({super.key});
+  const ChangePasswordSheet({super.key, this.forced = false, this.currentPassword, this.accessToken});
+
+  final bool forced;
+  final String? currentPassword;
+  final String? accessToken;
 
   @override
   ConsumerState<ChangePasswordSheet> createState() => _ChangePasswordSheetState();
 }
 
 class _ChangePasswordSheetState extends ConsumerState<ChangePasswordSheet> {
-  final _current = TextEditingController();
+  late final _current = TextEditingController(text: widget.currentPassword ?? '');
   final _new = TextEditingController();
   final _confirm = TextEditingController();
   bool _showCurrent = false;
@@ -65,8 +73,9 @@ class _ChangePasswordSheetState extends ConsumerState<ChangePasswordSheet> {
       await ref.read(authRepositoryProvider).changePassword(
             currentPassword: _current.text,
             newPassword: _new.text,
+            accessToken: widget.accessToken,
           );
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) Navigator.pop(context, _new.text);
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
@@ -101,14 +110,22 @@ class _ChangePasswordSheetState extends ConsumerState<ChangePasswordSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Change password', style: AppTypography.headingSmall),
+                  Text(widget.forced ? 'Set a new password' : 'Change password', style: AppTypography.headingSmall),
                   IconButton(
                     icon: const Icon(Icons.close_rounded, size: 20),
                     onPressed: _busy ? null : () => Navigator.pop(context),
                   ),
                 ],
               ),
+              if (widget.forced) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Your password was set by an administrator. Choose your own to continue.',
+                  style: AppTypography.bodySmall,
+                ),
+              ],
               const SizedBox(height: 12),
+              if (!widget.forced) ...[
               TextField(
                 controller: _current,
                 obscureText: !_showCurrent,
@@ -117,6 +134,7 @@ class _ChangePasswordSheetState extends ConsumerState<ChangePasswordSheet> {
                 onChanged: (_) => setState(() => _error = null),
               ),
               const SizedBox(height: 12),
+              ],
               TextField(
                 controller: _new,
                 obscureText: !_showNew,
@@ -184,14 +202,16 @@ class _ChangePasswordSheetState extends ConsumerState<ChangePasswordSheet> {
                   onPressed: _valid && !_busy ? _submit : null,
                   child: _busy
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Change password', style: TextStyle(fontWeight: FontWeight.w600)),
+                      : Text(widget.forced ? 'Set password and sign in' : 'Change password',
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                'You will be signed out on all devices and asked to sign in with the new password.',
-                style: AppTypography.caption,
-              ),
+              if (!widget.forced)
+                Text(
+                  'You will be signed out on all devices and asked to sign in with the new password.',
+                  style: AppTypography.caption,
+                ),
             ],
           ),
         ),

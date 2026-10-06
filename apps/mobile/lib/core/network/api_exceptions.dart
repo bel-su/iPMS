@@ -68,6 +68,19 @@ class UnauthorizedException extends ApiException {
       : super(statusCode: 401, errorCode: 'UNAUTHORIZED');
 }
 
+/// Sign-in worked, but the account owes a password change (an administrator
+/// set or reset its password). The token it was given carries no permissions
+/// and is good only for changing the password, so it travels in the exception
+/// instead of being saved as a session.
+class PasswordChangeRequiredException extends ApiException {
+  const PasswordChangeRequiredException({
+    required this.accessToken,
+    super.message = 'You need to set a new password before using the app.',
+  }) : super(errorCode: 'MUST_CHANGE_PASSWORD');
+
+  final String accessToken;
+}
+
 class NetworkException extends ApiException {
   const NetworkException({super.message = 'No internet connection. Please check your network.'})
       : super(statusCode: 0, errorCode: 'NETWORK_ERROR');
