@@ -10,6 +10,12 @@ function checked(value: string): string {
  * for one project sits under `projects/{projectId}/`, which is what the purge
  * in sub-project 5 deletes.
  */
+/** An invoice photo: under its project, in a `finance` folder of its own. */
+export function financeKeys(o: { projectId: string; id: string }): { storageKey: string; thumbnailKey: string } {
+  const base = `projects/${checked(o.projectId)}/finance/${checked(o.id)}`;
+  return { storageKey: `${base}.jpg`, thumbnailKey: `${base}.thumb.webp` };
+}
+
 export function evidenceKeys(o: { projectId: string; siteId: string; id: string; kind: 'PHOTO' | 'VIDEO' }): { storageKey: string; thumbnailKey: string } {
   const base = `projects/${checked(o.projectId)}/sites/${checked(o.siteId)}/evidence/${checked(o.id)}`;
   return o.kind === 'PHOTO'

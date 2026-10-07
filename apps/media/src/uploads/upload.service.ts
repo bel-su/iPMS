@@ -5,7 +5,7 @@ import {
 import { Prisma, type MediaObject, type PrismaClient } from '@prisma-clients/media';
 import {
   MEDIA_LIMITS, MULTIPART_THRESHOLD_BYTES, PART_SIZE_BYTES, partCountFor,
-  type CompleteUploadDto, type MediaKind, type MediaStatus, type PartUrls, type RegisterUploadDto,
+  type CompleteUploadDto, type MediaKind, type MediaStatus, type PartUrls, type RegisterFinanceDocumentDto, type RegisterUploadDto,
   type RegisterUploadResponse, type RejectReason, type SignedPut, type UploadInstructions, type UploadStatusItem,
 } from '@ipms/contracts';
 import { required } from '../directory/lookup.js';
@@ -14,7 +14,7 @@ import { OPEN_WORK_ORDER, type QcClient } from '../directory/qc.client.js';
 import type { MediaDiscarder } from '../media/discarder.js';
 import { LOCKED } from '../media/status.js';
 import { captureToReceipt, uploadsCompleted, uploadsRegistered } from '../metrics.js';
-import { evidenceKeys } from '../storage/keys.js';
+import { evidenceKeys, financeKeys } from '../storage/keys.js';
 import type { StorageClient } from '../storage/storage.client.js';
 
 export const UPLOAD_URL_TTL_SECONDS = 3600;
@@ -35,7 +35,7 @@ export class UploadService {
     private readonly prisma: PrismaClient,
     private readonly storage: StorageClient,
     private readonly qc: Pick<QcClient, 'workOrder'>,
-    private readonly project: Pick<ProjectClient, 'geofence'>,
+    private readonly project: Pick<ProjectClient, 'geofence' | 'scope'>,
     private readonly discarder: MediaDiscarder,
   ) {}
 
@@ -79,6 +79,48 @@ export class UploadService {
       // or it doesn't exist at all, and either way this attempt owns nothing.
       if (uploadId) await this.storage.abortMultipart(keys.storageKey, uploadId);
       // Two retries raced: the loser answers with the winner's row.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return this.resume(await this.prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } }), dto, userId);
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * An invoice photo, filed under the project the request is for. The caller
+   * must have that project in their scope, so nobody files into a project they
+   * cannot see. Repeat-safe like `register`: the same id and hash answer with
+   * the same object.
+   */
+  async registerFinanceDocument(dto: RegisterFinanceDocumentDto, userId: string, bearer: string): Promise<RegisterUploadResponse> {
+    const limit = MEDIA_LIMITS.PHOTO;
+    if (!limit.contentTypes.includes(dto.contentType)) throw new BadRequestException(`An invoice photo must be ${limit.contentTypes.join(' or ')}`);
+    if (dto.sizeBytes > limit.maxBytes) throw new PayloadTooLargeException(`An invoice photo may be at most ${limit.maxBytes} bytes`);
+
+    const existing = await this.prisma.mediaObject.findUnique({ where: { id: dto.id } });
+    if (existing) {
+      if (existing.category !== 'FINANCE_DOCUMENT') throw new ConflictException('This media id already belongs to another upload');
+      return this.resume(existing, dto, userId);
+    }
+
+    const scope = required(await this.project.scope(bearer), 'Project access');
+    if (!scope.global && !scope.projectIds.includes(dto.projectId)) throw new ForbiddenException('You do not have access to this project');
+
+    const pending = await this.prisma.mediaObject.count({ where: { uploadedBy: userId, status: 'PENDING' } });
+    if (pending >= PENDING_CAP) throw new HttpException(`You already have ${PENDING_CAP} uploads waiting to finish`, HttpStatus.TOO_MANY_REQUESTS);
+
+    const keys = financeKeys({ projectId: dto.projectId, id: dto.id });
+    try {
+      const row = await this.prisma.mediaObject.create({
+        data: {
+          id: dto.id, kind: 'PHOTO', category: 'FINANCE_DOCUMENT', contentType: dto.contentType, sizeBytes: dto.sizeBytes,
+          projectId: dto.projectId, storageKey: keys.storageKey, thumbnailKey: keys.thumbnailKey,
+          contentHash: dto.contentHash, capturedAt: dto.capturedAt ?? null, deviceId: dto.deviceId, uploadedBy: userId,
+        },
+      });
+      uploadsRegistered.inc({ kind: 'PHOTO' });
+      return this.instructions(row);
+    } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         return this.resume(await this.prisma.mediaObject.findUniqueOrThrow({ where: { id: dto.id } }), dto, userId);
       }
@@ -180,7 +222,7 @@ export class UploadService {
     return row;
   }
 
-  private resume(row: MediaObject, dto: RegisterUploadDto, userId: string): Promise<RegisterUploadResponse> {
+  private resume(row: MediaObject, dto: { contentHash: string }, userId: string): Promise<RegisterUploadResponse> {
     if (row.uploadedBy !== userId) throw new ConflictException('This media id already belongs to another upload');
     if (row.contentHash !== dto.contentHash) throw new ConflictException('This media id was registered with different content');
     return this.instructions(row);

@@ -5,7 +5,7 @@ import 'core/security/token_storage.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/providers/auth_provider.dart';
-import 'features/map/presentation/my_sites_map_screen.dart';
+import 'features/finance/presentation/finance_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
 import 'features/projects/presentation/project_list_screen.dart';
 import 'features/tasks/presentation/task_list_screen.dart';
@@ -43,7 +43,7 @@ class IpmsApp extends ConsumerWidget {
         pages: [
           TaskListScreen(),
           ProjectListScreen(),
-          MySitesMapScreen(),
+          FinanceScreen(),
           ProfileScreen(),
         ],
       );

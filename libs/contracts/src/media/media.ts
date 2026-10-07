@@ -4,7 +4,7 @@ import { UuidSchema } from '../common/ids.js';
 export const MIB = 1024 * 1024;
 
 export type MediaKind = 'PHOTO' | 'VIDEO' | 'DOCUMENT';
-export type MediaCategory = 'EVIDENCE' | 'GALLERY' | 'TEMPLATE_DOCUMENT';
+export type MediaCategory = 'EVIDENCE' | 'GALLERY' | 'TEMPLATE_DOCUMENT' | 'FINANCE_DOCUMENT';
 export type MediaStatus =
   | 'PENDING' | 'VERIFYING' | 'READY' | 'ATTACHED' | 'REJECTED' | 'DISCARDED' | 'PURGE_SCHEDULED' | 'PURGED';
 export type RejectReason = 'HASH_MISMATCH' | 'SIZE_EXCEEDED' | 'TYPE_MISMATCH' | 'POSTER_MISSING';
@@ -58,6 +58,30 @@ export const RegisterUploadSchema = z.object({
   deviceId: z.string().trim().min(1).max(255),
 }).strip();
 export type RegisterUploadDto = z.infer<typeof RegisterUploadSchema>;
+
+/**
+ * An invoice photo for a finance request. Filed under a project, not a site or
+ * work order: an invoice belongs to the money, not to the tower.
+ */
+export const RegisterFinanceDocumentSchema = z.object({
+  id: UuidSchema,
+  projectId: UuidSchema,
+  kind: z.literal('PHOTO'),
+  contentType: z.string().min(1).max(100),
+  sizeBytes: z.number().int().positive(),
+  contentHash: Sha256HexSchema,
+  capturedAt: z.coerce.date().optional(),
+  deviceId: z.string().trim().min(1).max(255),
+}).strip();
+export type RegisterFinanceDocumentDto = z.infer<typeof RegisterFinanceDocumentSchema>;
+
+/** finance's submit-time checks on its invoice files, mirroring the evidence ones. */
+export const FinanceAttachRequestSchema = z.object({
+  requestId: UuidSchema,
+  projectId: UuidSchema,
+  mediaIds: z.array(UuidSchema).min(1).max(100),
+}).strip();
+export type FinanceAttachRequestDto = z.infer<typeof FinanceAttachRequestSchema>;
 
 export const UploadStatusRequestSchema = z.object({ ids: z.array(UuidSchema).min(1).max(200) }).strip();
 

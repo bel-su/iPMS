@@ -30,7 +30,10 @@ describe('UploadService against unreachable storage', () => {
     });
     const workOrderId = uuidv7();
     const qc = { workOrder: async () => ({ state: 'found' as const, value: { id: workOrderId, projectId: uuidv7(), siteId: uuidv7(), siteCode: 'KOS121', status: 'ONGOING' as const } }) };
-    const project = { geofence: async () => ({ latitude: 26.4525, longitude: 87.2718, effectiveRadiusM: 100 }) };
+    const project = {
+      geofence: async () => ({ latitude: 26.4525, longitude: 87.2718, effectiveRadiusM: 100 }),
+      scope: async () => ({ state: 'found' as const, value: { global: true, projectIds: [], siteIds: [] } }),
+    };
     const service = new UploadService(prisma, unreachable, qc, project, new MediaDiscarder(prisma, unreachable));
 
     // A multipart-threshold video: register() calls storage.createMultipart(),

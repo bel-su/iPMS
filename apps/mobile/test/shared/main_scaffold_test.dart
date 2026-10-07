@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile/features/map/presentation/site_map_screen.dart';
+import 'package:mobile/features/finance/presentation/finance_screen.dart';
 import 'package:mobile/features/profile/presentation/profile_screen.dart';
 import 'package:mobile/features/projects/presentation/project_list_screen.dart';
 import 'package:mobile/features/tasks/presentation/task_list_screen.dart';
@@ -17,7 +17,7 @@ void main() {
             pages: [
               TaskListScreen(),
               ProjectListScreen(),
-              SiteMapScreen(),
+              FinanceScreen(),
               ProfileScreen(),
             ],
           ),
@@ -38,12 +38,13 @@ void main() {
 
     expect(find.text('Assigned Projects'), findsOneWidget);
 
-    // Tap Map tab (index 2)
-    await tester.tap(find.byIcon(Icons.map_outlined));
+    // Tap Finance tab (index 2); the Map tab is gone from the bar
+    expect(find.byIcon(Icons.map_outlined), findsNothing);
+    await tester.tap(find.byIcon(Icons.account_balance_wallet_outlined));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('OpenStreetMap Explorer'), findsOneWidget);
+    expect(find.text('Your advances, settlements and reimbursements'), findsOneWidget);
 
     // Tap Profile tab (index 3)
     await tester.tap(find.byIcon(Icons.person_outline_rounded));

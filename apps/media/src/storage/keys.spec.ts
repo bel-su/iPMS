@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evidenceKeys } from './keys.js';
+import { evidenceKeys, financeKeys } from './keys.js';
 
 const P = '0192f7a0-0000-7000-8000-000000000001';
 const S = '0192f7a0-0000-7000-8000-000000000002';
@@ -19,5 +19,18 @@ describe('evidenceKeys', () => {
 
   it('refuses anything that is not a UUID, so no caller can steer a key', () => {
     expect(() => evidenceKeys({ projectId: '../other', siteId: S, id: M, kind: 'PHOTO' })).toThrow('Invalid id');
+  });
+});
+
+describe('financeKeys', () => {
+  it('files an invoice photo under its project, apart from site evidence', () => {
+    expect(financeKeys({ projectId: P, id: M })).toEqual({
+      storageKey: `projects/${P}/finance/${M}.jpg`,
+      thumbnailKey: `projects/${P}/finance/${M}.thumb.webp`,
+    });
+  });
+
+  it('refuses anything that is not a UUID', () => {
+    expect(() => financeKeys({ projectId: '../x', id: M })).toThrow();
   });
 });

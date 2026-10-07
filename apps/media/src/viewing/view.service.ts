@@ -30,6 +30,22 @@ export class ViewService {
     return this.storage.presignGet(key, VIEW_URL_TTL_SECONDS, readableName({ siteCode: row.siteCode, capturedAt: row.capturedAt, id: row.id, variant, kind: row.kind as MediaKind }), download ? 'attachment' : 'inline');
   }
 
+  /**
+   * An invoice file's download link. Its uploader may always see it; anyone
+   * else needs `view_all` finance access and the file's project in scope. Out
+   * of scope reads as absent, like evidence.
+   */
+  async financeUrl(id: string, variant: 'original' | 'thumbnail', user: { id: string; permissions: readonly string[] }, scope: AuthzScope, download = false): Promise<SignedGet> {
+    const row = await this.prisma.mediaObject.findUnique({ where: { id } });
+    const mayView = row !== null && row.category === 'FINANCE_DOCUMENT'
+      && (row.uploadedBy === user.id || (user.permissions.includes('finance_request.view_all') && inScope(scope, row)));
+    if (!row || !mayView) throw new NotFoundException('Media not found');
+    if (!VIEWABLE.includes(row.status as MediaStatus)) throw new ConflictException(`This file is ${row.status.toLowerCase()} and cannot be viewed`);
+    const key = variant === 'thumbnail' ? row.thumbnailKey : row.storageKey;
+    if (!key) throw new NotFoundException('This file has no thumbnail');
+    return this.storage.presignGet(key, VIEW_URL_TTL_SECONDS, `invoice-${row.id}${variant === 'thumbnail' ? '.thumb.webp' : '.jpg'}`, download ? 'attachment' : 'inline');
+  }
+
   async listForWorkOrder(workOrderId: string, scope: AuthzScope): Promise<MediaView[]> {
     const rows = await this.prisma.mediaObject.findMany({
       where: { AND: [scopeWhere(scope), { workOrderId, status: { notIn: ['DISCARDED', 'PURGED'] } }] },

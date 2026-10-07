@@ -30,7 +30,22 @@ class ApiEndpoints {
   static String mediaComplete(String id) => '/api/v1/media/uploads/$id/complete';
   static String media(String id) => '/api/v1/media/$id';
   static String mediaUrl(String id) => '/api/v1/media/$id/url';
+  // media: invoice photos for finance requests
+  static const String financeUploads = '/api/v1/media/finance/uploads';
+  static const String financeUploadStatus = '/api/v1/media/finance/uploads/status';
+  static String financeUploadComplete(String id) => '/api/v1/media/finance/uploads/$id/complete';
+  static String financeUpload(String id) => '/api/v1/media/finance/uploads/$id';
+  static String financeFileUrl(String id) => '/api/v1/media/finance/$id/url';
   static const String mediaList = '/api/v1/media';
+
+  // finance
+  static const String financeRequests = '/api/v1/finance/requests';
+  static String financeRequest(String id) => '/api/v1/finance/requests/$id';
+  static String financeSubmit(String id) => '/api/v1/finance/requests/$id/submit';
+  static String financeCancel(String id) => '/api/v1/finance/requests/$id/cancel';
+  static String financeAction(String id, String verb) => '/api/v1/finance/requests/$id/$verb';
+  static String financeCashReturn(String advanceId) => '/api/v1/finance/advances/$advanceId/cash-return';
+  static const String financeCategories = '/api/v1/finance/categories';
 
   /// Requests that must never carry (or refresh) an access token.
   static bool isAuthEndpoint(String path) =>

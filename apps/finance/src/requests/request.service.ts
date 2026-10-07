@@ -9,6 +9,7 @@ import { emit, factsOf, recordAction } from '../events.js';
 import { compareMoney, sumMoney } from '../money.js';
 import { loadBalance } from '../ledger.js';
 import { serializeDetail } from '../serialize.js';
+import type { InvoiceFiles } from '../directory/media.client.js';
 import { entryStatus, isEditable, isPending, isPm, stepOf } from '../workflow.js';
 
 const NUMBER_PREFIX: Record<RequestKind, string> = { ADVANCE: 'ADV', SETTLEMENT: 'SET', REIMBURSEMENT: 'REI' };
@@ -22,7 +23,8 @@ const WITH_DETAIL = { invoices: true, actions: { orderBy: { at: 'asc' as const }
  * cancelling. Only the requester ever touches a request here.
  */
 export class RequestService {
-  constructor(private readonly prisma: PrismaClient) {}
+  /** `media` checks and attaches the invoice photos; without it files are not verified (unit tests, or a service run without media). */
+  constructor(private readonly prisma: PrismaClient, private readonly media?: InvoiceFiles) {}
 
   /** `project` is required for an advance or reimbursement; a settlement takes its advance's project. */
   async create(dto: CreateRequestDto, actor: Actor, scope: AuthzScope, project?: ProjectRef) {
@@ -100,7 +102,8 @@ export class RequestService {
     return this.detail(id);
   }
 
-  async submit(id: string, actor: Actor) {
+  async submit(id: string, actor: Actor, bearer = '') {
+    await this.attachInvoiceFiles(id, actor, bearer);
     await this.prisma.$transaction(async (tx) => {
       const row = await this.own(tx, id, actor);
       requireCreatePermission(actor, row);
@@ -127,6 +130,32 @@ export class RequestService {
       await recordAudit(tx, { actorId: actor.id, action: 'finance.request.submitted', objectId: id, previousState: { status: row.status }, newState: { status: entry, revision } });
     });
     return this.detail(id);
+  }
+
+  /**
+   * Before a request is submitted, its invoice photos must be uploaded and
+   * verified, and they become part of its record. Done ahead of the status
+   * change, as qc does for evidence: a failure leaves the request a draft, and
+   * attaching twice is harmless, so a retry (or a resubmit after a return, with
+   * the same files) goes through.
+   */
+  private async attachInvoiceFiles(id: string, actor: Actor, bearer: string): Promise<void> {
+    if (!this.media) return;
+    const row = await this.prisma.financeRequest.findUnique({ where: { id }, include: { invoices: { select: { mediaId: true } } } });
+    // Missing and "someone else's" look the same, as in `own`.
+    if (!row || row.requesterId !== actor.id) throw notFound('Request');
+    const mediaIds = [...new Set(row.invoices.map((i) => i.mediaId).filter((m): m is string => m !== null))];
+    if (mediaIds.length === 0) return;
+
+    const body = { requestId: id, projectId: row.projectId, mediaIds };
+    const unusable = (await this.media.check(body, bearer)).filter((file) => !file.usable);
+    if (unusable.length > 0) {
+      const waiting = unusable.every((f) => f.reason === 'UPLOADING' || f.reason === 'VERIFYING');
+      throw new UnprocessableEntityException(waiting
+        ? 'An invoice photo is still uploading. Wait for it to finish, then submit again.'
+        : 'An invoice photo is missing or was refused. Remove it or upload it again.');
+    }
+    if ((await this.media.attach(body, bearer)) === 'refused') throw new ConflictException('An invoice photo changed while submitting. Try again.');
   }
 
   async cancel(id: string, comment: string | undefined, actor: Actor) {

@@ -25,7 +25,10 @@ beforeAll(async () => {
   [db, minio] = await Promise.all([startTestDb(), startMinio()]);
   prisma = db.prisma;
   const qc = { workOrder: async () => workOrder };
-  const project = { geofence: async () => ({ latitude: 26.4525, longitude: 87.2718, effectiveRadiusM: 100 }) };
+  const project = {
+    geofence: async () => ({ latitude: 26.4525, longitude: 87.2718, effectiveRadiusM: 100 }),
+    scope: async () => ({ state: 'found' as const, value: { global: true, projectIds: [], siteIds: [] } }),
+  };
   service = new UploadService(prisma, minio.client, qc, project, new MediaDiscarder(prisma, minio.client));
 });
 afterAll(async () => { await db?.stop(); await minio?.stop(); });

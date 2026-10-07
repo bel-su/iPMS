@@ -11,6 +11,13 @@ type Authed = { user: AuthzUser; headers: Record<string, string | undefined> };
 export class ViewController {
   constructor(private readonly views: ViewService, private readonly project: ProjectClient) {}
 
+  /** An invoice file of a finance request. Declared before `:id/url` so `finance` is never read as an id. */
+  @Get('finance/:id/url') @RequirePermission('finance_request.view')
+  async financeUrl(@Param('id') id: string, @Query() query: unknown, @Req() req: Authed) {
+    const { variant, download } = ViewUrlQuerySchema.parse(query);
+    return this.views.financeUrl(UuidSchema.parse(id), variant, req.user, await this.scope(req), download);
+  }
+
   @Get(':id/url') @RequirePermission('qc_submission.view')
   async url(@Param('id') id: string, @Query() query: unknown, @Req() req: Authed) {
     const { variant, download } = ViewUrlQuerySchema.parse(query);

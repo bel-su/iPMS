@@ -51,7 +51,7 @@ export class RequestController {
 
   @Post('requests/:id/submit') @RequirePermission('finance_request.view')
   submit(@Param('id') id: string, @Req() req: Authed) {
-    return this.requests.submit(UuidSchema.parse(id), req.user);
+    return this.requests.submit(UuidSchema.parse(id), req.user, bearerOf(req));
   }
 
   @Post('requests/:id/cancel') @RequirePermission('finance_request.view')
