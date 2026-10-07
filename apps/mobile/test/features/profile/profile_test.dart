@@ -30,17 +30,20 @@ void main() {
 
     expect(find.text('Mohammad Oalid Hasan'), findsOneWidget);
     expect(find.text('Field Engineer • Field Operations'), findsOneWidget);
-    expect(find.text('Edit Profile'), findsOneWidget);
-    expect(find.text('Account setting'), findsOneWidget);
-    expect(find.text('Privacy & Security'), findsOneWidget);
+    // Details are not editable from the app, and the gateway is not shown.
+    expect(find.text('Edit Profile'), findsNothing);
+    expect(find.text('Account setting'), findsNothing);
+    expect(find.textContaining('Gateway'), findsNothing);
+    expect(find.text('Security'), findsOneWidget);
+    expect(find.text('Sync now'), findsOneWidget);
     // Biometric hardware is unavailable in tests, so the row explains that.
     expect(find.text('Biometric login'), findsOneWidget);
 
-    // Tap Edit Profile to verify bottom sheet opens
-    await tester.tap(find.text('Edit Profile'));
+    // Security opens the change-password sheet
+    await tester.tap(find.text('Security'));
     await tester.pumpAndSettle();
-
-    expect(find.text('Save Profile Changes'), findsOneWidget);
+    expect(find.text('Change password'), findsWidgets);
+    expect(find.text('Current password'), findsOneWidget);
 
     // Close bottom sheet
     await tester.tap(find.byIcon(Icons.close_rounded));

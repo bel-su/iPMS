@@ -28,10 +28,7 @@ import 'widgets/photo_preview_modal.dart';
 import 'widgets/session_photo_browser_modal.dart';
 
 class TaskDetailScreen extends ConsumerStatefulWidget {
-  const TaskDetailScreen({
-    super.key,
-    required this.task,
-  });
+  const TaskDetailScreen({super.key, required this.task});
 
   final TaskItem task;
 
@@ -80,8 +77,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     }
 
     // Reactively receive completed background watermark jobs
-    _watermarkSub =
-        BackgroundWatermarkService.onWatermarkCompleted.listen((evidence) {
+    _watermarkSub = BackgroundWatermarkService.onWatermarkCompleted.listen((
+      evidence,
+    ) {
       // The evidence notifier records the photo (even if this screen has
       // closed); here only the checklist display follows.
       if (evidence.taskId == widget.task.id && mounted) {
@@ -89,10 +87,17 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
           // The evidence notifier files the photo in this same event; send it
           // once that has happened.
           scheduleMicrotask(() {
-            if (mounted) unawaited(ref.read(evidenceUploaderProvider).upload(evidence.taskId, evidence.id));
+            if (mounted) {
+              unawaited(
+                ref
+                    .read(evidenceUploaderProvider)
+                    .upload(evidence.taskId, evidence.id),
+              );
+            }
           });
-          final idx =
-              _checklist.indexWhere((c) => c.id == evidence.checklistItemId);
+          final idx = _checklist.indexWhere(
+            (c) => c.id == evidence.checklistItemId,
+          );
           if (idx != -1 && !_checklist[idx].isCompleted) {
             setState(() {
               _checklist[idx] = _checklist[idx].copyWith(
@@ -123,8 +128,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       _checklistError = null;
     });
     try {
-      final checklist =
-          await ref.read(taskRepositoryProvider).getChecklist(widget.task.id);
+      final checklist = await ref
+          .read(taskRepositoryProvider)
+          .getChecklist(widget.task.id);
       // Photos saved from an earlier session count towards their items.
       await ref.read(taskEvidenceProvider.notifier).restored;
       if (!mounted) return;
@@ -143,20 +149,34 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       // order, otherwise what the last submission says (a rework picked up on
       // a different phone).
       final owner = ref.read(sessionOwnerProvider);
-      var local = owner == null ? null : await _marksStore.load(owner, widget.task.id);
+      var local = owner == null
+          ? null
+          : await _marksStore.load(owner, widget.task.id);
       if (!mounted) return;
       // A submission made after this phone last touched them (from here or
       // another phone) is the newer record.
       final submittedAt = submission?.submittedAt;
-      if (local != null && submittedAt != null && !local.savedAt.isAfter(submittedAt)) local = null;
-      final naIds = local?.na ?? {
-        for (final e in (submission?.answers ?? const <String, SubmittedAnswer>{}).entries)
-          if (e.value.isNa) e.key,
-      };
-      final remarks = local?.remarks ?? {
-        for (final e in (submission?.answers ?? const <String, SubmittedAnswer>{}).entries)
-          if ((e.value.remark ?? '').isNotEmpty) e.key: e.value.remark!,
-      };
+      if (local != null &&
+          submittedAt != null &&
+          !local.savedAt.isAfter(submittedAt)) {
+        local = null;
+      }
+      final naIds =
+          local?.na ??
+          {
+            for (final e
+                in (submission?.answers ?? const <String, SubmittedAnswer>{})
+                    .entries)
+              if (e.value.isNa) e.key,
+          };
+      final remarks =
+          local?.remarks ??
+          {
+            for (final e
+                in (submission?.answers ?? const <String, SubmittedAnswer>{})
+                    .entries)
+              if ((e.value.remark ?? '').isNotEmpty) e.key: e.value.remark!,
+          };
 
       final evidence = ref.read(taskEvidenceListProvider(widget.task.id));
       setState(() {
@@ -173,7 +193,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
             return item.copyWith(isCompleted: true, verdict: 'NA');
           }
           final hasPhotos = evidence.any((e) => e.checklistItemId == item.id);
-          return hasPhotos ? item.copyWith(isCompleted: true, verdict: 'PASS') : item;
+          return hasPhotos
+              ? item.copyWith(isCompleted: true, verdict: 'PASS')
+              : item;
         }).toList();
         _loadingChecklist = false;
       });
@@ -198,7 +220,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     final submissionId = task.currentSubmissionId;
     if (submissionId == null) return null;
     try {
-      return await ref.read(taskRepositoryProvider).getReviewFeedback(submissionId);
+      return await ref
+          .read(taskRepositoryProvider)
+          .getReviewFeedback(submissionId);
     } catch (_) {
       // The checklist is still usable without the reviewer's notes.
       return null;
@@ -209,13 +233,17 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
   /// carried on from any device.
   Future<void> _pullRemotePhotos(TaskItem task, TaskChecklist checklist) async {
     try {
-      final titles = {for (final i in checklist.items) i.id: '${i.itemNumber} ${i.title}'};
+      final titles = {
+        for (final i in checklist.items) i.id: '${i.itemNumber} ${i.title}',
+      };
       final gained = await ref.read(evidenceSyncProvider).pull(task, titles);
       if (!mounted || gained.isEmpty) return;
       setState(() {
         for (var i = 0; i < _checklist.length; i++) {
           final item = _checklist[i];
-          if (gained.contains(item.id) && item.verdict != 'NA' && !item.isCompleted) {
+          if (gained.contains(item.id) &&
+              item.verdict != 'NA' &&
+              !item.isCompleted) {
             _checklist[i] = item.copyWith(isCompleted: true, verdict: 'PASS');
           }
         }
@@ -243,16 +271,22 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
   /// Evidence can be added or removed only while the work order is waiting on
   /// the assignee: not yet submitted, or sent back for rework. Under review,
   /// completed or cancelled it is view-only.
-  bool _canWork(TaskItem task) => AppConfig.demoMode || (task.isSubmittable && !_justSubmitted);
+  bool _canWork(TaskItem task) =>
+      AppConfig.demoMode || (task.isSubmittable && !_justSubmitted);
 
   void _showMessage(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: isError ? AppColors.statusBlockedText : AppColors.darkSlate,
+        backgroundColor: isError
+            ? AppColors.statusBlockedText
+            : AppColors.darkSlate,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        content: Text(message, style: const TextStyle(fontSize: 12, color: Colors.white)),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 12, color: Colors.white),
+        ),
       ),
     );
   }
@@ -261,7 +295,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
   /// the engineer taps Done.
   Future<void> _capturePhotoForItem(TaskItem task, ChecklistItem item) async {
     if (!_canWork(task)) {
-      _showMessage('This work order cannot be changed right now.', isError: true);
+      _showMessage(
+        'This work order cannot be changed right now.',
+        isError: true,
+      );
       return;
     }
     if (!item.acceptsPhotos) {
@@ -279,10 +316,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     setState(() {
       final idx = _checklist.indexWhere((c) => c.id == item.id);
       if (idx != -1) {
-        _checklist[idx] = _checklist[idx].copyWith(isCompleted: true, verdict: 'PASS');
+        _checklist[idx] = _checklist[idx].copyWith(
+          isCompleted: true,
+          verdict: 'PASS',
+        );
       }
     });
-    _showMessage('$taken photo${taken == 1 ? '' : 's'} added to ${item.itemNumber}. Watermarking and uploading.');
+    _showMessage(
+      '$taken photo${taken == 1 ? '' : 's'} added to ${item.itemNumber}. Watermarking and uploading.',
+    );
   }
 
   void _toggleItemNA(TaskItem task, int index) {
@@ -303,10 +345,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
           isCompleted: itemEvidence.isNotEmpty,
         );
       } else {
-        _checklist[index] = item.copyWith(
-          verdict: 'NA',
-          isCompleted: true,
-        );
+        _checklist[index] = item.copyWith(verdict: 'NA', isCompleted: true);
       }
     });
     _saveMarks();
@@ -317,14 +356,19 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
   void _saveMarks() {
     final owner = ref.read(sessionOwnerProvider);
     if (owner == null) return;
-    unawaited(_marksStore.save(
-      owner,
-      widget.task.id,
-      ChecklistMarks(
-        na: {for (final i in _checklist) if (i.verdict == 'NA') i.id},
-        remarks: Map.of(_remarks),
+    unawaited(
+      _marksStore.save(
+        owner,
+        widget.task.id,
+        ChecklistMarks(
+          na: {
+            for (final i in _checklist)
+              if (i.verdict == 'NA') i.id,
+          },
+          remarks: Map.of(_remarks),
+        ),
       ),
-    ));
+    );
   }
 
   void _openSessionPhotoBrowser(TaskItem task, ChecklistItem item) {
@@ -356,11 +400,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
 
   /// Photos on checklist items that have not reached the media bucket yet.
   List<TaskEvidence> _unsent(List<TaskEvidence> evidence) => evidence
-      .where((e) =>
-          !e.isSubmitted &&
-          e.checklistItemId != null &&
-          e.checklistItemId!.isNotEmpty &&
-          !e.isUploaded)
+      .where(
+        (e) =>
+            !e.isSubmitted &&
+            e.checklistItemId != null &&
+            e.checklistItemId!.isNotEmpty &&
+            !e.isUploaded,
+      )
       .toList();
 
   /// Sends every photo to the bucket now, without submitting. Another user
@@ -368,12 +414,20 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
   Future<void> _uploadPhotos(TaskItem task, List<TaskEvidence> evidence) async {
     if (_isUploading || _isSubmitting) return;
     final unsent = _unsent(evidence);
-    final inTray = evidence.where((e) => !e.isSubmitted && (e.checklistItemId == null || e.checklistItemId!.isEmpty)).length;
+    final inTray = evidence
+        .where(
+          (e) =>
+              !e.isSubmitted &&
+              (e.checklistItemId == null || e.checklistItemId!.isEmpty),
+        )
+        .length;
     final trayNote = inTray > 0
         ? ' $inTray photo${inTray == 1 ? ' is' : 's are'} not on a checklist item and can not be uploaded until attached.'
         : '';
     if (unsent.isEmpty) {
-      _showMessage('Everything on checklist items is already uploaded.$trayNote');
+      _showMessage(
+        'Everything on checklist items is already uploaded.$trayNote',
+      );
       return;
     }
     setState(() => _isUploading = true);
@@ -382,9 +436,14 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
           .read(evidenceUploaderProvider)
           .uploadAndWait(task.id, unsent.map((e) => e.id).toSet());
       if (notReady.isEmpty) {
-        _showMessage('${unsent.length} photo${unsent.length == 1 ? '' : 's'} uploaded.$trayNote');
+        _showMessage(
+          '${unsent.length} photo${unsent.length == 1 ? '' : 's'} uploaded.$trayNote',
+        );
       } else {
-        final firstError = notReady.map((e) => e.uploadError).whereType<String>().firstOrNull;
+        final firstError = notReady
+            .map((e) => e.uploadError)
+            .whereType<String>()
+            .firstOrNull;
         _showMessage(
           '${unsent.length - notReady.length} of ${unsent.length} uploaded. ${notReady.length} did not go: ${firstError ?? 'still being checked, try again shortly.'}',
           isError: true,
@@ -397,12 +456,16 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     }
   }
 
-  Future<void> _submitChecklistToQC(TaskItem task, List<TaskEvidence> evidenceList) async {
+  Future<void> _submitChecklistToQC(
+    TaskItem task,
+    List<TaskEvidence> evidenceList,
+  ) async {
     if (_isSubmitting) return;
     final missingItems = _checklist.where((item) {
       if (item.verdict == 'NA') return false;
-      final photos =
-          evidenceList.where((e) => e.checklistItemId == item.id).length;
+      final photos = evidenceList
+          .where((e) => e.checklistItemId == item.id)
+          .length;
       return photos < item.minPhotos;
     }).toList();
 
@@ -423,14 +486,17 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       return;
     }
     if (!_canWork(task)) {
-      _showMessage('This work order is ${task.status.replaceAll('_', ' ').toLowerCase()} and cannot be submitted now.',
-          isError: true);
+      _showMessage(
+        'This work order is ${task.status.replaceAll('_', ' ').toLowerCase()} and cannot be submitted now.',
+        isError: true,
+      );
       return;
     }
 
     final overLimit = _checklist.where((item) {
       if (item.verdict == 'NA' || item.maxPhotos == null) return false;
-      return evidenceList.where((e) => e.checklistItemId == item.id).length > item.maxPhotos!;
+      return evidenceList.where((e) => e.checklistItemId == item.id).length >
+          item.maxPhotos!;
     }).toList();
     if (overLimit.isNotEmpty) {
       _showMessage(
@@ -458,16 +524,27 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
 
       // Only photos on items being answered go with the submission; an N/A
       // item carries none.
-      final answeredIds = _checklist.where((i) => i.verdict != 'NA').map((i) => i.id).toSet();
+      final answeredIds = _checklist
+          .where((i) => i.verdict != 'NA')
+          .map((i) => i.id)
+          .toSet();
       final toSend = evidenceList
-          .where((e) => e.checklistItemId != null && answeredIds.contains(e.checklistItemId))
+          .where(
+            (e) =>
+                e.checklistItemId != null &&
+                answeredIds.contains(e.checklistItemId),
+          )
           .map((e) => e.id)
           .toSet();
 
-      final notReady =
-          await ref.read(evidenceUploaderProvider).uploadAndWait(task.id, toSend);
+      final notReady = await ref
+          .read(evidenceUploaderProvider)
+          .uploadAndWait(task.id, toSend);
       if (notReady.isNotEmpty) {
-        final firstError = notReady.map((e) => e.uploadError).whereType<String>().firstOrNull;
+        final firstError = notReady
+            .map((e) => e.uploadError)
+            .whereType<String>()
+            .firstOrNull;
         _showMessage(
           '${notReady.length} photo(s) are not uploaded yet. ${firstError ?? 'They are still being checked; try again shortly.'}',
           isError: true,
@@ -484,18 +561,34 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
             .toList();
         final remark = _remarks[item.id]?.trim();
         if (item.verdict == 'NA') {
-          responses.add(ItemResponse(itemId: item.id, result: 'NA', description: remark));
-        } else if (item.isRequired || photos.isNotEmpty || item.verdict == 'PASS' || (remark ?? '').isNotEmpty) {
-          responses.add(ItemResponse(itemId: item.id, result: 'PASS', photoMediaIds: photos, description: remark));
+          responses.add(
+            ItemResponse(itemId: item.id, result: 'NA', description: remark),
+          );
+        } else if (item.isRequired ||
+            photos.isNotEmpty ||
+            item.verdict == 'PASS' ||
+            (remark ?? '').isNotEmpty) {
+          responses.add(
+            ItemResponse(
+              itemId: item.id,
+              result: 'PASS',
+              photoMediaIds: photos,
+              description: remark,
+            ),
+          );
         }
       }
 
       _submissionKey ??= const Uuid().v4();
-      await ref.read(taskRepositoryProvider).submitChecklist(
+      await ref
+          .read(taskRepositoryProvider)
+          .submitChecklist(
             checklist: checklist,
             responses: responses,
             idempotencyKey: _submissionKey!,
-            deviceId: await ref.read(tokenStorageProvider).getOrCreateDeviceId(),
+            deviceId: await ref
+                .read(tokenStorageProvider)
+                .getOrCreateDeviceId(),
             latitude: position?.latitude,
             longitude: position?.longitude,
           );
@@ -560,7 +653,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
       ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.fromLTRB(
-            20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          20,
+          16,
+          20,
+          MediaQuery.of(ctx).viewInsets.bottom + 24,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -584,8 +681,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                     color: const Color(0xFFFFEBEE),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.warning_amber_rounded,
-                      color: Color(0xFFC62828), size: 22),
+                  child: const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Color(0xFFC62828),
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -594,13 +694,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                     children: [
                       Text(
                         'Checklist Evidence Incomplete',
-                        style: AppTypography.titleMedium
-                            .copyWith(fontWeight: FontWeight.bold),
+                        style: AppTypography.titleMedium.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       Text(
                         '${missingItems.length} item(s) missing photo proof or N/A declaration',
-                        style: AppTypography.caption
-                            .copyWith(color: AppColors.statusBlockedText),
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.statusBlockedText,
+                        ),
                       ),
                     ],
                   ),
@@ -622,8 +724,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                 itemBuilder: (context, i) {
                   final missingItem = missingItems[i];
                   return Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.searchFieldBackground,
                       borderRadius: BorderRadius.circular(10),
@@ -633,7 +737,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.darkSlate,
                             borderRadius: BorderRadius.circular(6),
@@ -641,9 +747,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                           child: Text(
                             missingItem.itemNumber,
                             style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold),
+                              fontSize: 10,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -651,7 +758,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                           child: Text(
                             missingItem.title,
                             style: const TextStyle(
-                                fontSize: 12, fontWeight: FontWeight.w500),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -663,15 +772,21 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.darkSlate,
                               foregroundColor: Colors.white,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                              ),
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
-                            icon:
-                                const Icon(Icons.camera_alt_outlined, size: 14),
-                            label: const Text('Click',
-                                style: TextStyle(fontSize: 11)),
+                            icon: const Icon(
+                              Icons.camera_alt_outlined,
+                              size: 14,
+                            ),
+                            label: const Text(
+                              'Click',
+                              style: TextStyle(fontSize: 11),
+                            ),
                             onPressed: () {
                               Navigator.pop(ctx);
                               _capturePhotoForItem(task, missingItem);
@@ -691,7 +806,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
               child: OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Back to Checklist'),
@@ -716,9 +832,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
         : 'Not set';
 
     final completedItemsCount = _checklist
-        .where((e) =>
-            e.verdict == 'NA' ||
-            evidenceList.any((ev) => ev.checklistItemId == e.id))
+        .where(
+          (e) =>
+              e.verdict == 'NA' ||
+              evidenceList.any((ev) => ev.checklistItemId == e.id),
+        )
         .length;
 
     return Scaffold(
@@ -728,8 +846,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(task.siteCode ?? 'Task Detail',
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        title: Text(
+          task.siteCode ?? 'Task Detail',
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+        ),
       ),
       body: SafeArea(
         child: Column(
@@ -779,7 +899,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                     const SizedBox(height: 10),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.searchFieldBackground,
                         borderRadius: BorderRadius.circular(12),
@@ -788,7 +911,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.sticky_note_2_outlined, size: 16, color: AppColors.darkSlate),
+                          const Icon(
+                            Icons.sticky_note_2_outlined,
+                            size: 16,
+                            color: AppColors.darkSlate,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text.rich(
@@ -796,12 +923,16 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                                 children: [
                                   const TextSpan(
                                     text: 'Notes: ',
-                                    style: TextStyle(fontWeight: FontWeight.w700),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                   TextSpan(text: task.note),
                                 ],
                               ),
-                              style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary),
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
                             ),
                           ),
                         ],
@@ -818,12 +949,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
-                            side:
-                                const BorderSide(color: AppColors.subtleDivider),
+                            side: const BorderSide(
+                              color: AppColors.subtleDivider,
+                            ),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -831,8 +965,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                                 const SizedBox(height: 4),
                                 Row(
                                   children: [
-                                    const Icon(Icons.calendar_month_outlined,
-                                        size: 15, color: AppColors.darkSlate),
+                                    const Icon(
+                                      Icons.calendar_month_outlined,
+                                      size: 15,
+                                      color: AppColors.darkSlate,
+                                    ),
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: Text(
@@ -855,22 +992,30 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
-                            side:
-                                const BorderSide(color: AppColors.subtleDivider),
+                            side: const BorderSide(
+                              color: AppColors.subtleDivider,
+                            ),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('App Evidence',
-                                    style: AppTypography.caption),
+                                Text(
+                                  'App Evidence',
+                                  style: AppTypography.caption,
+                                ),
                                 const SizedBox(height: 4),
                                 Row(
                                   children: [
-                                    const Icon(Icons.photo_library_outlined,
-                                        size: 15, color: AppColors.darkSlate),
+                                    const Icon(
+                                      Icons.photo_library_outlined,
+                                      size: 15,
+                                      color: AppColors.darkSlate,
+                                    ),
                                     const SizedBox(width: 6),
                                     Text(
                                       '${evidenceList.length} Photos',
@@ -896,7 +1041,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFEDE7F6),
                           borderRadius: BorderRadius.circular(8),
@@ -954,11 +1101,14 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                       labelColor: AppColors.darkSlate,
                       unselectedLabelColor: AppColors.textSecondary,
                       labelStyle: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.bold),
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                       tabs: [
                         Tab(
-                            text:
-                                'Checklist ($completedItemsCount/${_checklist.length})'),
+                          text:
+                              'Checklist ($completedItemsCount/${_checklist.length})',
+                        ),
                         const Tab(text: 'Site & Map'),
                       ],
                     ),
@@ -1004,25 +1154,32 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.darkSlate,
                           side: const BorderSide(
-                              color: AppColors.darkSlate, width: 1.2),
+                            color: AppColors.darkSlate,
+                            width: 1.2,
+                          ),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         icon: _isUploading
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.cloud_upload_outlined, size: 18),
                         label: Text(
                           _isUploading
                               ? 'Uploading…'
                               : unsentCount > 0
-                                  ? 'Upload ($unsentCount)'
-                                  : 'Upload',
+                              ? 'Upload ($unsentCount)'
+                              : 'Upload',
                           style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.bold),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         onPressed: canWork && !_isUploading && !_isSubmitting
                             ? () => _uploadPhotos(task, evidenceList)
@@ -1041,20 +1198,25 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                           backgroundColor: const Color(0xFF2E7D32),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         icon: _isSubmitting
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white),
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
                               )
                             : const Icon(Icons.send_rounded, size: 18),
                         label: Text(
-                          _isSubmitting ? 'Uploading…' : 'Submit to QC',
+                          _isSubmitting ? 'Uploading…' : 'Submit',
                           style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.bold),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         onPressed: _isSubmitting || _isUploading || !canWork
                             ? null
@@ -1075,36 +1237,53 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
     if (_loadingChecklist) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_checklistError != null || (_checklist.isEmpty && !AppConfig.demoMode)) {
+    if (_checklistError != null ||
+        (_checklist.isEmpty && !AppConfig.demoMode)) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.checklist_rtl_outlined, size: 44, color: AppColors.textSecondary),
+              const Icon(
+                Icons.checklist_rtl_outlined,
+                size: 44,
+                color: AppColors.textSecondary,
+              ),
               const SizedBox(height: 10),
               Text(
-                _checklistError != null ? 'Could not load the checklist' : 'This checklist has no items',
+                _checklistError != null
+                    ? 'Could not load the checklist'
+                    : 'This checklist has no items',
                 style: AppTypography.titleMedium,
               ),
               if (_checklistError != null) ...[
                 const SizedBox(height: 4),
-                Text(_checklistError!, style: AppTypography.bodySmall, textAlign: TextAlign.center),
+                Text(
+                  _checklistError!,
+                  style: AppTypography.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 10),
-                TextButton(onPressed: _loadChecklist, child: const Text('Retry')),
+                TextButton(
+                  onPressed: _loadChecklist,
+                  child: const Text('Retry'),
+                ),
               ],
             ],
           ),
         ),
       );
     }
-    final unassignedPhotos =
-        ref.watch(unassignedSessionPhotosProvider(task.id));
+    final unassignedPhotos = ref.watch(
+      unassignedSessionPhotosProvider(task.id),
+    );
     final itemsWithEvidence = _checklist
-        .where((item) =>
-            item.verdict == 'NA' ||
-            evidenceList.any((e) => e.checklistItemId == item.id))
+        .where(
+          (item) =>
+              item.verdict == 'NA' ||
+              evidenceList.any((e) => e.checklistItemId == item.id),
+        )
         .length;
     final canWork = _canWork(task);
 
@@ -1122,15 +1301,21 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
             ),
             child: Row(
               children: [
-                const Icon(Icons.lock_outline, size: 18, color: AppColors.textSecondary),
+                const Icon(
+                  Icons.lock_outline,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _justSubmitted
                         ? 'Submitted. Photos and answers are now view-only.'
                         : switch (task.status) {
-                            'REVIEWING' => 'Submitted and waiting for QC review. Photos and answers are view-only until the reviewer responds.',
-                            'COMPLETED' => 'Approved by QC. This work order is complete and view-only.',
+                            'REVIEWING' =>
+                              'Submitted and waiting for QC review. Photos and answers are view-only until the reviewer responds.',
+                            'COMPLETED' =>
+                              'Approved by QC. This work order is complete and view-only.',
                             'CANCELLED' => 'This work order was cancelled.',
                             _ => 'This work order cannot be changed right now.',
                           },
@@ -1153,7 +1338,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.replay_rounded, size: 18, color: AppColors.statusBlockedText),
+                    const Icon(
+                      Icons.replay_rounded,
+                      size: 18,
+                      color: AppColors.statusBlockedText,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -1168,9 +1357,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                     ),
                   ],
                 ),
-                if (_review!.comment != null && _review!.comment!.isNotEmpty) ...[
+                if (_review!.comment != null &&
+                    _review!.comment!.isNotEmpty) ...[
                   const SizedBox(height: 6),
-                  Text('Reviewer: ${_review!.comment}', style: AppTypography.bodySmall),
+                  Text(
+                    'Reviewer: ${_review!.comment}',
+                    style: AppTypography.bodySmall,
+                  ),
                 ],
               ],
             ),
@@ -1209,8 +1402,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
               if (unassignedPhotos.isNotEmpty)
                 Container(
                   margin: const EdgeInsets.only(right: 6),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3E5F5),
                     borderRadius: BorderRadius.circular(6),
@@ -1225,8 +1420,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                   ),
                 ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: itemsWithEvidence == _checklist.length
                       ? const Color(0xFFE8F5E9)
@@ -1266,8 +1460,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                 color: isNA
                     ? AppColors.subtleDivider
                     : hasEvidence
-                        ? const Color(0xFF2E7D32).withValues(alpha: 0.4)
-                        : AppColors.subtleDivider,
+                    ? const Color(0xFF2E7D32).withValues(alpha: 0.4)
+                    : AppColors.subtleDivider,
                 width: hasEvidence ? 1.4 : 1,
               ),
             ),
@@ -1282,7 +1476,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 2.5),
+                          horizontal: 7,
+                          vertical: 2.5,
+                        ),
                         decoration: BoxDecoration(
                           color: isNA
                               ? AppColors.textTertiary
@@ -1307,7 +1503,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                             color: isNA
                                 ? AppColors.textTertiary
                                 : AppColors.textPrimary,
-                            decoration: isNA ? TextDecoration.lineThrough : null,
+                            decoration: isNA
+                                ? TextDecoration.lineThrough
+                                : null,
                           ),
                         ),
                       ),
@@ -1317,7 +1515,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                       if (isNA)
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFEEEEEE),
                             borderRadius: BorderRadius.circular(6),
@@ -1335,18 +1535,22 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                       else if (hasEvidence)
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFE8F5E9),
                             borderRadius: BorderRadius.circular(6),
-                            border:
-                                Border.all(color: const Color(0xFFC8E6C9)),
+                            border: Border.all(color: const Color(0xFFC8E6C9)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.verified,
-                                  size: 12, color: Color(0xFF1B5E20)),
+                              const Icon(
+                                Icons.verified,
+                                size: 12,
+                                color: Color(0xFF1B5E20),
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 'COMPLETED (${itemEvidence.length})',
@@ -1362,12 +1566,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                       else
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFF3E0),
                             borderRadius: BorderRadius.circular(6),
-                            border:
-                                Border.all(color: const Color(0xFFFFE0B2)),
+                            border: Border.all(color: const Color(0xFFFFE0B2)),
                           ),
                           child: const Text(
                             'PENDING EVIDENCE',
@@ -1431,7 +1636,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                         fillColor: AppColors.searchFieldBackground,
                         labelText: 'Remark',
                         hintText: 'Add a remark for this item (optional)',
-                        prefixIcon: const Icon(Icons.edit_note_rounded, size: 20),
+                        prefixIcon: const Icon(
+                          Icons.edit_note_rounded,
+                          size: 20,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -1477,11 +1685,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                                       errorBuilder:
                                           (context, error, stackTrace) =>
                                               Container(
-                                        color: AppColors.searchFieldBackground,
-                                        child: const Icon(
-                                            Icons.broken_image_outlined,
-                                            size: 20),
-                                      ),
+                                                color: AppColors
+                                                    .searchFieldBackground,
+                                                child: const Icon(
+                                                  Icons.broken_image_outlined,
+                                                  size: 20,
+                                                ),
+                                              ),
                                     ),
                                   ),
                                 ),
@@ -1498,38 +1708,42 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                               ),
                               // Detach [X] Button
                               if (canWork)
-                              Positioned(
-                                top: 3,
-                                right: 3,
-                                child: InkWell(
-                                  onTap: () {
-                                    ref
-                                        .read(taskEvidenceProvider.notifier)
-                                        .detachFromItem(
+                                Positioned(
+                                  top: 3,
+                                  right: 3,
+                                  child: InkWell(
+                                    onTap: () {
+                                      ref
+                                          .read(taskEvidenceProvider.notifier)
+                                          .detachFromItem(
                                             taskId: task.id,
-                                            evidenceId: ev.id);
-                                    final remaining = itemEvidence.length - 1;
-                                    if (remaining == 0 &&
-                                        item.verdict != 'NA') {
-                                      setState(() {
-                                        _checklist[index] = item.copyWith(
-                                          isCompleted: false,
-                                          verdict: 'PENDING',
-                                        );
-                                      });
-                                    }
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.black54,
-                                      shape: BoxShape.circle,
+                                            evidenceId: ev.id,
+                                          );
+                                      final remaining = itemEvidence.length - 1;
+                                      if (remaining == 0 &&
+                                          item.verdict != 'NA') {
+                                        setState(() {
+                                          _checklist[index] = item.copyWith(
+                                            isCompleted: false,
+                                            verdict: 'PENDING',
+                                          );
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.black54,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        size: 13,
+                                        color: Colors.white,
+                                      ),
                                     ),
-                                    child: const Icon(Icons.close,
-                                        size: 13, color: Colors.white),
                                   ),
                                 ),
-                              ),
                             ],
                           );
                         },
@@ -1551,29 +1765,36 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                           height: 36,
                           child: OutlinedButton(
                             style: OutlinedButton.styleFrom(
-                              backgroundColor:
-                                  isNA ? AppColors.darkSlate : Colors.white,
-                              foregroundColor:
-                                  isNA ? Colors.white : AppColors.textSecondary,
+                              backgroundColor: isNA
+                                  ? AppColors.darkSlate
+                                  : Colors.white,
+                              foregroundColor: isNA
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
                               side: BorderSide(
                                 color: isNA
                                     ? AppColors.darkSlate
                                     : AppColors.subtleDivider,
                               ),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 2,
+                              ),
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
-                            onPressed: canWork ? () => _toggleItemNA(task, index) : null,
+                            onPressed: canWork
+                                ? () => _toggleItemNA(task, index)
+                                : null,
                             child: FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
                                 isNA ? 'N/A Active' : 'N/A',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  fontWeight:
-                                      isNA ? FontWeight.bold : FontWeight.w600,
+                                  fontWeight: isNA
+                                      ? FontWeight.bold
+                                      : FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -1594,13 +1815,17 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                                   : Colors.white,
                               foregroundColor: AppColors.primaryLavenderDark,
                               side: const BorderSide(color: Color(0xFFDDD7F7)),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
-                            icon: const Icon(Icons.photo_library_outlined,
-                                size: 14),
+                            icon: const Icon(
+                              Icons.photo_library_outlined,
+                              size: 14,
+                            ),
                             label: FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
@@ -1608,7 +1833,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                                     ? 'Browse (${unassignedPhotos.length})'
                                     : 'Browse',
                                 style: const TextStyle(
-                                    fontSize: 11, fontWeight: FontWeight.bold),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             onPressed: canWork
@@ -1628,19 +1855,25 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.darkSlate,
                               foregroundColor: Colors.white,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
-                            icon: const Icon(Icons.camera_alt_outlined,
-                                size: 14),
+                            icon: const Icon(
+                              Icons.camera_alt_outlined,
+                              size: 14,
+                            ),
                             label: const FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
                                 'Take Photos',
                                 style: TextStyle(
-                                    fontSize: 11, fontWeight: FontWeight.bold),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             onPressed: item.acceptsPhotos && canWork
@@ -1678,12 +1911,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Site Identification & GPS',
-                        style: AppTypography.titleLarge),
+                    Text(
+                      'Site Identification & GPS',
+                      style: AppTypography.titleLarge,
+                    ),
                     IconButton.filledTonal(
                       style: IconButton.styleFrom(
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       icon: const Icon(Icons.map_outlined, size: 20),
                       tooltip: 'View Interactive Map',
@@ -1706,24 +1942,33 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    const Icon(Icons.apartment_outlined,
-                        size: 18, color: AppColors.darkSlate),
+                    const Icon(
+                      Icons.apartment_outlined,
+                      size: 18,
+                      color: AppColors.darkSlate,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Site Code: ${task.siteCode ?? "—"}',
-                      style: AppTypography.bodyMedium
-                          .copyWith(fontWeight: FontWeight.w600),
+                      style: AppTypography.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    const Icon(Icons.location_on_outlined,
-                        size: 18, color: AppColors.darkSlate),
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 18,
+                      color: AppColors.darkSlate,
+                    ),
                     const SizedBox(width: 8),
                     Text(
-                      task.latitude != null ? 'Lat: ${task.latitude!.toStringAsFixed(5)}' : 'Lat: not recorded',
+                      task.latitude != null
+                          ? 'Lat: ${task.latitude!.toStringAsFixed(5)}'
+                          : 'Lat: not recorded',
                       style: AppTypography.bodyMedium,
                     ),
                   ],
@@ -1731,11 +1976,16 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    const Icon(Icons.explore_outlined,
-                        size: 18, color: AppColors.darkSlate),
+                    const Icon(
+                      Icons.explore_outlined,
+                      size: 18,
+                      color: AppColors.darkSlate,
+                    ),
                     const SizedBox(width: 8),
                     Text(
-                      task.longitude != null ? 'Long: ${task.longitude!.toStringAsFixed(5)}' : 'Long: not recorded',
+                      task.longitude != null
+                          ? 'Long: ${task.longitude!.toStringAsFixed(5)}'
+                          : 'Long: not recorded',
                       style: AppTypography.bodyMedium,
                     ),
                   ],
@@ -1777,12 +2027,18 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen>
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    const Icon(Icons.verified_outlined,
-                        size: 16, color: Color(0xFF2E7D32)),
+                    const Icon(
+                      Icons.verified_outlined,
+                      size: 16,
+                      color: Color(0xFF2E7D32),
+                    ),
                     const SizedBox(width: 8),
-                    Text('Stateless Verification Active',
-                        style: AppTypography.bodySmall
-                            .copyWith(fontWeight: FontWeight.bold)),
+                    Text(
+                      'Stateless Verification Active',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -1810,16 +2066,30 @@ class _UploadStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (AppConfig.demoMode) return const SizedBox.shrink();
-    final (IconData icon, Color color, String tip) = switch (evidence.uploadStatus) {
-      EvidenceUploadStatus.ready || EvidenceUploadStatus.attached =>
-        (Icons.cloud_done, const Color(0xFF2E7D32), 'Uploaded'),
-      EvidenceUploadStatus.uploading || EvidenceUploadStatus.verifying =>
-        (Icons.cloud_upload_outlined, AppColors.primaryLavenderDark, 'Uploading'),
-      EvidenceUploadStatus.failed || EvidenceUploadStatus.rejected =>
-        (Icons.cloud_off, AppColors.statusBlockedText, evidence.uploadError ?? 'Upload failed. Tap to retry.'),
+    final (
+      IconData icon,
+      Color color,
+      String tip,
+    ) = switch (evidence.uploadStatus) {
+      EvidenceUploadStatus.ready || EvidenceUploadStatus.attached => (
+        Icons.cloud_done,
+        const Color(0xFF2E7D32),
+        'Uploaded',
+      ),
+      EvidenceUploadStatus.uploading || EvidenceUploadStatus.verifying => (
+        Icons.cloud_upload_outlined,
+        AppColors.primaryLavenderDark,
+        'Uploading',
+      ),
+      EvidenceUploadStatus.failed || EvidenceUploadStatus.rejected => (
+        Icons.cloud_off,
+        AppColors.statusBlockedText,
+        evidence.uploadError ?? 'Upload failed. Tap to retry.',
+      ),
       _ => (Icons.cloud_queue, AppColors.textSecondary, 'Waiting to upload'),
     };
-    final failed = evidence.uploadStatus == EvidenceUploadStatus.failed ||
+    final failed =
+        evidence.uploadStatus == EvidenceUploadStatus.failed ||
         evidence.uploadStatus == EvidenceUploadStatus.rejected;
     return Tooltip(
       message: tip,
@@ -1827,12 +2097,18 @@ class _UploadStatusBadge extends StatelessWidget {
         onTap: failed ? onRetry : null,
         child: Container(
           padding: const EdgeInsets.all(2),
-          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
           child: evidence.isUploading
               ? SizedBox(
                   width: 13,
                   height: 13,
-                  child: CircularProgressIndicator(strokeWidth: 1.6, color: color),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.6,
+                    color: color,
+                  ),
                 )
               : Icon(icon, size: 13, color: color),
         ),

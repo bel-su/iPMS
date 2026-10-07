@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/config/env.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/network/api_exceptions.dart';
+import '../../profile/presentation/widgets/change_password_sheet.dart';
 import '../providers/auth_provider.dart';
 import '../providers/biometric_provider.dart';
 import 'widgets/server_settings_sheet.dart';
@@ -33,10 +35,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ref.read(biometricAuthStateProvider.notifier).clearStatus();
       // On success the app switches to the main screen, which offers to turn
       // on biometric sign-in.
-      await ref.read(authStateProvider.notifier).login(
-            _emailController.text.trim(),
-            _passwordController.text,
-          );
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+      await ref.read(authStateProvider.notifier).login(email, password);
+
+      // An administrator-set password has to be replaced before the app can
+      // be used: ask for the new one here, then sign in with it.
+      final error = ref.read(authStateProvider).error;
+      if (error is PasswordChangeRequiredException && mounted) {
+        final fresh = await showModalBottomSheet<String>(
+          context: context,
+          isScrollControlled: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          builder: (_) => ChangePasswordSheet(
+            forced: true,
+            currentPassword: password,
+            accessToken: error.accessToken,
+          ),
+        );
+        if (fresh != null && mounted) {
+          _passwordController.text = fresh;
+          await ref.read(authStateProvider.notifier).login(email, fresh);
+        }
+      }
     }
   }
 

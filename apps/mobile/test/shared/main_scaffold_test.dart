@@ -50,6 +50,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Account setting'), findsOneWidget);
+    expect(find.text('Security'), findsOneWidget);
   });
 }

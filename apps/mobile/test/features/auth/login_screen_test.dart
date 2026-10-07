@@ -23,6 +23,10 @@ class GatedIam implements HttpClientAdapter {
   Completer<void> loginGate = Completer<void>()..complete();
   int loginStatus = 200;
 
+  /// The account owes a password change until `/auth/change-password` is called.
+  bool mustChange = false;
+  RequestOptions? changeCall;
+
   @override
   Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
     ResponseBody json(int status, Object body) => ResponseBody.fromString(jsonEncode(body), status,
@@ -33,7 +37,16 @@ class GatedIam implements HttpClientAdapter {
         if (loginStatus != 200) {
           return json(loginStatus, {'error': {'code': 'UNAUTHENTICATED', 'message': 'Invalid email or password', 'correlationId': 'c'}});
         }
-        return json(200, {'accessToken': 'a', 'refreshToken': 'r', 'expiresIn': 900});
+        return json(200, {
+          'accessToken': 'a',
+          'refreshToken': 'r',
+          'expiresIn': 900,
+          if (mustChange) 'mustChangePassword': true,
+        });
+      case '/api/v1/auth/change-password':
+        changeCall = options;
+        mustChange = false;
+        return json(200, {'status': 'ok'});
       case '/api/v1/auth/me':
         return json(200, {'id': 'u-1', 'roles': ['FIELD_ENGINEER'], 'permissions': ['task.view']});
       case '/api/v1/users/me':
@@ -89,6 +102,45 @@ void main() {
     await tester.tap(find.text('Sign In'));
     await tester.pump();
   }
+
+  testWidgets('an account that owes a password change sets one in the app and is signed in', (tester) async {
+    iam.mustChange = true;
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+
+    // Real async, as in the wrong-password test: Dio does not deliver every
+    // response under the widget tester's fake clock.
+    await tester.enterText(find.byType(TextFormField).at(0), 'engineer@ipms.local');
+    await tester.enterText(find.byType(TextFormField).at(1), 'Temp-pass-1!');
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Sign In'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Still on sign-in, with the sheet asking for a new password; the current
+    // one was just typed, so it is not asked for again.
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.text('Set a new password'), findsOneWidget);
+    expect(find.text('Current password'), findsNothing);
+
+    await tester.enterText(find.widgetWithText(TextField, 'New password'), 'Fresh-pass-2!');
+    await tester.enterText(find.widgetWithText(TextField, 'Confirm new password'), 'Fresh-pass-2!');
+    await tester.pump();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Set password and sign in'));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // The change went out with the token sign-in returned and the typed password.
+    expect(iam.changeCall!.headers['Authorization'], 'Bearer a');
+    expect(iam.changeCall!.data, {'currentPassword': 'Temp-pass-1!', 'newPassword': 'Fresh-pass-2!'});
+    // Then it signed in with the new one.
+    expect(find.byType(MainScaffold), findsOneWidget);
+  });
 
   testWidgets('the sign-in page stays up while signing in, then opens the app without errors', (tester) async {
     iam.loginGate = Completer<void>();

@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/config/env.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/brand_mark.dart';
-import '../../auth/domain/models/auth_user.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/providers/biometric_provider.dart';
 import '../../projects/providers/project_providers.dart';
+import '../../map/providers/map_providers.dart';
+import '../../media/providers/evidence_upload_provider.dart';
+import '../../tasks/domain/models/task_evidence.dart';
+import '../../tasks/providers/evidence_provider.dart';
 import '../../tasks/providers/task_providers.dart';
+import 'widgets/change_password_sheet.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -64,206 +67,38 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  void _showAccountSettingsSheet(BuildContext context, AuthUser? user) {
-    showModalBottomSheet<void>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Account Details', style: AppTypography.headingSmall),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildInfoRow('Full Name', user?.displayName ?? 'Field Engineer'),
-              _buildInfoRow('Username', user?.username ?? 'engineer'),
-              _buildInfoRow('Assigned Role', user?.roleLabel ?? 'Field Operations'),
-              _buildInfoRow('User Identifier', user?.id ?? 'Local Session'),
-              _buildInfoRow('Secure Enclave', 'Hardware Keystore / EncryptedPrefs'),
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showEditProfileSheet(BuildContext context, WidgetRef ref, AuthUser? user) {
-    final nameController = TextEditingController(text: user?.displayName ?? '');
-    final emailController = TextEditingController(text: user?.email ?? '');
-    final codeController = TextEditingController(text: user?.employeeCode ?? '');
-
-    showModalBottomSheet<void>(
+  Future<void> _showChangePassword(BuildContext context, WidgetRef ref) async {
+    final changed = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 24,
-          right: 24,
-          top: 20,
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Edit Profile', style: AppTypography.headingSmall),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Full Name',
-                  hintText: 'e.g. Jane Doe',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email Address',
-                  hintText: 'user@company.com',
-                  prefixIcon: Icon(Icons.email_outlined),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: codeController,
-                decoration: const InputDecoration(
-                  labelText: 'Employee Badge Code',
-                  hintText: 'e.g. EMP-1042',
-                  prefixIcon: Icon(Icons.badge_outlined),
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.darkSlate,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    try {
-                      await ref.read(authStateProvider.notifier).updateProfile(
-                            fullName: nameController.text.trim(),
-                            email: emailController.text.trim(),
-                            employeeCode: codeController.text.trim(),
-                          );
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Profile updated successfully!'),
-                            backgroundColor: AppColors.statusCompletedText,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(e.toString()),
-                            backgroundColor: AppColors.statusBlockedText,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Save Profile Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                ),
-              ),
-              const SizedBox(height: 14),
-            ],
-          ),
-        ),
-      ),
+      builder: (_) => const ChangePasswordSheet(),
     );
-  }
-
-  void _showPrivacySecuritySheet(BuildContext context) {
-    showModalBottomSheet<void>(
+    if (changed == null || !context.mounted) return;
+    // The server ended every session when the password changed.
+    await showDialog<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Privacy & Security Policy', style: AppTypography.headingSmall),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildInfoRow('Authentication', 'JWT Bearer with Auto-Refresh'),
-              _buildInfoRow('Camera Evidence', 'Pure Canvas In-Memory Watermarking'),
-              _buildInfoRow('GPS Acquisition', 'High Accuracy Geolocator (Tamper Verified)'),
-              _buildInfoRow('Storage State', 'Stateless Client (No SQLite cache leakage)'),
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.darkSlate),
-            ),
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Password changed'),
+        content: const Text('Sign in again with your new password.'),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.darkSlate, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Sign in'),
           ),
         ],
       ),
     );
+    // Read before signing out: this screen is gone afterwards. Every session,
+    // including the biometric one, is already revoked.
+    final biometrics = ref.read(biometricAuthStateProvider.notifier);
+    await ref.read(authStateProvider.notifier).logout(purgeBiometrics: true);
+    await biometrics.checkBiometricStatus();
   }
 
   @override
@@ -374,7 +209,7 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
 
-            // Functional Security & Account Settings Container
+            // Security
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Card(
@@ -383,25 +218,10 @@ class ProfileScreen extends ConsumerWidget {
                   child: Column(
                     children: [
                       _buildSettingsTile(
-                        icon: Icons.edit_outlined,
-                        title: 'Edit Profile',
-                        trailingText: 'Update',
-                        onTap: () => _showEditProfileSheet(context, ref, user),
-                      ),
-                      const Divider(height: 1, color: AppColors.subtleDivider),
-                      _buildSettingsTile(
-                        icon: Icons.person_outline_rounded,
-                        title: 'Account setting',
-                        trailingText: 'View info',
-                        onTap: () => _showAccountSettingsSheet(context, user),
-                      ),
-                      const Divider(height: 1, color: AppColors.subtleDivider),
-                      _buildSettingsTile(
                         icon: Icons.shield_outlined,
-                        title: 'Privacy & Security',
-                        trailingText: 'Disabled',
-                        enabled: false,
-                        onTap: null,
+                        title: 'Security',
+                        trailingText: 'Change password',
+                        onTap: () => _showChangePassword(context, ref),
                       ),
                     ],
                   ),
@@ -411,53 +231,10 @@ class ProfileScreen extends ConsumerWidget {
 
             const SizedBox(height: 14),
 
-            // Gateway & Sync Info Card
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.cloud_done_outlined, size: 18, color: Color(0xFF2E7D32)),
-                              SizedBox(width: 8),
-                              Text(
-                                'API Gateway Connection',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.darkSlate),
-                              ),
-                            ],
-                          ),
-                          TextButton(
-                            style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
-                            onPressed: () {
-                              ref.invalidate(assignedTasksProvider);
-                              ref.invalidate(projectListProvider);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('All tasks and projects synchronized.'),
-                                  duration: Duration(seconds: 1),
-                                ),
-                              );
-                            },
-                            child: const Text('Sync Now', style: TextStyle(fontSize: 12)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Gateway: ${AppConfig.apiBaseUrl}',
-                        style: AppTypography.caption,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            // Sync
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: _SyncCard(),
             ),
 
             const SizedBox(height: 14),
@@ -592,6 +369,181 @@ class ProfileScreen extends ConsumerWidget {
         ],
       ),
       onTap: enabled ? onTap : null,
+    );
+  }
+}
+
+/// When the app last brought itself up to date, for the Sync card.
+class LastSyncedNotifier extends Notifier<DateTime?> {
+  @override
+  DateTime? build() => null;
+
+  void set(DateTime when) => state = when;
+}
+
+final lastSyncedProvider = NotifierProvider<LastSyncedNotifier, DateTime?>(LastSyncedNotifier.new);
+
+/// One button that brings the phone and the server level: it re-reads the work
+/// orders, projects and sites, and sends any photos still waiting to upload.
+class _SyncCard extends ConsumerStatefulWidget {
+  const _SyncCard();
+
+  @override
+  ConsumerState<_SyncCard> createState() => _SyncCardState();
+}
+
+class _SyncCardState extends ConsumerState<_SyncCard> {
+  bool _syncing = false;
+  String? _result;
+  bool _failed = false;
+
+  /// Photos on checklist items that have not reached the media bucket.
+  int _waiting() => ref
+      .read(taskEvidenceProvider)
+      .values
+      .expand((list) => list)
+      .where((e) =>
+          !e.isSubmitted &&
+          (e.checklistItemId ?? '').isNotEmpty &&
+          !e.isUploaded)
+      .length;
+
+  Future<void> _sync() async {
+    if (_syncing) return;
+    setState(() {
+      _syncing = true;
+      _result = null;
+      _failed = false;
+    });
+    try {
+      final before = _waiting();
+      // Photos first, so the work orders read afterwards reflect them.
+      final uploader = ref.read(evidenceUploaderProvider);
+      for (final taskId in ref.read(taskEvidenceProvider).keys.toList()) {
+        await uploader.uploadPending(taskId);
+      }
+      final stuck = _waiting();
+
+      ref.invalidate(taskDetailProvider);
+      ref.invalidate(projectListProvider);
+      ref.invalidate(mySitesProvider);
+      final _ = await ref.refresh(assignedTasksProvider.future);
+
+      ref.read(lastSyncedProvider.notifier).set(DateTime.now());
+      final sent = before - stuck;
+      setState(() {
+        _failed = stuck > 0;
+        _result = stuck > 0
+            ? '$stuck photo${stuck == 1 ? '' : 's'} could not be uploaded. Try again with a better connection.'
+            : sent > 0
+                ? 'Up to date. $sent photo${sent == 1 ? '' : 's'} uploaded.'
+                : 'Up to date.';
+      });
+    } catch (e) {
+      setState(() {
+        _failed = true;
+        _result = e.toString();
+      });
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  String _ago(DateTime when) {
+    final d = DateTime.now().difference(when);
+    if (d.inMinutes < 1) return 'just now';
+    if (d.inHours < 1) return '${d.inMinutes} min ago';
+    if (d.inDays < 1) return '${d.inHours} h ago';
+    return '${d.inDays} d ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final last = ref.watch(lastSyncedProvider);
+    final waiting = ref.watch(taskEvidenceProvider.select(
+      (all) => all.values
+          .expand((list) => list)
+          .where((TaskEvidence e) => !e.isSubmitted && (e.checklistItemId ?? '').isNotEmpty && !e.isUploaded)
+          .length,
+    ));
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLavenderLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.sync_rounded, size: 22, color: AppColors.darkSlate),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Sync', style: AppTypography.titleMedium),
+                      const SizedBox(height: 2),
+                      Text(
+                        waiting > 0
+                            ? '$waiting photo${waiting == 1 ? '' : 's'} waiting to upload'
+                            : last == null
+                                ? 'Tasks, projects and photos'
+                                : 'Last synced ${_ago(last)}',
+                        style: AppTypography.caption,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.darkSlate,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _syncing ? null : _sync,
+                icon: _syncing
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.sync_rounded, size: 18),
+                label: Text(_syncing ? 'Syncing…' : 'Sync now', style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ),
+            if (_result != null) ...[
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    _failed ? Icons.error_outline : Icons.check_circle_outline,
+                    size: 16,
+                    color: _failed ? AppColors.statusBlockedText : const Color(0xFF2E7D32),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _result!,
+                      style: AppTypography.caption.copyWith(
+                        color: _failed ? AppColors.statusBlockedText : AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

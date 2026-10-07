@@ -36,7 +36,7 @@ class AuthRepository {
       // An account that owes a password change gets a token with no
       // permissions; nothing in the app would work with it.
       if (data['mustChangePassword'] == true) {
-        throw const ApiException(message: mustChangePasswordMessage, errorCode: 'MUST_CHANGE_PASSWORD');
+        throw PasswordChangeRequiredException(accessToken: data['accessToken'] as String);
       }
 
       await tokenStorage.saveTokens(
@@ -165,10 +165,32 @@ class AuthRepository {
   }
 
   static const String mustChangePasswordMessage =
-      'You need to set a new password before using the app. Change it on the Axiom web portal, then sign in here.';
+      'You need to set a new password before using the app.';
 
   static const String biometricSessionExpired =
       'Your biometric sign-in has expired. Sign in with your password once to turn it back on.';
+
+  /// Changes the signed-in user's own password. The server ends every session
+  /// of the account when it succeeds, this one included, so the caller must
+  /// sign in again afterwards.
+  ///
+  /// A user who owes a change has no saved session yet; they pass the token
+  /// sign-in gave them as [accessToken], which is sent for this call only.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    String? accessToken,
+  }) async {
+    try {
+      await apiClient.dio.post<void>(
+        ApiEndpoints.changePassword,
+        data: {'currentPassword': currentPassword, 'newPassword': newPassword},
+        options: accessToken == null ? null : Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, fallbackMessage: 'Could not change the password.');
+    }
+  }
 
   Future<AuthUser> updateProfile({
     String? fullName,

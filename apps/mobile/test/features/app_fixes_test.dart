@@ -181,7 +181,9 @@ void main() {
 
     await expectLater(
       repo.login(email: 'new@ipms.local', password: 'temporary-pass'),
-      throwsA(isA<ApiException>().having((e) => e.message, 'message', AuthRepository.mustChangePasswordMessage)),
+      throwsA(isA<PasswordChangeRequiredException>()
+          .having((e) => e.message, 'message', AuthRepository.mustChangePasswordMessage)
+          .having((e) => e.accessToken, 'accessToken', 'a')),
     );
     expect(await storage.getAccessToken(), isNull);
   });
