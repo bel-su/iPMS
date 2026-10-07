@@ -122,11 +122,13 @@ class ApprovalEntry {
     required this.action,
     required this.at,
     required this.revision,
+    this.actorId = '',
     this.comment,
     this.amount,
   });
 
   factory ApprovalEntry.fromJson(Map<String, dynamic> json) => ApprovalEntry(
+        actorId: json['actorId'] as String? ?? '',
         step: json['step'] as String? ?? 'REQUESTER',
         action: json['action'] as String? ?? '',
         at: DateTime.tryParse(json['at']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
@@ -139,6 +141,7 @@ class ApprovalEntry {
   final String action;
   final DateTime at;
   final int revision;
+  final String actorId;
   final String? comment;
   final String? amount;
 
@@ -170,9 +173,11 @@ class RequestPayment {
     required this.reference,
     required this.paidOn,
     required this.amount,
+    this.recordedBy = '',
   });
 
   factory RequestPayment.fromJson(Map<String, dynamic> json) => RequestPayment(
+        recordedBy: json['recordedBy'] as String? ?? '',
         kind: json['kind'] as String? ?? 'PAYOUT',
         mode: json['mode'] as String? ?? '',
         reference: json['reference'] as String? ?? '',
@@ -185,6 +190,7 @@ class RequestPayment {
   final String reference;
   final DateTime paidOn;
   final String amount;
+  final String recordedBy;
 
   bool get isCashReturn => kind == 'CASH_RETURN';
 

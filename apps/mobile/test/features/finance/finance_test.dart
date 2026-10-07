@@ -10,6 +10,7 @@ import 'package:mobile/core/security/token_storage.dart';
 import 'package:mobile/features/auth/domain/models/auth_user.dart';
 import 'package:mobile/features/auth/providers/auth_provider.dart';
 import 'package:mobile/features/finance/domain/finance_models.dart';
+import 'package:mobile/features/finance/domain/finance_rules.dart';
 import 'package:mobile/features/finance/presentation/finance_screen.dart';
 import 'package:mobile/features/finance/presentation/request_detail_screen.dart';
 import 'package:mobile/features/finance/presentation/request_form_screen.dart';
@@ -17,6 +18,7 @@ import 'package:mobile/features/finance/presentation/request_form_screen.dart';
 class _Finance implements HttpClientAdapter {
   final List<RequestOptions> calls = [];
   List<Map<String, dynamic>> list = [];
+  List<Map<String, dynamic>> awaiting = [];
   Map<String, Map<String, dynamic>> byId = {};
 
   @override
@@ -26,7 +28,8 @@ class _Finance implements HttpClientAdapter {
         headers: {Headers.contentTypeHeader: [Headers.jsonContentType]});
     final path = options.path;
     if (path == '/api/v1/finance/requests' && options.method == 'GET') {
-      return json(200, {'items': list, 'total': list.length, 'page': 1, 'limit': 100});
+      final rows = options.queryParameters['view'] == 'awaiting' ? awaiting : list;
+      return json(200, {'items': rows, 'total': rows.length, 'page': 1, 'limit': 100});
     }
     if (path == '/api/v1/finance/requests' && options.method == 'POST') {
       return json(201, {'id': 'new-1', 'number': 'ADV-2026-0009', 'kind': 'ADVANCE', 'status': 'DRAFT'});
@@ -42,7 +45,15 @@ class _Finance implements HttpClientAdapter {
         {'id': 'p-1', 'code': 'KOS', 'name': 'Koshi rollout', 'status': 'ACTIVE'},
       ]);
     }
-    if (path.endsWith('/submit') || path.endsWith('/cancel')) return json(200, {});
+    if (path == '/api/v1/users/directory') {
+      return json(200, [
+        {'id': 'u-1', 'fullName': 'Field Engineer'},
+        {'id': 'u-2', 'fullName': 'Sita Sharma'},
+      ]);
+    }
+    if (options.method == 'POST' && ['/submit', '/cancel', '/approve', '/return', '/reject', '/pay', '/cash-return'].any(path.endsWith)) {
+      return json(200, {});
+    }
     final id = path.split('/').last;
     if (byId.containsKey(id)) return json(200, byId[id]!);
     return json(404, {});
@@ -242,10 +253,9 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, 'Amount (NPR)'), '25000.50');
     await tester.pump();
 
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Submit'));
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    });
+    await tester.tap(find.text('Submit'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
     await tester.pump();
 
     final create = server.calls.firstWhere((c) => c.method == 'POST' && c.path == '/api/v1/finance/requests');
@@ -265,5 +275,180 @@ void main() {
     expect(tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Submit')).onPressed, isNull);
     expect(find.text('Invoice 1'), findsOneWidget);
     expect(find.text('Total NPR 0.00'), findsOneWidget);
+  });
+
+  group('approvals and payments', () {
+    const pm = AuthUser(id: 'u-pm', email: 'pm@ipms.local', permissions: ['finance_request.view', 'finance_request.view_all', 'finance_approval.pm']);
+    const director = AuthUser(id: 'u-dir', email: 'd@ipms.local', permissions: ['finance_request.view', 'finance_request.view_all', 'finance_approval.director']);
+    const finance = AuthUser(id: 'u-fin', email: 'f@ipms.local', permissions: ['finance_request.view', 'finance_request.view_all', 'finance_payment.record']);
+
+    FinanceRequest req(String status, {String requester = 'u-1', String kind = 'ADVANCE', Map<String, dynamic>? extra}) =>
+        FinanceRequest.fromJson(request('abc', status, kind: kind, extra: {'requesterId': requester, ...?extra}));
+
+    test('the right person is offered the right step', () {
+      List<FinanceAction> offered(FinanceRequest r, AuthUser u) =>
+          availableActions(r, FinanceViewer(id: u.id, permissions: u.permissions));
+      const decide = [FinanceAction.approve, FinanceAction.returnToRequester, FinanceAction.reject];
+
+      expect(offered(req('PENDING_PM'), pm), decide);
+      expect(offered(req('PENDING_PM'), director), isEmpty);
+      expect(offered(req('PENDING_DIRECTOR'), director), decide);
+      expect(offered(req('PENDING_FINANCE'), finance), [FinanceAction.pay, FinanceAction.returnToRequester, FinanceAction.reject]);
+      expect(offered(req('PENDING_PM', requester: 'u-2'), _engineer), isEmpty);
+    });
+
+    test('nobody acts on two steps of one revision, and nobody on their own request', () {
+      final approvedByDirector = req('PENDING_FINANCE', extra: {
+        'actions': [
+          {'step': 'DIRECTOR', 'action': 'APPROVED', 'actorId': 'u-fin', 'revision': 1, 'at': '2026-10-02T05:00:00Z'},
+        ],
+      });
+      // Finance who also approved earlier is refused the payment step.
+      expect(availableActions(approvedByDirector, FinanceViewer(id: 'u-fin', permissions: finance.permissions)), isEmpty);
+      // An approver whose own request it is gets the requester's buttons only.
+      expect(
+        availableActions(req('PENDING_PM', requester: 'u-pm'), FinanceViewer(id: 'u-pm', permissions: pm.permissions)),
+        [FinanceAction.cancel],
+      );
+    });
+
+    test('finance can take returned cash on an open paid advance only', () {
+      final open = req('PAID', extra: {'balance': {'status': 'PAID', 'outstanding': '100.00'}});
+      final closed = req('PAID', extra: {'balance': {'status': 'CLOSED', 'outstanding': '0.00'}});
+      final viewer = FinanceViewer(id: 'u-fin', permissions: finance.permissions);
+      expect(availableActions(open, viewer), [FinanceAction.cashReturn]);
+      expect(availableActions(closed, viewer), isEmpty);
+    });
+
+    testWidgets('an approver sees a queue and can switch to it', (tester) async {
+      server.awaiting = [request('aa', 'PENDING_PM', extra: {'requesterId': 'u-2'})];
+      await tester.pumpWidget(app(const FinanceScreen(), user: pm));
+      await settle(tester);
+
+      expect(find.widgetWithText(ButtonSegment<bool>, 'Approvals'), findsNothing);
+      await tester.tap(find.textContaining('Approvals'));
+      await tester.pump();
+      await settle(tester);
+
+      expect(find.text('Requests waiting for your decision'), findsOneWidget);
+      expect(find.textContaining('Sita Sharma'), findsOneWidget);
+      expect(find.text('New'), findsNothing);
+    });
+
+    testWidgets('an engineer has no approvals queue', (tester) async {
+      await tester.pumpWidget(app(const FinanceScreen()));
+      await settle(tester);
+      expect(find.textContaining('Approvals'), findsNothing);
+    });
+
+    testWidgets('the director approves with a lower amount', (tester) async {
+      server.byId = {'abc': request('abc', 'PENDING_DIRECTOR', extra: {'requesterId': 'u-2'})};
+      await tester.pumpWidget(app(const RequestDetailScreen(requestId: 'abc'), user: director));
+      await settle(tester);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Approve'));
+      await tester.pumpAndSettle();
+
+      // More than asked is refused before it is sent.
+      await tester.enterText(find.widgetWithText(TextField, 'Approved amount (NPR)'), '60000');
+      await tester.pump();
+      expect(find.text('Cannot be more than NPR 50,000.00'), findsOneWidget);
+      expect(tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Approve').last).onPressed, isNull);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Approved amount (NPR)'), '45000');
+      await tester.enterText(find.widgetWithText(TextField, 'Note (optional)'), 'Within budget');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Approve').last);
+      await tester.pumpAndSettle();
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+      await tester.pump();
+
+      final call = server.calls.firstWhere((c) => c.path == '/api/v1/finance/requests/abc/approve');
+      expect(call.data, {'amount': '45000', 'comment': 'Within budget'});
+    });
+
+    testWidgets('the project manager approves without an amount field', (tester) async {
+      server.byId = {'abc': request('abc', 'PENDING_PM', extra: {'requesterId': 'u-2'})};
+      await tester.pumpWidget(app(const RequestDetailScreen(requestId: 'abc'), user: pm));
+      await settle(tester);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Approve'));
+      await tester.pumpAndSettle();
+      expect(find.text('Approved amount (NPR)'), findsNothing);
+    });
+
+    testWidgets('returning and rejecting both need a reason', (tester) async {
+      server.byId = {'abc': request('abc', 'PENDING_PM', extra: {'requesterId': 'u-2'})};
+      await tester.pumpWidget(app(const RequestDetailScreen(requestId: 'abc'), user: pm));
+      await settle(tester);
+
+      await tester.tap(find.text('Return to requester'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Return to requester')).onPressed, isNull);
+      await tester.enterText(find.byType(TextField), 'Attach the quotation');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Return to requester'));
+      await tester.pumpAndSettle();
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+      await tester.pump();
+
+      final call = server.calls.firstWhere((c) => c.path == '/api/v1/finance/requests/abc/return');
+      expect(call.data, {'comment': 'Attach the quotation'});
+    });
+
+    testWidgets('finance records a payment with its details', (tester) async {
+      server.byId = {'abc': request('abc', 'PENDING_FINANCE', extra: {'requesterId': 'u-2', 'approvedAmount': '45000.00'})};
+      await tester.pumpWidget(app(const RequestDetailScreen(requestId: 'abc'), user: finance));
+      await settle(tester);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Record payment'));
+      await tester.pumpAndSettle();
+
+      // Details are required for a plain payment.
+      expect(tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Record payment').last).onPressed, isNull);
+      await tester.tap(find.text('How was it paid?'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bank transfer').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextField, 'Reference'), 'TXN-1001');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Record payment').last);
+      await tester.pumpAndSettle();
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+      await tester.pump();
+
+      final call = server.calls.firstWhere((c) => c.path == '/api/v1/finance/requests/abc/pay');
+      final data = call.data as Map<String, dynamic>;
+      expect(data['mode'], 'BANK_TRANSFER');
+      expect(data['reference'], 'TXN-1001');
+      expect(data['paidOn'], matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')));
+    });
+
+    testWidgets('finance records returned cash against an advance', (tester) async {
+      server.byId = {
+        'abc': request('abc', 'PAID', extra: {
+          'requesterId': 'u-2',
+          'balance': {'paid': '50000.00', 'applied': '0.00', 'cashReturned': '0.00', 'outstanding': '50000.00', 'status': 'PAID'},
+        }),
+      };
+      await tester.pumpWidget(app(const RequestDetailScreen(requestId: 'abc'), user: finance));
+      await settle(tester);
+      await tester.tap(find.text('Record returned cash'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextField, 'Amount returned (NPR)'), '1500.50');
+      await tester.tap(find.text('How was it paid?'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cash').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextField, 'Reference'), 'RCPT-7');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Record cash return'));
+      await tester.pumpAndSettle();
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+      await tester.pump();
+
+      final call = server.calls.firstWhere((c) => c.path == '/api/v1/finance/advances/abc/cash-return');
+      final data = call.data as Map<String, dynamic>;
+      expect(data['amount'], '1500.50');
+      expect(data['mode'], 'CASH');
+      expect(data['reference'], 'RCPT-7');
+    });
   });
 }

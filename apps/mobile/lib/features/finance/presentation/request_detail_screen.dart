@@ -6,7 +6,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../domain/finance_models.dart';
+import '../domain/finance_rules.dart';
 import '../providers/finance_providers.dart';
+import 'finance_action_sheets.dart';
 import 'finance_widgets.dart';
 import 'request_form_screen.dart';
 
@@ -34,6 +36,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   void _refresh() {
     ref.invalidate(financeRequestProvider(widget.requestId));
     ref.invalidate(myFinanceRequestsProvider);
+    ref.invalidate(awaitingFinanceRequestsProvider);
   }
 
   Future<void> _run(Future<void> Function() action, String done) async {
@@ -87,8 +90,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userId = ref.watch(authStateProvider).value?.id ?? '';
-    final canSettle = ref.watch(authStateProvider).value?.can('finance_settlement.submit') ?? false;
+    final user = ref.watch(authStateProvider).value;
+    final viewer = FinanceViewer(id: user?.id ?? '', permissions: user?.permissions ?? const []);
+    final names = ref.watch(financeUserNamesProvider).value ?? const <String, String>{};
+    String who(String id) => (names[id] ?? '').isNotEmpty ? names[id]! : (id.length > 8 ? '${id.substring(0, 8)}…' : id);
     final async = ref.watch(financeRequestProvider(widget.requestId));
 
     return Scaffold(
@@ -136,6 +141,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               _section('Summary', [
                 FinanceInfoRow('Project', [r.projectCode, r.projectName].whereType<String>().join(' — ')),
                 FinanceInfoRow('Category', r.categoryName ?? '—'),
+                FinanceInfoRow('Requested by', who(r.requesterId)),
                 FinanceInfoRow('Requested', formatMoney(r.requestedAmount), bold: true),
                 if (r.approvedAmount != null) FinanceInfoRow('Approved', formatMoney(r.approvedAmount), bold: true),
                 if (r.appliedAmount != null) FinanceInfoRow('Applied to advance', formatMoney(r.appliedAmount)),
@@ -177,7 +183,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 _section('Payments', [
                   for (final p in r.payments)
                     FinanceInfoRow(
-                      '${p.isCashReturn ? 'Cash returned' : 'Paid'} ${DateFormat('d MMM yyyy').format(p.paidOn)} • ${p.modeLabel}',
+                      '${p.isCashReturn ? 'Cash returned' : 'Paid'} ${DateFormat('d MMM yyyy').format(p.paidOn)} • ${p.modeLabel}'
+                      '${p.reference.isEmpty ? '' : ' • ${p.reference}'}'
+                      '${p.recordedBy.isEmpty ? '' : ' • by ${who(p.recordedBy)}'}',
                       formatMoney(p.amount),
                     ),
                 ]),
@@ -190,7 +198,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(e.description, style: AppTypography.titleMedium),
-                          Text(DateFormat('d MMM yyyy, h:mm a').format(e.at), style: AppTypography.caption),
+                          Text(
+                            '${e.actorId.isEmpty ? '' : 'by ${who(e.actorId)} • '}${DateFormat('d MMM yyyy, h:mm a').format(e.at)}'
+                            '${e.amount == null ? '' : ' • ${formatMoney(e.amount)}'}',
+                            style: AppTypography.caption,
+                          ),
                           if ((e.comment ?? '').isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(top: 2),
@@ -201,7 +213,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     ),
                 ]),
               const SizedBox(height: 8),
-              ..._actions(r, userId, canSettle),
+              ..._actions(r, viewer),
             ],
           ),
         ),
@@ -209,7 +221,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     );
   }
 
-  List<Widget> _actions(FinanceRequest r, String userId, bool canSettle) {
+  List<Widget> _actions(FinanceRequest r, FinanceViewer viewer) {
     final primary = ElevatedButton.styleFrom(
       backgroundColor: AppColors.darkSlate,
       foregroundColor: Colors.white,
@@ -220,46 +232,143 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       minimumSize: const Size.fromHeight(48),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
-    final gap = const SizedBox(height: 10);
+    final danger = secondary.copyWith(foregroundColor: const WidgetStatePropertyAll(AppColors.statusBlockedText));
+    final repo = ref.read(financeRepositoryProvider);
+    const gap = SizedBox(height: 10);
+    final isSettlement = r.kind == RequestKind.settlement;
 
-    if (r.isEditable(userId)) {
-      return [
-        ElevatedButton.icon(
-          style: primary,
-          onPressed: _busy ? null : () => _run(() => ref.read(financeRepositoryProvider).submit(r.id), 'Request submitted.'),
-          icon: const Icon(Icons.send_rounded, size: 18),
-          label: Text(r.status == 'RETURNED' ? 'Resubmit' : 'Submit', style: const TextStyle(fontWeight: FontWeight.w700)),
-        ),
-        gap,
-        OutlinedButton.icon(
-          style: secondary,
-          onPressed: _busy ? null : () => _open(RequestFormScreen(kind: r.kind, initial: r, advance: null)),
-          icon: const Icon(Icons.edit_outlined, size: 18),
-          label: const Text('Edit'),
-        ),
-      ];
+    Widget button(FinanceAction a) {
+      switch (a) {
+        case FinanceAction.submit:
+          return ElevatedButton.icon(
+            style: primary,
+            onPressed: _busy ? null : () => _run(() => repo.submit(r.id), 'Request submitted.'),
+            icon: const Icon(Icons.send_rounded, size: 18),
+            label: Text(r.status == 'RETURNED' ? 'Resubmit' : 'Submit', style: const TextStyle(fontWeight: FontWeight.w700)),
+          );
+        case FinanceAction.edit:
+          return OutlinedButton.icon(
+            style: secondary,
+            onPressed: _busy ? null : () => _open(RequestFormScreen(kind: r.kind, initial: r)),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Edit'),
+          );
+        case FinanceAction.cancel:
+          return OutlinedButton.icon(
+            style: danger,
+            onPressed: _busy ? null : () => _cancel(r),
+            icon: const Icon(Icons.cancel_outlined, size: 18),
+            label: const Text('Cancel request'),
+          );
+        case FinanceAction.settle:
+          return ElevatedButton.icon(
+            style: primary,
+            onPressed: _busy ? null : () => _open(RequestFormScreen(kind: RequestKind.settlement, advance: r)),
+            icon: const Icon(Icons.receipt_long_outlined, size: 18),
+            label: const Text('Settle with invoices', style: TextStyle(fontWeight: FontWeight.w700)),
+          );
+        case FinanceAction.approve:
+          return ElevatedButton.icon(
+            style: primary,
+            onPressed: _busy
+                ? null
+                : () async {
+                    final choice = await askApproval(context, r, setsAmount: r.status == 'PENDING_DIRECTOR');
+                    if (choice == null) return;
+                    await _run(
+                      () => repo.approve(r.id, amount: choice.amount, comment: choice.comment),
+                      'Approved.',
+                    );
+                  },
+            icon: const Icon(Icons.check_circle_outline, size: 18),
+            label: const Text('Approve', style: TextStyle(fontWeight: FontWeight.w700)),
+          );
+        case FinanceAction.pay:
+          return ElevatedButton.icon(
+            style: primary,
+            onPressed: _busy
+                ? null
+                : () async {
+                    final details = await askPaymentDetails(
+                      context,
+                      title: isSettlement ? 'Settle ${r.number}' : 'Record payment',
+                      subtitle: 'Approved amount ${formatMoney(r.approvedAmount ?? r.requestedAmount)}.'
+                          '${isSettlement ? ' Payment details are needed only if money is paid out.' : ''}',
+                      button: isSettlement ? 'Confirm settlement' : 'Record payment',
+                      detailsOptional: isSettlement,
+                    );
+                    if (details == null) return;
+                    await _run(() => repo.pay(r.id, details), isSettlement ? 'Settled.' : 'Payment recorded.');
+                  },
+            icon: const Icon(Icons.payments_outlined, size: 18),
+            label: Text(isSettlement ? 'Settle' : 'Record payment', style: const TextStyle(fontWeight: FontWeight.w700)),
+          );
+        case FinanceAction.cashReturn:
+          return OutlinedButton.icon(
+            style: secondary,
+            onPressed: _busy
+                ? null
+                : () async {
+                    final details = await askPaymentDetails(
+                      context,
+                      title: 'Record returned cash',
+                      subtitle: 'Outstanding ${formatMoney(r.balance?.outstanding)}.',
+                      button: 'Record cash return',
+                      withAmount: true,
+                    );
+                    if (details == null) return;
+                    await _run(() => repo.returnCash(r.id, details), 'Cash return recorded.');
+                  },
+            icon: const Icon(Icons.undo_rounded, size: 18),
+            label: const Text('Record returned cash'),
+          );
+        case FinanceAction.returnToRequester:
+          return OutlinedButton.icon(
+            style: secondary,
+            onPressed: _busy
+                ? null
+                : () async {
+                    final reason = await askForReason(
+                      context,
+                      title: 'Return to requester',
+                      hint: 'Why? The requester will see this.',
+                      button: 'Return to requester',
+                    );
+                    if (reason == null) return;
+                    await _run(() => repo.returnToRequester(r.id, reason), 'Returned to the requester.');
+                  },
+            icon: const Icon(Icons.reply_rounded, size: 18),
+            label: const Text('Return to requester'),
+          );
+        case FinanceAction.reject:
+          return OutlinedButton.icon(
+            style: danger,
+            onPressed: _busy
+                ? null
+                : () async {
+                    final reason = await askForReason(
+                      context,
+                      title: 'Reject ${r.number}',
+                      hint: 'Why? This ends the request.',
+                      button: 'Reject',
+                      destructive: true,
+                    );
+                    if (reason == null) return;
+                    await _run(() => repo.reject(r.id, reason), 'Rejected.');
+                  },
+            icon: const Icon(Icons.block_rounded, size: 18),
+            label: const Text('Reject'),
+          );
+      }
     }
-    if (r.canCancel(userId)) {
-      return [
-        OutlinedButton.icon(
-          style: secondary.copyWith(foregroundColor: const WidgetStatePropertyAll(AppColors.statusBlockedText)),
-          onPressed: _busy ? null : () => _cancel(r),
-          icon: const Icon(Icons.cancel_outlined, size: 18),
-          label: const Text('Cancel request'),
-        ),
-      ];
-    }
-    if (r.requesterId == userId && r.canSettle && canSettle) {
-      return [
-        ElevatedButton.icon(
-          style: primary,
-          onPressed: _busy ? null : () => _open(RequestFormScreen(kind: RequestKind.settlement, advance: r)),
-          icon: const Icon(Icons.receipt_long_outlined, size: 18),
-          label: const Text('Settle with invoices', style: TextStyle(fontWeight: FontWeight.w700)),
-        ),
-      ];
-    }
-    return const [];
+
+    final actions = availableActions(r, viewer);
+    return [
+      for (var i = 0; i < actions.length; i++) ...[
+        if (i > 0) gap,
+        button(actions[i]),
+      ],
+    ];
   }
 
   Widget _banner(String text, Color bg, Color fg) => Container(

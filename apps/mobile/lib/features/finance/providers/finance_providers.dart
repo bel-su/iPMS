@@ -13,6 +13,16 @@ final myFinanceRequestsProvider = FutureProvider<List<FinanceRequest>>((ref) {
   return ref.watch(financeRepositoryProvider).myRequests();
 });
 
+/// Other people's requests waiting on the signed-in user.
+final awaitingFinanceRequestsProvider = FutureProvider<List<FinanceRequest>>((ref) {
+  return ref.watch(financeRepositoryProvider).awaitingMe();
+});
+
+/// Names by user id, for history and requester lines.
+final financeUserNamesProvider = FutureProvider<Map<String, String>>((ref) {
+  return ref.watch(financeRepositoryProvider).userNames();
+});
+
 final financeRequestProvider = FutureProvider.family<FinanceRequest, String>((ref, id) {
   return ref.watch(financeRepositoryProvider).getRequest(id);
 });

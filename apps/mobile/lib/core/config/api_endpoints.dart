@@ -37,6 +37,8 @@ class ApiEndpoints {
   static String financeRequest(String id) => '/api/v1/finance/requests/$id';
   static String financeSubmit(String id) => '/api/v1/finance/requests/$id/submit';
   static String financeCancel(String id) => '/api/v1/finance/requests/$id/cancel';
+  static String financeAction(String id, String verb) => '/api/v1/finance/requests/$id/$verb';
+  static String financeCashReturn(String advanceId) => '/api/v1/finance/advances/$advanceId/cash-return';
   static const String financeCategories = '/api/v1/finance/categories';
 
   /// Requests that must never carry (or refresh) an access token.

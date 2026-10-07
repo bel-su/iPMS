@@ -12,11 +12,17 @@ class FinanceRepository {
 
   final ApiClient apiClient;
 
-  Future<List<FinanceRequest>> myRequests({String? status}) async {
+  Future<List<FinanceRequest>> myRequests({String? status}) => _list('mine', status: status);
+
+  /// Other people's requests waiting for the signed-in user's approval or
+  /// payment. Empty for someone who approves nothing.
+  Future<List<FinanceRequest>> awaitingMe() => _list('awaiting');
+
+  Future<List<FinanceRequest>> _list(String view, {String? status}) async {
     try {
       final response = await apiClient.dio.get<Map<String, dynamic>>(
         ApiEndpoints.financeRequests,
-        queryParameters: {'view': 'mine', 'limit': 100, 'status': ?status},
+        queryParameters: {'view': view, 'limit': 100, 'status': ?status},
       );
       return (response.data?['items'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
@@ -74,6 +80,59 @@ class FinanceRepository {
       await apiClient.dio.post<void>(ApiEndpoints.financeSubmit(id), data: const <String, dynamic>{});
     } on DioException catch (e) {
       throw ApiException.fromDio(e, fallbackMessage: 'Could not submit the request.');
+    }
+  }
+
+  /// Approves the request at the caller's step. Only the Director may set an
+  /// [amount] (at most the requested one).
+  Future<void> approve(String id, {String? amount, String? comment}) => _act(
+        ApiEndpoints.financeAction(id, 'approve'),
+        {
+          if (amount != null && amount.trim().isNotEmpty) 'amount': amount.trim(),
+          if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim(),
+        },
+        'Could not approve the request.',
+      );
+
+  Future<void> returnToRequester(String id, String comment) => _act(
+        ApiEndpoints.financeAction(id, 'return'),
+        {'comment': comment.trim()},
+        'Could not return the request.',
+      );
+
+  Future<void> reject(String id, String comment) => _act(
+        ApiEndpoints.financeAction(id, 'reject'),
+        {'comment': comment.trim()},
+        'Could not reject the request.',
+      );
+
+  /// Records the payment of an approved request. A settlement with nothing to
+  /// pay out needs no details.
+  Future<void> pay(String id, Map<String, dynamic> details) =>
+      _act(ApiEndpoints.financeAction(id, 'pay'), details, 'Could not record the payment.');
+
+  /// Records cash an engineer handed back against a paid advance.
+  Future<void> returnCash(String advanceId, Map<String, dynamic> details) =>
+      _act(ApiEndpoints.financeCashReturn(advanceId), details, 'Could not record the cash return.');
+
+  /// Display names by user id, so history can say who did what.
+  Future<Map<String, String>> userNames() async {
+    try {
+      final response = await apiClient.dio.get<List<dynamic>>(ApiEndpoints.userDirectory);
+      return {
+        for (final row in response.data ?? const <dynamic>[])
+          if (row is Map && row['id'] != null) row['id'] as String: (row['fullName'] as String?) ?? '',
+      };
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  Future<void> _act(String path, Map<String, dynamic> body, String fallback) async {
+    try {
+      await apiClient.dio.post<void>(path, data: body);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, fallbackMessage: fallback);
     }
   }
 

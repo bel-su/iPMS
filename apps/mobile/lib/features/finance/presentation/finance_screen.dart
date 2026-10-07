@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../domain/finance_models.dart';
+import '../domain/finance_rules.dart';
 import '../providers/finance_providers.dart';
 import 'finance_widgets.dart';
 import 'request_detail_screen.dart';
@@ -29,6 +30,9 @@ class FinanceScreen extends ConsumerStatefulWidget {
 
 class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   String _filter = 'All';
+
+  /// Whether the list shows other people's requests waiting on me.
+  bool _approvals = false;
 
   Future<void> _newRequest() async {
     final kind = await showModalBottomSheet<String>(
@@ -77,16 +81,21 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).value;
-    final requests = ref.watch(myFinanceRequestsProvider);
-    final canView = user?.can('finance_request.view') ?? false;
-    final canCreate = user?.can('finance_request.create') ?? false;
+    final viewer = FinanceViewer(id: user?.id ?? '', permissions: user?.permissions ?? const []);
+    final showApprovals = _approvals && viewer.hasApprovals;
+    final requests = ref.watch(showApprovals ? awaitingFinanceRequestsProvider : myFinanceRequestsProvider);
+    final names = ref.watch(financeUserNamesProvider).value ?? const <String, String>{};
+    final canView = viewer.can('finance_request.view');
+    final canCreate = viewer.raisesRequests;
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: () => ref.refresh(myFinanceRequestsProvider.future).then((_) {}, onError: (_) {}),
+          onRefresh: () => ref
+              .refresh((showApprovals ? awaitingFinanceRequestsProvider : myFinanceRequestsProvider).future)
+              .then((_) {}, onError: (_) {}),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
@@ -101,11 +110,16 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                           children: [
                             Text('Finance', style: AppTypography.headingMedium),
                             const SizedBox(height: 2),
-                            Text('Your advances, settlements and reimbursements', style: AppTypography.bodySmall),
+                            Text(
+                              showApprovals
+                                  ? 'Requests waiting for your decision'
+                                  : 'Your advances, settlements and reimbursements',
+                              style: AppTypography.bodySmall,
+                            ),
                           ],
                         ),
                       ),
-                      if (canCreate)
+                      if (canCreate && !showApprovals)
                         FilledButton.icon(
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.darkSlate,
@@ -130,6 +144,29 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                   ),
                 )
               else ...[
+                if (viewer.hasApprovals)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                      child: SegmentedButton<bool>(
+                        showSelectedIcon: false,
+                        segments: [
+                          const ButtonSegment(value: false, label: Text('My requests')),
+                          ButtonSegment(
+                            value: true,
+                            label: Text(
+                              'Approvals${(ref.watch(awaitingFinanceRequestsProvider).value?.length ?? 0) > 0 ? ' (${ref.watch(awaitingFinanceRequestsProvider).value!.length})' : ''}',
+                            ),
+                          ),
+                        ],
+                        selected: {_approvals},
+                        onSelectionChanged: (s) => setState(() {
+                          _approvals = s.first;
+                          _filter = 'All';
+                        }),
+                      ),
+                    ),
+                  ),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.only(top: 14),
@@ -173,7 +210,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                       title: 'Could not load your requests',
                       message: e.toString(),
                       action: TextButton(
-                        onPressed: () => ref.invalidate(myFinanceRequestsProvider),
+                        onPressed: () => ref.invalidate(showApprovals ? awaitingFinanceRequestsProvider : myFinanceRequestsProvider),
                         child: const Text('Retry'),
                       ),
                     ),
@@ -186,9 +223,13 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                         hasScrollBody: false,
                         child: _Notice(
                           icon: Icons.account_balance_wallet_outlined,
-                          title: all.isEmpty ? 'No requests yet' : 'Nothing here',
+                          title: all.isEmpty ? (showApprovals ? 'Nothing is waiting for you' : 'No requests yet') : 'Nothing here',
                           message: all.isEmpty
-                              ? (canCreate ? 'Tap New to raise an advance or a reimbursement.' : 'Requests you raise will show here.')
+                              ? (showApprovals
+                                  ? 'Requests that need your approval or payment will show here.'
+                                  : canCreate
+                                      ? 'Tap New to raise an advance or a reimbursement.'
+                                      : 'Requests you raise will show here.')
                               : 'No requests match this filter.',
                         ),
                       );
@@ -198,7 +239,10 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                       sliver: SliverList.separated(
                         itemCount: shown.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) => _RequestCard(request: shown[i]),
+                        itemBuilder: (_, i) => _RequestCard(
+                          request: shown[i],
+                          requester: showApprovals ? names[shown[i].requesterId] : null,
+                        ),
                       ),
                     );
                   },
@@ -213,9 +257,12 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 }
 
 class _RequestCard extends StatelessWidget {
-  const _RequestCard({required this.request});
+  const _RequestCard({required this.request, this.requester});
 
   final FinanceRequest request;
+
+  /// Shown on the approvals list, where the request is someone else's.
+  final String? requester;
 
   @override
   Widget build(BuildContext context) {
@@ -253,6 +300,7 @@ class _RequestCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 [
+                  if ((requester ?? '').isNotEmpty) requester!,
                   if (request.projectCode != null) request.projectCode!,
                   if (request.categoryName != null) request.categoryName!,
                   DateFormat('d MMM yyyy').format(request.createdAt),
