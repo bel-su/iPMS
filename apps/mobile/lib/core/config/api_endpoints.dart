@@ -30,6 +30,12 @@ class ApiEndpoints {
   static String mediaComplete(String id) => '/api/v1/media/uploads/$id/complete';
   static String media(String id) => '/api/v1/media/$id';
   static String mediaUrl(String id) => '/api/v1/media/$id/url';
+  // media: invoice photos for finance requests
+  static const String financeUploads = '/api/v1/media/finance/uploads';
+  static const String financeUploadStatus = '/api/v1/media/finance/uploads/status';
+  static String financeUploadComplete(String id) => '/api/v1/media/finance/uploads/$id/complete';
+  static String financeUpload(String id) => '/api/v1/media/finance/uploads/$id';
+  static String financeFileUrl(String id) => '/api/v1/media/finance/$id/url';
   static const String mediaList = '/api/v1/media';
 
   // finance

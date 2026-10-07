@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../media/providers/evidence_upload_provider.dart';
 import '../data/finance_repository.dart';
+import '../data/invoice_photo_uploader.dart';
 import '../domain/finance_models.dart';
 
 final financeRepositoryProvider = Provider<FinanceRepository>((ref) {
@@ -30,4 +32,11 @@ final financeRequestProvider = FutureProvider.family<FinanceRequest, String>((re
 /// Categories a request can be filed under (disabled ones left out).
 final financeCategoriesProvider = FutureProvider<List<ExpenseCategory>>((ref) {
   return ref.watch(financeRepositoryProvider).categories();
+});
+
+final invoicePhotoUploaderProvider = Provider<InvoicePhotoUploader>((ref) {
+  return InvoicePhotoUploader(
+    media: ref.watch(mediaRepositoryProvider),
+    deviceId: () => ref.read(tokenStorageProvider).getOrCreateDeviceId(),
+  );
 });

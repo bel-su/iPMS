@@ -1,18 +1,24 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../../../core/network/api_exceptions.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../media/providers/evidence_upload_provider.dart';
 import '../../projects/providers/project_providers.dart';
 import '../domain/finance_models.dart';
 import '../providers/finance_providers.dart';
+import 'invoice_photo_viewer.dart';
 
 /// One invoice being typed. Each row owns its fields so removing one in the
 /// middle keeps what was typed in the others.
 class _InvoiceRow {
-  _InvoiceRow({String vendor = '', String number = '', String amount = '', this.date})
+  _InvoiceRow({String vendor = '', String number = '', String amount = '', this.date, this.mediaId, this.saved = false})
       : vendor = TextEditingController(text: vendor),
         number = TextEditingController(text: number),
         amount = TextEditingController(text: amount);
@@ -21,6 +27,21 @@ class _InvoiceRow {
   final TextEditingController number;
   final TextEditingController amount;
   DateTime? date;
+
+  /// The invoice photo in the media bucket, once it is there.
+  String? mediaId;
+
+  /// [mediaId] came with the saved request, so it is already on the record
+  /// and must not be discarded when removed here.
+  final bool saved;
+
+  /// The photo just chosen on this phone, shown while and after it uploads.
+  File? photo;
+  bool uploading = false;
+  String? photoError;
+
+  /// Not ready to be sent: still uploading, or its upload failed.
+  bool get photoPending => uploading || photoError != null;
 
   void dispose() {
     vendor.dispose();
@@ -36,6 +57,7 @@ class _InvoiceRow {
         invoiceNumber: number.text,
         invoiceDate: date!,
         amount: amount.text,
+        mediaId: photoPending ? null : mediaId,
       );
 }
 
@@ -79,7 +101,14 @@ class _RequestFormScreenState extends ConsumerState<RequestFormScreen> {
       _projectId = initial.projectId;
       if (initial.isAdvance) _amount.text = initial.requestedAmount;
       for (final i in initial.invoices) {
-        _rows.add(_InvoiceRow(vendor: i.vendor, number: i.invoiceNumber, amount: i.amount, date: i.invoiceDate));
+        _rows.add(_InvoiceRow(
+          vendor: i.vendor,
+          number: i.invoiceNumber,
+          amount: i.amount,
+          date: i.invoiceDate,
+          mediaId: i.mediaId,
+          saved: i.mediaId != null,
+        ));
       }
     }
     if (_usesInvoices && _rows.isEmpty) _rows.add(_InvoiceRow());
@@ -109,8 +138,11 @@ class _RequestFormScreenState extends ConsumerState<RequestFormScreen> {
     if (_categoryId == null || _purpose.text.trim().isEmpty) return false;
     if (!_editing && widget.kind != RequestKind.settlement && _projectId == null) return false;
     if (widget.kind == RequestKind.advance) return isValidMoney(_amount.text);
-    return _rows.isNotEmpty && _rows.every((r) => r.isComplete);
+    return _rows.isNotEmpty && _rows.every((r) => r.isComplete && !r.photoPending);
   }
+
+  /// The project the request is for, which the photo is filed under.
+  String? get _photoProjectId => widget.advance?.projectId ?? widget.initial?.projectId ?? _projectId;
 
   Future<void> _pickDate(_InvoiceRow row) async {
     final now = DateTime.now();
@@ -121,6 +153,92 @@ class _RequestFormScreenState extends ConsumerState<RequestFormScreen> {
       lastDate: now,
     );
     if (picked != null) setState(() => row.date = picked);
+  }
+
+  Future<void> _addPhoto(_InvoiceRow row) async {
+    if (_photoProjectId == null) {
+      setState(() => _error = 'Choose the project first; the photo is filed under it.');
+      return;
+    }
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 85, maxWidth: 2048, maxHeight: 2048);
+    if (picked == null || !mounted) return;
+    setState(() {
+      // A new object each time, so a replaced photo never reuses an id.
+      row
+        ..mediaId = const Uuid().v7()
+        ..photo = File(picked.path);
+    });
+    await _uploadPhoto(row);
+  }
+
+  Future<void> _uploadPhoto(_InvoiceRow row) async {
+    final file = row.photo;
+    final mediaId = row.mediaId;
+    final projectId = _photoProjectId;
+    if (file == null || mediaId == null || projectId == null) return;
+    setState(() {
+      row.uploading = true;
+      row.photoError = null;
+    });
+    try {
+      await ref.read(invoicePhotoUploaderProvider).upload(
+            projectId: projectId,
+            mediaId: mediaId,
+            bytes: await file.readAsBytes(),
+          );
+      if (mounted) setState(() => row.uploading = false);
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          row.uploading = false;
+          row.photoError = e.message;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          row.uploading = false;
+          row.photoError = 'Upload failed: $e';
+        });
+      }
+    }
+  }
+
+  void _removePhoto(_InvoiceRow row) {
+    final id = row.mediaId;
+    // A photo that never reached a submission is thrown away on the server
+    // too; one already on the saved request stays until it is resubmitted.
+    if (id != null && !row.saved && !row.uploading) {
+      unawaited(ref.read(mediaRepositoryProvider).discardFinanceDocument(id).catchError((_) {}));
+    }
+    setState(() {
+      row
+        ..mediaId = null
+        ..photo = null
+        ..photoError = null
+        ..uploading = false;
+    });
   }
 
   /// Saves, then submits when [submit]. A failed submit leaves the request
@@ -410,8 +528,90 @@ class _RequestFormScreenState extends ConsumerState<RequestFormScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            _photoBlock(row),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _photoBlock(_InvoiceRow row) {
+    if (row.mediaId == null) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: _busy ? null : () => _addPhoto(row),
+          icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+          label: const Text('Add invoice photo'),
+        ),
+      );
+    }
+    final ready = !row.uploading && row.photoError == null;
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: row.photoError != null ? AppColors.statusBlockedBg : AppColors.searchFieldBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width: 54,
+              height: 54,
+              child: row.photo != null
+                  ? Image.file(row.photo!, fit: BoxFit.cover)
+                  : InkWell(
+                      onTap: () => Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(builder: (_) => InvoicePhotoViewer(mediaId: row.mediaId!)),
+                      ),
+                      child: const ColoredBox(color: Colors.black12, child: Icon(Icons.image_outlined)),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: row.uploading
+                ? const Row(
+                    children: [
+                      SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                      SizedBox(width: 8),
+                      Text('Uploading…', style: TextStyle(fontSize: 12)),
+                    ],
+                  )
+                : row.photoError != null
+                    ? Text(
+                        row.photoError!,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.statusBlockedText),
+                      )
+                    : const Row(
+                        children: [
+                          Icon(Icons.cloud_done_outlined, size: 16, color: Color(0xFF2E7D32)),
+                          SizedBox(width: 6),
+                          Text('Photo attached', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+          ),
+          if (row.photoError != null && row.photo != null)
+            TextButton(onPressed: () => _uploadPhoto(row), child: const Text('Retry')),
+          if (ready && row.photo == null)
+            TextButton(
+              onPressed: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute(builder: (_) => InvoicePhotoViewer(mediaId: row.mediaId!)),
+              ),
+              child: const Text('View'),
+            ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.close_rounded, size: 18),
+            tooltip: 'Remove photo',
+            onPressed: row.uploading ? null : () => _removePhoto(row),
+          ),
+        ],
       ),
     );
   }

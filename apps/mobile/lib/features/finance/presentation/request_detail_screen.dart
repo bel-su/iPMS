@@ -10,6 +10,7 @@ import '../domain/finance_rules.dart';
 import '../providers/finance_providers.dart';
 import 'finance_action_sheets.dart';
 import 'finance_widgets.dart';
+import 'invoice_photo_viewer.dart';
 import 'request_form_screen.dart';
 
 class RequestDetailScreen extends ConsumerStatefulWidget {
@@ -174,7 +175,31 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                               ],
                             ),
                           ),
-                          Text(formatMoney(i.amount), style: AppTypography.titleMedium),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(formatMoney(i.amount), style: AppTypography.titleMedium),
+                              if (i.mediaId != null)
+                                InkWell(
+                                  onTap: () => Navigator.push<void>(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => InvoicePhotoViewer(mediaId: i.mediaId!)),
+                                  ),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 4),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.image_outlined, size: 14, color: AppColors.primaryLavenderDark),
+                                        SizedBox(width: 4),
+                                        Text('View photo',
+                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primaryLavenderDark)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
                     ),

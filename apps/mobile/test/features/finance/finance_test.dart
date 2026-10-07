@@ -269,10 +269,19 @@ void main() {
     expect(server.calls.any((c) => c.path == '/api/v1/finance/requests/new-1/submit'), isTrue);
   });
 
+  testWidgets('an invoice photo needs the project first', (tester) async {
+    await tester.pumpWidget(app(const RequestFormScreen(kind: RequestKind.reimbursement)));
+    await settle(tester);
+    await tester.ensureVisible(find.text('Add invoice photo'));
+    await tester.tap(find.text('Add invoice photo'));
+    await tester.pump();
+    expect(find.text('Choose the project first; the photo is filed under it.'), findsOneWidget);
+  });
+
   testWidgets('the form stays disabled until it is complete', (tester) async {
     await tester.pumpWidget(app(const RequestFormScreen(kind: RequestKind.reimbursement)));
     await settle(tester);
-    expect(tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Submit')).onPressed, isNull);
+    expect(tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Submit', skipOffstage: false)).onPressed, isNull);
     expect(find.text('Invoice 1'), findsOneWidget);
     expect(find.text('Total NPR 0.00'), findsOneWidget);
   });

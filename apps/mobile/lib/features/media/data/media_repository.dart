@@ -171,6 +171,86 @@ class MediaRepository {
     }
   }
 
+  /// Announces an invoice photo for a finance request on [projectId]. Like
+  /// evidence it is keyed by the id and hash fixed here, so a retry describes
+  /// the same object.
+  Future<UploadRegistration> registerFinanceDocument({
+    required String id,
+    required String projectId,
+    required int sizeBytes,
+    required String contentHash,
+    required DateTime capturedAt,
+    required String deviceId,
+  }) async {
+    try {
+      final response = await apiClient.dio.post<Map<String, dynamic>>(
+        ApiEndpoints.financeUploads,
+        data: {
+          'id': id,
+          'projectId': projectId,
+          'kind': 'PHOTO',
+          'contentType': 'image/jpeg',
+          'sizeBytes': sizeBytes,
+          'contentHash': contentHash,
+          'capturedAt': capturedAt.toUtc().toIso8601String(),
+          'deviceId': deviceId,
+        },
+      );
+      return UploadRegistration.fromJson(response.data ?? const {});
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, fallbackMessage: 'Could not register the invoice photo for upload.');
+    }
+  }
+
+  Future<String> completeFinanceDocument(String id) async {
+    try {
+      final response = await apiClient.dio.post<Map<String, dynamic>>(
+        ApiEndpoints.financeUploadComplete(id),
+        data: const <String, dynamic>{},
+      );
+      return response.data?['status'] as String? ?? 'VERIFYING';
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, fallbackMessage: 'Could not finish the upload.');
+    }
+  }
+
+  Future<UploadStatusItem?> financeDocumentStatus(String id) async {
+    try {
+      final response = await apiClient.dio.post<List<dynamic>>(
+        ApiEndpoints.financeUploadStatus,
+        data: {'ids': [id]},
+      );
+      final rows = (response.data ?? const []).whereType<Map<String, dynamic>>();
+      return rows.isEmpty ? null : UploadStatusItem.fromJson(rows.first);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, fallbackMessage: 'Could not check upload status.');
+    }
+  }
+
+  /// Discards an invoice photo that was never submitted.
+  Future<void> discardFinanceDocument(String id) async {
+    try {
+      await apiClient.dio.delete<void>(ApiEndpoints.financeUpload(id));
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, fallbackMessage: 'Could not discard the photo.');
+    }
+  }
+
+  /// A short-lived link to an invoice photo.
+  Future<String> financeFileUrl(String id, {String variant = 'original'}) async {
+    try {
+      final response = await apiClient.dio.get<Map<String, dynamic>>(
+        ApiEndpoints.financeFileUrl(id),
+        queryParameters: {'variant': variant},
+      );
+      final url = response.data?['signedUrl'] as String?;
+      if (url == null) throw const ApiException(message: 'No download link was returned.');
+      return url;
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, fallbackMessage: 'Could not load the photo.');
+    }
+  }
+
   Future<String> complete(String id) async {
     try {
       final response = await apiClient.dio.post<Map<String, dynamic>>(

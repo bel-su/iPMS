@@ -93,9 +93,11 @@ class RequestInvoice {
     required this.invoiceNumber,
     required this.invoiceDate,
     required this.amount,
+    this.mediaId,
   });
 
   factory RequestInvoice.fromJson(Map<String, dynamic> json) => RequestInvoice(
+        mediaId: json['mediaId'] as String?,
         vendor: json['vendor'] as String? ?? '',
         invoiceNumber: json['invoiceNumber'] as String? ?? '',
         invoiceDate: DateTime.tryParse(json['invoiceDate']?.toString() ?? '') ?? DateTime.now(),
@@ -107,7 +109,11 @@ class RequestInvoice {
   final DateTime invoiceDate;
   final String amount;
 
+  /// The invoice photo in the media service, if one was attached.
+  final String? mediaId;
+
   Map<String, dynamic> toJson() => {
+        'mediaId': ?mediaId,
         'vendor': vendor.trim(),
         'invoiceNumber': invoiceNumber.trim(),
         'invoiceDate': DateFormat('yyyy-MM-dd').format(invoiceDate),
