@@ -32,6 +32,13 @@ class ApiEndpoints {
   static String mediaUrl(String id) => '/api/v1/media/$id/url';
   static const String mediaList = '/api/v1/media';
 
+  // finance
+  static const String financeRequests = '/api/v1/finance/requests';
+  static String financeRequest(String id) => '/api/v1/finance/requests/$id';
+  static String financeSubmit(String id) => '/api/v1/finance/requests/$id/submit';
+  static String financeCancel(String id) => '/api/v1/finance/requests/$id/cancel';
+  static const String financeCategories = '/api/v1/finance/categories';
+
   /// Requests that must never carry (or refresh) an access token.
   static bool isAuthEndpoint(String path) =>
       path.contains(login) || path.contains(refresh);

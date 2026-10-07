@@ -47,9 +47,9 @@ class FloatingNavBar extends StatelessWidget {
           ),
           _buildNavItem(
             index: 2,
-            icon: Icons.map_outlined,
-            selectedIcon: Icons.map_rounded,
-            label: 'Map',
+            icon: Icons.account_balance_wallet_outlined,
+            selectedIcon: Icons.account_balance_wallet_rounded,
+            label: 'Finance',
           ),
           _buildNavItem(
             index: 3,

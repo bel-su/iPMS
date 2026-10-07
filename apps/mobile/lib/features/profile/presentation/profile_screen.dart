@@ -6,7 +6,6 @@ import '../../../shared/widgets/brand_mark.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/providers/biometric_provider.dart';
 import '../../projects/providers/project_providers.dart';
-import '../../map/providers/map_providers.dart';
 import '../../media/providers/evidence_upload_provider.dart';
 import '../../tasks/domain/models/task_evidence.dart';
 import '../../tasks/providers/evidence_provider.dart';
@@ -426,7 +425,6 @@ class _SyncCardState extends ConsumerState<_SyncCard> {
 
       ref.invalidate(taskDetailProvider);
       ref.invalidate(projectListProvider);
-      ref.invalidate(mySitesProvider);
       final _ = await ref.refresh(assignedTasksProvider.future);
 
       ref.read(lastSyncedProvider.notifier).set(DateTime.now());

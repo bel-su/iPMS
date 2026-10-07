@@ -88,20 +88,20 @@ const List<FieldWorkflowStep> _kWorkflowSteps = [
     summary:
         'Navigate to the physical tower location across Nepal and validate engineer presence inside the mandatory 100m geofence radius.',
     whatHappens: [
-      'The Nepal Map pins every cell tower site with live latitude and longitude coordinates.',
+      'Each work order opens a map of its cell tower site with live latitude and longitude coordinates.',
       'The automated geofencing engine measures your real-time distance from the tower base.',
       'Check-in is permitted only when inside the 100m compliance radius, preventing off-site fraud.',
     ],
     stepActions: [
-      'Open the "Nepal Sites Map" to preview the site coordinates and route.',
+      'Open a work order and tap the map button to preview the site and your distance from it.',
       'Tap "Navigate with Maps" for turn-by-turn driving directions to the tower base.',
       'Once on site, open the task detail and check the Geofence status card.',
       'When the status turns green ("Inside Geofence"), tap "Verify Check-in".',
     ],
     proTip:
         'Ensure device GPS location mode is set to "High Accuracy" and wait for the accuracy indicator to stabilize (<= 15m) before checking in.',
-    targetTabIndex: 2,
-    actionLabel: 'Explore Nepal Map',
+    targetTabIndex: 0,
+    actionLabel: 'Go to Tasks List',
   ),
   FieldWorkflowStep(
     stepNumber: 3,
@@ -194,22 +194,22 @@ const List<MobileComponentInfo> _kComponentsCatalog = [
     actionLabel: 'Switch to Tasks Tab',
   ),
   MobileComponentInfo(
-    id: 'nepal-map',
-    name: 'Nepal Sites Map',
-    screenRoute: 'Tab 3: MySitesMapScreen',
-    category: 'Spatial Engineering',
+    id: 'finance',
+    name: 'Finance',
+    screenRoute: 'Tab 3: FinanceScreen',
+    category: 'Expenses',
     summary:
-        'Interactive telecom tower map strictly bounded to Nepal geographical coordinates.',
+        'Raise advances and reimbursements, settle advances with invoices, and follow each request through approval.',
     description:
-        'Visualizes tower locations across all 7 provinces of Nepal. Displays status-coded pins, calculates live distance from the device, and integrates with external turn-by-turn GPS navigation.',
+        'Your own finance requests in one place. Requests go to your project manager, then the project director, then finance, who pays. Returned requests can be edited and resubmitted.',
     keyFeatures: [
-      'Bounded to Nepal territory (26.3488°N to 30.4474°N, 80.0586°E to 88.2015°E)',
-      'Site detail cards with tower type (Rooftop, Greenfield, Guyed)',
-      'Live distance calculation from engineer’s current location',
-      'Turn-by-turn navigation via Google Maps',
+      'New advance and reimbursement requests with category and purpose',
+      'Settle a paid advance with invoices; the outstanding balance is shown',
+      'Status filters: drafts, in approval, paid, returned, closed',
+      'Full history with reviewer comments, invoices and payments',
     ],
     targetTabIndex: 2,
-    actionLabel: 'Switch to Map Tab',
+    actionLabel: 'Switch to Finance Tab',
   ),
   MobileComponentInfo(
     id: 'projects',
