@@ -13,3 +13,8 @@ export function listWorkOrderMedia(workOrderId: string): Promise<ApiResult<Media
 export function mediaUrl(id: string, variant: MediaVariant, download = false): Promise<ApiResult<SignedGet>> {
   return authFetch<SignedGet>(`/api/v1/media/${encodeURIComponent(id)}/url`, { query: download ? { variant, download: '1' } : { variant } });
 }
+
+/** An invoice file of a finance request: a 5-minute link, signed only for its uploader or someone who can see all the project's finance requests. */
+export function financeFileUrl(id: string, variant: MediaVariant): Promise<ApiResult<SignedGet>> {
+  return authFetch<SignedGet>(`/api/v1/media/finance/${encodeURIComponent(id)}/url`, { query: { variant } });
+}

@@ -1,7 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma-clients/media';
-import type { AttachRequestDto, AttachedMedia, MediaCheckRequestDto, MediaCheckResult, MediaKind } from '@ipms/contracts';
-import { judge } from './judge.js';
+import type { AttachRequestDto, AttachedMedia, FinanceAttachRequestDto, MediaCheckRequestDto, MediaCheckResult, MediaKind } from '@ipms/contracts';
+import { judge, judgeFinance } from './judge.js';
 
 const num = (value: { toString(): string } | null): number | null => (value === null ? null : Number(value.toString()));
 
@@ -16,6 +16,35 @@ export class AttachService {
     const rows = await this.prisma.mediaObject.findMany({ where: { id: { in: ids } } });
     const byId = new Map(rows.map((row) => [row.id, row]));
     return ids.map((id) => judge(id, byId.get(id), dto));
+  }
+
+  /** Whether each invoice file could be attached to a finance request on the project right now. Read-only. */
+  async checkFinance(dto: FinanceAttachRequestDto): Promise<MediaCheckResult[]> {
+    const ids = [...new Set(dto.mediaIds)];
+    const rows = await this.prisma.mediaObject.findMany({ where: { id: { in: ids } } });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return ids.map((id) => judgeFinance(id, byId.get(id), dto));
+  }
+
+  /**
+   * Makes the invoice files part of the request's record, all or nothing and
+   * repeat-safe. `attachedToSubmissionId` holds the finance request's id here:
+   * the column says "the thing this file is evidence for".
+   */
+  async attachFinance(dto: FinanceAttachRequestDto): Promise<{ id: string }[]> {
+    const ids = [...new Set(dto.mediaIds)];
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM media_object WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+      const rows = await tx.mediaObject.findMany({ where: { id: { in: ids } } });
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      const refused = ids.filter((id) => !judgeFinance(id, byId.get(id), dto).usable);
+      if (refused.length) throw new ConflictException(`These files cannot be attached: ${refused.join(', ')}`);
+      await tx.mediaObject.updateMany({
+        where: { id: { in: ids }, status: 'READY' },
+        data: { status: 'ATTACHED', attachedToSubmissionId: dto.requestId, attachedAt: new Date() },
+      });
+      return ids.map((id) => ({ id }));
+    });
   }
 
   async attach(dto: AttachRequestDto): Promise<AttachedMedia[]> {

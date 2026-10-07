@@ -9,6 +9,7 @@ import { EventBus } from '@ipms/events';
 import { HealthController, MetricsController, registerReadinessCheck } from '@ipms/observability';
 import { ApprovalService } from './approvals/approval.service.js';
 import { CategoryService } from './categories/category.service.js';
+import { MediaClient } from './directory/media.client.js';
 import { ProjectDirectoryClient } from './directory/project-directory.client.js';
 import { CategoryController } from './http/category.controller.js';
 import { ReportController } from './http/report.controller.js';
@@ -25,6 +26,7 @@ import { RequestService } from './requests/request.service.js';
 const scopeProvider: ScopeProvider = { async for(): Promise<AuthzScope> { return { global: false, projectIds: [], siteIds: [] }; } };
 
 const projectInternalUrl = (): string => process.env['PROJECT_INTERNAL_URL'] ?? 'http://project:3004';
+const mediaInternalUrl = (): string => process.env['MEDIA_INTERNAL_URL'] ?? 'http://media:3006';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -56,7 +58,12 @@ const service = <T>(cls: new (db: PrismaService['db']) => T) => ({
       },
     },
     { provide: ProjectDirectoryClient, useFactory: () => new ProjectDirectoryClient(projectInternalUrl()) },
-    service(RequestService),
+    { provide: MediaClient, useFactory: () => new MediaClient(mediaInternalUrl()) },
+    {
+      provide: RequestService,
+      useFactory: (prisma: PrismaService, media: MediaClient) => new RequestService(prisma.db, media),
+      inject: [PrismaService, MediaClient],
+    },
     service(ApprovalService),
     service(PaymentService),
     service(QueryService),

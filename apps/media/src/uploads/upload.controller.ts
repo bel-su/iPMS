@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, HttpCode, Param, Post, Req } from '@nestjs/common';
 import { RequirePermission, type AuthzUser } from '@ipms/authz';
-import { CompleteUploadSchema, PartsRequestSchema, RegisterUploadSchema, UploadStatusRequestSchema, UuidSchema } from '@ipms/contracts';
+import {
+  CompleteUploadSchema, PartsRequestSchema, RegisterFinanceDocumentSchema, RegisterUploadSchema, UploadStatusRequestSchema, UuidSchema,
+} from '@ipms/contracts';
 import { UploadService } from './upload.service.js';
 
 type Authed = { user: AuthzUser; headers: Record<string, string | undefined> };
@@ -9,6 +11,31 @@ type Authed = { user: AuthzUser; headers: Record<string, string | undefined> };
 @Controller('media')
 export class UploadController {
   constructor(private readonly uploads: UploadService) {}
+
+  /**
+   * Invoice photos for finance requests. Their own routes and permission, so a
+   * project manager who raises requests but uploads no site evidence can still
+   * attach an invoice. Declared before `:id` routes like the rest.
+   */
+  @Post('finance/uploads') @RequirePermission('finance_request.create')
+  registerFinance(@Body() body: unknown, @Req() req: Authed) {
+    return this.uploads.registerFinanceDocument(RegisterFinanceDocumentSchema.parse(body), req.user.id, req.headers['authorization'] ?? '');
+  }
+
+  @Post('finance/uploads/status') @HttpCode(200) @RequirePermission('finance_request.create')
+  financeStatus(@Body() body: unknown, @Req() req: Authed) {
+    return this.uploads.status(UploadStatusRequestSchema.parse(body).ids, req.user.id);
+  }
+
+  @Post('finance/uploads/:id/complete') @HttpCode(200) @RequirePermission('finance_request.create')
+  financeComplete(@Param('id') id: string, @Body() body: unknown, @Req() req: Authed) {
+    return this.uploads.complete(UuidSchema.parse(id), CompleteUploadSchema.parse(body ?? {}), req.user.id);
+  }
+
+  @Delete('finance/uploads/:id') @RequirePermission('finance_request.create')
+  financeDiscard(@Param('id') id: string, @Req() req: Authed) {
+    return this.uploads.discard(UuidSchema.parse(id), req.user.id);
+  }
 
   @Post('uploads/status') @HttpCode(200) @RequirePermission('qc_evidence.upload')
   status(@Body() body: unknown, @Req() req: Authed) {
