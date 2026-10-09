@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/security/token_storage.dart';
 import '../../core/theme/app_colors.dart';
 import '../../features/auth/presentation/widgets/biometric_enrollment_sheet.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/providers/biometric_provider.dart';
-import '../../features/guide/presentation/app_guide_modal.dart';
+import '../../features/tour/presentation/mobile_product_tour.dart';
 import 'floating_nav_bar.dart';
 
 /// Navigation index notifier for active tab switching across screens.
@@ -38,21 +37,14 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _offerBiometricSignIn();
       if (mounted) {
-        await _checkFirstTimeGuide();
+        await _checkFirstTimeTour();
       }
     });
   }
 
-  /// Displays the interactive onboarding guide once on initial installation / first login.
-  Future<void> _checkFirstTimeGuide() async {
-    final storage = TokenStorage();
-    final hasSeen = await storage.hasSeenProjectGuide();
-    if (!hasSeen && mounted) {
-      await storage.markProjectGuideAsSeen();
-      if (mounted) {
-        await AppGuideModal.show(context);
-      }
-    }
+  /// Displays the interactive product tour spotlight once on initial installation / first login.
+  Future<void> _checkFirstTimeTour() async {
+    await MobileProductTour.checkAndStart(context);
   }
 
   /// After a password sign-in, offers to turn on Face ID / fingerprint once,
@@ -91,6 +83,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
             bottom: 0,
             child: SafeArea(
               child: FloatingNavBar(
+                key: TourTargetRegistry.navigationDockKey,
                 currentIndex: currentIndex,
                 onTap: (index) {
                   ref.read(navigationIndexProvider.notifier).setIndex(index);

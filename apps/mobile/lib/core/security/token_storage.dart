@@ -152,14 +152,20 @@ class TokenStorage {
     }
   }
 
-  /// Checks if the user has already viewed the onboarding project guide.
-  Future<bool> hasSeenProjectGuide() async {
+  /// Checks if the user has already completed the interactive product tour.
+  Future<bool> hasSeenProductTour() async {
     final val = await _storage.read(key: _hasSeenGuideKey);
     return val == 'true';
   }
 
-  /// Records that the user has seen the project guide so it won't auto-pop again.
-  Future<void> markProjectGuideAsSeen() async {
+  /// Records that the user has completed the product tour so it won't auto-pop again.
+  Future<void> markProductTourAsSeen() async {
     await _storage.write(key: _hasSeenGuideKey, value: 'true');
   }
+
+  /// Backward-compatible alias for hasSeenProductTour.
+  Future<bool> hasSeenProjectGuide() => hasSeenProductTour();
+
+  /// Backward-compatible alias for markProductTourAsSeen.
+  Future<void> markProjectGuideAsSeen() => markProductTourAsSeen();
 }
