@@ -1,11 +1,11 @@
-import type { FinanceRequest, FinanceStep } from '../lib/finance-api';
+import type { FinanceRequest, FinanceRequestDetail, FinanceStep, RequestFlag } from '../lib/finance-api';
 
 /** What the finance screens show and which buttons they offer. Pure, so it is testable; the service enforces every rule again. */
 
 export const KIND_LABEL: Record<FinanceRequest['kind'], string> = { ADVANCE: 'Advance', SETTLEMENT: 'Settlement', REIMBURSEMENT: 'Reimbursement' };
 
 export const STATUS_LABEL: Record<FinanceRequest['status'], string> = {
-  DRAFT: 'Draft', PENDING_PM: 'With project manager', PENDING_DIRECTOR: 'With project director', PENDING_FINANCE: 'Ready to pay',
+  DRAFT: 'Draft', PENDING_PM: 'Approval', PENDING_DIRECTOR: 'Approval', PENDING_FINANCE: 'Payment',
   PAID: 'Paid', SETTLED: 'Settled', RETURNED: 'Returned', REJECTED: 'Rejected', CANCELLED: 'Cancelled',
 };
 
@@ -31,6 +31,17 @@ export function personName(id: string, names: ReadonlyMap<string, string>): stri
   return names.get(id) ?? `${id.slice(0, 8)}…`;
 }
 
+/** Who has the request in hand right now, or a dash once nobody does. */
+export function currentHandler(status: FinanceRequest['status']): string {
+  switch (status) {
+    case 'DRAFT': case 'RETURNED': return 'Requester';
+    case 'PENDING_PM': return 'Project manager';
+    case 'PENDING_DIRECTOR': return 'Project director';
+    case 'PENDING_FINANCE': return 'Finance';
+    default: return '—';
+  }
+}
+
 export function waitingOn(status: FinanceRequest['status']): string | null {
   switch (status) {
     case 'PENDING_PM': return 'Waiting for the project manager';
@@ -44,6 +55,20 @@ export interface Viewer { id: string; permissions: readonly string[] }
 export type RequestAction = 'edit' | 'submit' | 'cancel' | 'approve' | 'return' | 'reject' | 'pay' | 'settle' | 'cashReturn';
 
 const PENDING = new Set(['PENDING_PM', 'PENDING_DIRECTOR', 'PENDING_FINANCE']);
+
+/**
+ * Where an advance stands against its settlement window. Only a paid advance
+ * with something still outstanding is on the clock; the day is a calendar day,
+ * so it is compared as `YYYY-MM-DD` against today's date.
+ */
+export function settlementStatus(
+  dueOn: string | null | undefined, balance: { status: string } | null | undefined, today: string,
+): { label: string; overdue: boolean } | null {
+  if (!dueOn || balance?.status === 'CLOSED') return null;
+  const overdue = dueOn < today;
+  const date = new Date(`${dueOn}T00:00:00Z`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return { label: overdue ? `Overdue since ${date}` : `Settle by ${date}`, overdue };
+}
 
 /** An advance that has been paid can be settled and can take returned cash. */
 export const isSettleable = (request: Pick<FinanceRequest, 'kind' | 'status'>): boolean => request.kind === 'ADVANCE' && request.status === 'PAID';
@@ -87,5 +112,40 @@ export function describeEntry(entry: { step: FinanceStep; action: string }): str
   if (entry.action === 'SUBMITTED') return 'Submitted';
   if (entry.action === 'CANCELLED') return 'Cancelled';
   if (entry.action === 'CASH_RETURNED') return 'Cash return recorded by finance';
+  if (entry.action === 'REMINDED') return `Settlement reminder sent by ${STEP_NAME[entry.step]}`;
   return `${VERB[entry.action] ?? entry.action} by ${STEP_NAME[entry.step]}`;
+}
+
+/** "1 day", "9 days". */
+export const dayCount = (n: number): string => `${n} day${n === 1 ? '' : 's'}`;
+
+/** One warning as a sentence. */
+export function flagText(flag: RequestFlag): string {
+  switch (flag.code) {
+    case 'DUPLICATE_BILL':
+      return `Possible duplicate: ${flag.matches.map((m) => `${m.vendor}${m.invoiceNumber ? ` #${m.invoiceNumber}` : ''} on ${m.number}`).join('; ')}`;
+    case 'REQUESTER_HOLDS_CASH': {
+      const held = `Already holds ${formatMoney(flag.outstanding)} from ${flag.advances} advance${flag.advances === 1 ? '' : 's'}`;
+      if (flag.overdue === 0) return held;
+      if (flag.overdue === 1) return `${held}, one ${flag.oldestOverdueDays === null ? '' : `${dayCount(flag.oldestOverdueDays)} `}past settle-by`;
+      return `${held}, ${flag.overdue} past settle-by${flag.oldestOverdueDays === null ? '' : ` (oldest ${dayCount(flag.oldestOverdueDays)})`}`;
+    }
+    case 'UNUSUAL_AMOUNT':
+      return `About ${flag.ratio}× the usual for ${flag.category}`;
+    case 'WAITING_LONG':
+      return `Waiting ${flag.days} days`;
+  }
+}
+
+/**
+ * "ADV-2026-0012 approved for NPR 40,000.00." — what the viewer just decided,
+ * read from the request's own history; null when its last step is not theirs.
+ */
+export function decisionLine(request: Pick<FinanceRequestDetail, 'number' | 'actions'>, viewerId: string): string | null {
+  const last = request.actions[request.actions.length - 1];
+  if (!last || last.actorId !== viewerId) return null;
+  if (last.action === 'APPROVED') return `${request.number} approved${last.amount ? ` for ${formatMoney(last.amount)}` : ''}.`;
+  if (last.action === 'RETURNED') return `${request.number} returned to the requester.`;
+  if (last.action === 'REJECTED') return `${request.number} rejected.`;
+  return null;
 }

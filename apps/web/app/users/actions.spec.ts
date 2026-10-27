@@ -65,7 +65,8 @@ describe('createUserAction', () => {
   });
 
   it('requires exactly one role', async () => {
-    const { roleCodes: _none, ...withoutRole } = NEW_USER;
+    const withoutRole: Partial<typeof NEW_USER> = { ...NEW_USER };
+    delete withoutRole.roleCodes;
     expect(await createUserAction({}, form(withoutRole))).toEqual({ error: 'Choose a role for this user.' });
     expect(await createUserAction({}, form({ ...NEW_USER, roleCodes: ['FIELD_ENGINEER', 'QC_MANAGER'] })))
       .toEqual({ error: 'Choose a role for this user.' });
@@ -76,6 +77,30 @@ describe('createUserAction', () => {
     await expect(createUserAction({}, form({ ...NEW_USER, employeeCode: '   ' })))
       .rejects.toThrow('NEXT_REDIRECT');
     expect(createUser.mock.calls[0]![0]).not.toHaveProperty('employeeCode');
+  });
+
+  describe('the finance switch', () => {
+    it('turns finance off when the box was offered and left unticked', async () => {
+      await expect(createUserAction({}, form({ ...NEW_USER, financeOffered: '1' }))).rejects.toThrow('NEXT_REDIRECT');
+      expect(createUser.mock.calls[0]![0]).toMatchObject({ roleCodes: ['FIELD_ENGINEER'], financeEnabled: false });
+    });
+
+    it('leaves finance on when the box was ticked', async () => {
+      await expect(createUserAction({}, form({ ...NEW_USER, financeOffered: '1', financeEnabled: 'on' })))
+        .rejects.toThrow('NEXT_REDIRECT');
+      expect(createUser.mock.calls[0]![0]).not.toHaveProperty('financeEnabled');
+    });
+
+    it('leaves finance on when the box was never offered', async () => {
+      await expect(createUserAction({}, form(NEW_USER))).rejects.toThrow('NEXT_REDIRECT');
+      expect(createUser.mock.calls[0]![0]).not.toHaveProperty('financeEnabled');
+    });
+
+    it('ignores the box for any other role', async () => {
+      await expect(createUserAction({}, form({ ...NEW_USER, roleCodes: 'QC_MANAGER', financeOffered: '1' })))
+        .rejects.toThrow('NEXT_REDIRECT');
+      expect(createUser.mock.calls[0]![0]).not.toHaveProperty('financeEnabled');
+    });
   });
 
   it('refuses a mismatched confirmation without a round trip', async () => {

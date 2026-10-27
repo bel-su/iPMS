@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { PERMISSION_KEY, PERMISSION_CODES, type PermissionMetadata } from '@ipms/authz';
 import { CategoryController } from './category.controller.js';
+import { OverviewController } from './overview.controller.js';
 import { ReportController } from './report.controller.js';
 import { RequestController } from './request.controller.js';
 
@@ -29,6 +30,7 @@ const ROUTES: Route[] = [
   { controller: RequestController, handler: 'reject', verb: 'POST', path: 'finance/requests/:id/reject', permission: 'finance_request.view' },
   { controller: RequestController, handler: 'pay', verb: 'POST', path: 'finance/requests/:id/pay', permission: 'finance_payment.record' },
   { controller: RequestController, handler: 'returnCash', verb: 'POST', path: 'finance/advances/:id/cash-return', permission: 'finance_payment.record' },
+  { controller: RequestController, handler: 'remind', verb: 'POST', path: 'finance/advances/:id/remind', permission: 'finance_request.view' },
   { controller: RequestController, handler: 'list', verb: 'GET', path: 'finance/requests', permission: 'finance_request.view' },
   { controller: RequestController, handler: 'get', verb: 'GET', path: 'finance/requests/:id', permission: 'finance_request.view' },
   { controller: RequestController, handler: 'advance', verb: 'GET', path: 'finance/advances/:id', permission: 'finance_request.view' },
@@ -36,9 +38,10 @@ const ROUTES: Route[] = [
   { controller: CategoryController, handler: 'create', verb: 'POST', path: 'finance/categories', permission: 'finance_category.manage' },
   { controller: CategoryController, handler: 'update', verb: 'PATCH', path: 'finance/categories/:id', permission: 'finance_category.manage' },
   { controller: ReportController, handler: 'spend', verb: 'GET', path: 'finance/reports/project-spend', permission: 'finance_request.view_all' },
+  { controller: OverviewController, handler: 'overview', verb: 'GET', path: 'finance/overview', permission: 'finance_request.view_all' },
 ];
 
-const CONTROLLERS = [RequestController, CategoryController, ReportController];
+const CONTROLLERS = [RequestController, CategoryController, ReportController, OverviewController];
 
 const fn = (c: { prototype: object }, name: string): object =>
   (c.prototype as Record<string, object>)[name]!;

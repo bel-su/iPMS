@@ -11,15 +11,16 @@ export interface ProjectChoice { id: string; code: string; name: string }
 export interface CategoryChoice { id: string; code: string; name: string }
 export interface AdvanceContext { id: string; number: string; projectName: string; outstanding: string }
 export interface RequestInitial {
-  id: string; categoryId: string; purpose: string; requestedAmount: string;
-  invoices: Array<Pick<InvoiceInput, 'vendor' | 'invoiceNumber' | 'invoiceDate' | 'amount'>>;
+  id: string; categoryId: string; purpose: string; remarks: string; requestedAmount: string;
+  invoices: Invoice[];
 }
 
-type Invoice = Pick<InvoiceInput, 'vendor' | 'invoiceNumber' | 'invoiceDate' | 'amount'>;
+type Invoice = Pick<InvoiceInput, 'vendor' | 'invoiceDate' | 'amount'> & Partial<Pick<InvoiceInput, 'invoiceNumber' | 'vat' | 'supplierTaxNo' | 'mediaId'>>;
 /** Each row carries a stable key, so removing one in the middle keeps what was typed in the others. */
 type Row = Invoice & { key: number };
 
 const BLANK: Invoice = { vendor: '', invoiceNumber: '', invoiceDate: '', amount: '' };
+
 
 /**
  * One form for all three kinds. An advance asks for an amount; a reimbursement
@@ -74,15 +75,24 @@ export function RequestForm({
         ) : null}
       </div>
 
+      <label className="field">Remarks (optional)
+        <textarea name="remarks" rows={3} maxLength={1000} defaultValue={initial?.remarks ?? ''} placeholder={kind === 'ADVANCE' ? 'Details on what the advance will cover' : 'Details on the expenses'} />
+      </label>
+
       {kind !== 'ADVANCE' ? (
         <fieldset className="invoice-rows">
           <legend>Invoices</legend>
           {rows.map((row, index) => (
             <div className="form-grid" key={row.key}>
               <label className="field">Vendor<input name="invoiceVendor" defaultValue={row.vendor} maxLength={200} /></label>
-              <label className="field">Invoice no.<input name="invoiceNumber" defaultValue={row.invoiceNumber} maxLength={100} /></label>
+              <label className="field">Invoice no. (optional)<input name="invoiceNumber" defaultValue={row.invoiceNumber ?? ''} maxLength={100} /></label>
               <label className="field">Date<input name="invoiceDate" type="date" defaultValue={row.invoiceDate.slice(0, 10)} /></label>
               <label className="field">Amount (NPR)<input name="invoiceAmount" inputMode="decimal" defaultValue={row.amount} /></label>
+              <label className="field">VAT bill
+                <select name="invoiceVat" defaultValue={row.vat ? 'yes' : 'no'}><option value="no">No</option><option value="yes">Yes — 13% included in the amount</option></select>
+              </label>
+              <label className="field">Supplier PAN/VAT no.<input name="invoiceTaxNo" defaultValue={row.supplierTaxNo ?? ''} maxLength={50} /></label>
+              <input type="hidden" name="invoiceMediaId" value={row.mediaId ?? ''} />
               {rows.length > 1 ? (
                 <button type="button" className="ghost-button" aria-label={`Remove invoice ${index + 1}`} onClick={() => setRows(rows.filter((r) => r.key !== row.key))}>Remove</button>
               ) : null}
@@ -95,7 +105,7 @@ export function RequestForm({
           >
             + Add invoice
           </button>
-          <p className="hint">Attach the invoice files to your records for now; uploads are coming.</p>
+          <p className="hint">Invoice photos are added from the field app; any already attached stay with their invoice.</p>
         </fieldset>
       ) : null}
 
