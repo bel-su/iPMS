@@ -212,7 +212,12 @@ export async function Sidebar({ active }: { active: Section }) {
   ) : null;
 
   return (
-    <aside className={collapsed ? 'sidebar collapsed' : 'sidebar'}>
+    <aside
+      className={collapsed ? 'sidebar collapsed' : 'sidebar'}
+      data-user-home={home}
+      data-user-role={role}
+      data-user-roles={viewer.state === 'ready' ? viewer.data.roles.join(',') : ''}
+    >
       <div className="sidebar-header">
         <a className="brand" href="/" aria-label="Axiom home">
           <img className="brand-full" src="/brand/axiom-logo-horizontal.svg" alt="Axiom" />

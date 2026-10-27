@@ -53,7 +53,8 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
 
   /// Displays the interactive product tour spotlight once on initial installation / first login.
   Future<void> _checkFirstTimeTour() async {
-    await MobileProductTour.checkAndStart(context);
+    final user = ref.read(authStateProvider).value;
+    await MobileProductTour.checkAndStart(context, role: user?.role);
   }
 
   /// After a password sign-in, offers to turn on Face ID / fingerprint once,

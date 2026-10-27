@@ -15,91 +15,189 @@ class TourTargetRegistry {
 class TourStep {
   final GlobalKey targetKey;
   final String title;
-  final String badge;
   final String description;
-  final IconData icon;
 
   const TourStep({
     required this.targetKey,
     required this.title,
-    required this.badge,
     required this.description,
-    required this.icon,
   });
 }
 
-/// Interactive spotlight coach marks for the field mobile application.
+/// Interactive guided tour tailored to user role and permissions.
 class MobileProductTour {
-  static final List<TourStep> steps = [
-    TourStep(
-      targetKey: TourTargetRegistry.profileHeaderKey,
-      title: 'Engineer Identity & Profile',
-      badge: 'Step 1 of 5 • Profile',
-      description:
-          'View your authenticated field engineer status, telecom province deployment, and access account settings.',
-      icon: Icons.badge_outlined,
-    ),
-    TourStep(
-      targetKey: TourTargetRegistry.searchButtonKey,
-      title: 'Site & Tower Omni-Search',
-      badge: 'Step 2 of 5 • Search',
-      description:
-          'Instantly search cell towers by site code (e.g. KTM-T01), tower height, or work order title across Nepal.',
-      icon: Icons.search_rounded,
-    ),
-    TourStep(
-      targetKey: TourTargetRegistry.statusFilterKey,
-      title: 'Workflow Status Pipeline',
-      badge: 'Step 3 of 5 • Filters',
-      description:
-          'Filter work orders across Pending dispatches, In-Progress audits, Submissions awaiting QC, and Completed logs.',
-      icon: Icons.filter_list_rounded,
-    ),
-    TourStep(
-      targetKey: TourTargetRegistry.firstTaskCardKey,
-      title: 'Cell Tower Work Orders',
-      badge: 'Step 4 of 5 • Work Order',
-      description:
-          'Open active tasks to complete digital checklists, verify GPS coordinates, and capture watermarked camera evidence.',
-      icon: Icons.cell_tower_rounded,
-    ),
-    TourStep(
-      targetKey: TourTargetRegistry.navigationDockKey,
-      title: 'Floating Navigation Dock',
-      badge: 'Step 5 of 5 • Navigation',
-      description:
-          'Quickly navigate between your assigned Tasks, Project cell sites, Finance travel claims, and Profile.',
-      icon: Icons.navigation_outlined,
-    ),
-  ];
+  static List<TourStep> getStepsForRole(String? roleCode) {
+    final role = (roleCode ?? '').toUpperCase();
+
+    if (role == 'QC_MANAGER') {
+      return [
+        TourStep(
+          targetKey: TourTargetRegistry.profileHeaderKey,
+          title: 'QC Auditor Identity',
+          description:
+              'View your authenticated QC inspector status, digital signing authority, and regional telecom province.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.searchButtonKey,
+          title: 'Inspection Work Order Search',
+          description:
+              'Instantly look up cell site inspections by tower ID (e.g. KTM-T01), checklist title, or assigned engineer.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.statusFilterKey,
+          title: 'Review Status Pipeline',
+          description:
+              'Filter dispatches awaiting your approval, active audits, returned reworks, and finalized inspections.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.firstTaskCardKey,
+          title: 'Quality Verification Cards',
+          description:
+              'Open submitted work orders to review high-res watermarked photos, check GPS tolerances, and approve or return.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.navigationDockKey,
+          title: 'Audit Navigation Dock',
+          description:
+              'Quickly navigate between your active Inspection queue, Cell Sites, Travel Claims, and Profile.',
+        ),
+      ];
+    }
+
+    if (role == 'PROJECT_MANAGER' || role == 'PROJECT_DIRECTOR') {
+      return [
+        TourStep(
+          targetKey: TourTargetRegistry.profileHeaderKey,
+          title: 'Management Identity',
+          description:
+              'View your project portfolio authority, active deployment region, and operational settings.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.searchButtonKey,
+          title: 'Site & Tower Omni-Search',
+          description:
+              'Search cell sites, tower upgrades, and contractor work packages across all 7 provinces of Nepal.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.statusFilterKey,
+          title: 'Dispatch Status Pipeline',
+          description:
+              'Track work orders across Pending dispatches, ongoing field audits, and completed site handovers.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.firstTaskCardKey,
+          title: 'Active Site Work Packages',
+          description:
+              'Monitor assigned contractor activities, inspect execution progress, and review milestone completions.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.navigationDockKey,
+          title: 'Operations Dock',
+          description:
+              'Switch between assigned Project Sites, Work Orders, Budget advances, and Executive Settings.',
+        ),
+      ];
+    }
+
+    if (role == 'FINANCE') {
+      return [
+        TourStep(
+          targetKey: TourTargetRegistry.profileHeaderKey,
+          title: 'Finance Approver Identity',
+          description:
+              'Check your finance signing permissions, voucher disbursement thresholds, and account profile.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.searchButtonKey,
+          title: 'Voucher & Expense Search',
+          description:
+              'Quickly find travel advances, fuel expense vouchers, and contractor claims by reference code.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.statusFilterKey,
+          title: 'Disbursement Status Pipeline',
+          description:
+              'Filter requests across Pending Manager Approvals, Ready for Payment, Settled, and Returned items.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.firstTaskCardKey,
+          title: 'Travel Advances & Claims',
+          description:
+              'Inspect submitted receipts, verify operational site budgets, and authorize instant payouts.',
+        ),
+        TourStep(
+          targetKey: TourTargetRegistry.navigationDockKey,
+          title: 'Finance Navigation Dock',
+          description:
+              'Switch seamlessly between Payment Requests, Expense Reports, Cell Site Budgets, and Profile.',
+        ),
+      ];
+    }
+
+    // Default: Field Engineer
+    return [
+      TourStep(
+        targetKey: TourTargetRegistry.profileHeaderKey,
+        title: 'Engineer Identity & Profile',
+        description:
+            'View your authenticated field engineer status, telecom province deployment, and access account settings.',
+      ),
+      TourStep(
+        targetKey: TourTargetRegistry.searchButtonKey,
+        title: 'Site & Tower Omni-Search',
+        description:
+            'Instantly search cell towers by site code (e.g. KTM-T01), tower height, or work order title across Nepal.',
+      ),
+      TourStep(
+        targetKey: TourTargetRegistry.statusFilterKey,
+        title: 'Workflow Status Pipeline',
+        description:
+            'Filter work orders across Pending dispatches, In-Progress audits, Submissions awaiting QC, and Completed logs.',
+      ),
+      TourStep(
+        targetKey: TourTargetRegistry.firstTaskCardKey,
+        title: 'Cell Tower Work Orders',
+        description:
+            'Open active tasks to complete digital checklists, verify GPS coordinates, and capture watermarked camera evidence.',
+      ),
+      TourStep(
+        targetKey: TourTargetRegistry.navigationDockKey,
+        title: 'Floating Navigation Dock',
+        description:
+            'Quickly navigate between your assigned Tasks, Project cell sites, Finance travel claims, and Profile.',
+      ),
+    ];
+  }
 
   /// Checks if the user has already seen the tour; if not, marks as seen and launches it.
-  static Future<void> checkAndStart(BuildContext context) async {
+  static Future<void> checkAndStart(BuildContext context, {String? role}) async {
     final storage = TokenStorage();
     final hasSeen = await storage.hasSeenProductTour();
     if (hasSeen || !context.mounted) return;
 
     await storage.markProductTourAsSeen();
     if (context.mounted) {
-      await show(context);
+      await show(context, role: role);
     }
   }
 
-  /// Explicitly opens the interactive product tour overlay.
-  static Future<void> show(BuildContext context) {
+  /// Explicitly opens the interactive guided tour overlay matching Image 3 design.
+  static Future<void> show(BuildContext context, {String? role}) {
     return showGeneralDialog<void>(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        return const _TourOverlay();
+        return _TourOverlay(role: role);
       },
     );
   }
 }
 
 class _TourOverlay extends StatefulWidget {
-  const _TourOverlay();
+  final String? role;
+
+  const _TourOverlay({this.role});
 
   @override
   State<_TourOverlay> createState() => _TourOverlayState();
@@ -109,10 +207,12 @@ class _TourOverlayState extends State<_TourOverlay>
     with SingleTickerProviderStateMixin {
   int _currentStep = 0;
   late final AnimationController _pulseController;
+  late final List<TourStep> _steps;
 
   @override
   void initState() {
     super.initState();
+    _steps = MobileProductTour.getStepsForRole(widget.role);
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -135,7 +235,7 @@ class _TourOverlayState extends State<_TourOverlay>
   }
 
   void _next() {
-    if (_currentStep < MobileProductTour.steps.length - 1) {
+    if (_currentStep < _steps.length - 1) {
       setState(() => _currentStep++);
     } else {
       _dismiss();
@@ -156,7 +256,9 @@ class _TourOverlayState extends State<_TourOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final step = MobileProductTour.steps[_currentStep];
+    if (_steps.isEmpty) return const SizedBox.shrink();
+
+    final step = _steps[_currentStep];
     final screenSize = MediaQuery.of(context).size;
     final padding = MediaQuery.of(context).padding;
     final rawTargetRect = _getTargetRect(step.targetKey);
@@ -193,17 +295,15 @@ class _TourOverlayState extends State<_TourOverlay>
             },
           ),
 
-          // 2. Barrier tap to advance or dismiss
+          // 2. Barrier tap to prevent clicks underneath
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
-              onTap: () {
-                // Tapping outside does nothing or advances; keeping explicit buttons is safer
-              },
+              onTap: () {},
             ),
           ),
 
-          // 3. Floating Tooltip Popover Card
+          // 3. Floating Tooltip Popover Card (Matches Image 3)
           _buildPopoverCard(
             context: context,
             step: step,
@@ -235,17 +335,27 @@ class _TourOverlayState extends State<_TourOverlay>
       if (placeBelow) {
         top = math.min(
           targetRect.bottom + 12.0,
-          screenSize.height - safePadding.bottom - 260.0,
+          screenSize.height - safePadding.bottom - 220.0,
         );
       } else {
         bottom = math.min(
           (screenSize.height - targetRect.top) + 12.0,
-          screenSize.height - safePadding.top - 260.0,
+          screenSize.height - safePadding.top - 220.0,
         );
       }
     } else {
       // Centered fallback if target is not currently laid out
-      top = (screenSize.height - 240.0) / 2.0;
+      top = (screenSize.height - 200.0) / 2.0;
+    }
+
+    final isFirst = _currentStep == 0;
+    final isLast = _currentStep == _steps.length - 1;
+
+    // Calculate pointer arrow horizontal offset
+    double arrowLeft = 32.0;
+    if (targetRect != null) {
+      arrowLeft = (targetRect.center.dx - cardHorizontalMargin - 8.0)
+          .clamp(20.0, cardWidth - 36.0);
     }
 
     return Positioned(
@@ -253,186 +363,216 @@ class _TourOverlayState extends State<_TourOverlay>
       right: cardHorizontalMargin,
       top: top,
       bottom: bottom,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 240),
-        child: Container(
-          key: ValueKey<int>(_currentStep),
-          width: cardWidth,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B), // Deep slate background
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: const Color(0xFF475569).withValues(alpha: 0.6),
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
-                blurRadius: 28,
-                offset: const Offset(0, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Arrow pointing UP towards target when placeBelow is true
+          if (targetRect != null && placeBelow)
+            Padding(
+              padding: EdgeInsets.only(left: arrowLeft),
+              child: CustomPaint(
+                size: const Size(16, 9),
+                painter: _TrianglePainter(isPointingUp: true),
               ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Row: Badge Pill + Icon + Skip Button
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFF818CF8).withValues(alpha: 0.6),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(step.icon, size: 14, color: const Color(0xFFA5B4FC)),
-                        const SizedBox(width: 6),
-                        Text(
-                          step.badge,
-                          style: const TextStyle(
-                            color: Color(0xFFA5B4FC),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  // Skip Text Button
-                  InkWell(
-                    onTap: _dismiss,
-                    borderRadius: BorderRadius.circular(8),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Text(
-                        'Skip Tour',
-                        style: TextStyle(
-                          color: Color(0xFF94A3B8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
+            ),
+
+          // Compact Pure White Card (Exact Image 3 Spec)
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: Container(
+              key: ValueKey<int>(_currentStep),
+              width: cardWidth,
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFFE2E8F0),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 28,
+                    offset: const Offset(0, 10),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-
-              // Title
-              Text(
-                step.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              // Description
-              Text(
-                step.description,
-                style: const TextStyle(
-                  color: Color(0xFFCBD5E1),
-                  fontSize: 13.5,
-                  height: 1.45,
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              // Footer: Progress Dots + Navigation Action Buttons
-              Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Progress Dots
+                  // Header Row: Royal Blue Title + Circular Close (X)
                   Row(
-                    children: List.generate(
-                      MobileProductTour.steps.length,
-                      (index) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        margin: const EdgeInsets.only(right: 5),
-                        width: index == _currentStep ? 20 : 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: index == _currentStep
-                              ? const Color(0xFF6366F1)
-                              : const Color(0xFF475569),
-                          borderRadius: BorderRadius.circular(3),
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          step.title,
+                          style: const TextStyle(
+                            color: Color(0xFF2563EB), // Royal blue matching Image 3
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      // Circular (X) Button
+                      InkWell(
+                        onTap: _dismiss,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFCBD5E1),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 13,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+
+                  // Description Text
+                  Text(
+                    step.description,
+                    style: const TextStyle(
+                      color: Color(0xFF475569),
+                      fontSize: 13,
+                      height: 1.45,
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(height: 16),
 
-                  // Back Button (if index > 0)
-                  if (_currentStep > 0) ...[
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFE2E8F0),
-                        side: const BorderSide(color: Color(0xFF475569)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                  // Footer: Outlined Button (End Tour / Previous) + Step Indicator (1/5) + Solid Blue Button (Next / Finish)
+                  Row(
+                    children: [
+                      // Left Button
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF334155),
+                          side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                          shape: const StadiumBorder(),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: _previous,
-                      child: const Text('Back', style: TextStyle(fontSize: 12.5)),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-
-                  // Next / Finish Button
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: _next,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _currentStep == MobileProductTour.steps.length - 1
-                              ? 'Get Started'
-                              : 'Next',
+                        onPressed: isFirst ? _dismiss : _previous,
+                        child: Text(
+                          isFirst ? 'End Tour' : 'Previous',
                           style: const TextStyle(
                             fontSize: 12.5,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.arrow_forward_rounded, size: 14),
-                      ],
-                    ),
+                      ),
+
+                      // Center Step Count (e.g. 1/5)
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            '${_currentStep + 1}/${_steps.length}',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Right Solid Blue Button
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
+                          shape: const StadiumBorder(),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: _next,
+                        child: Text(
+                          isLast ? 'Finish' : 'Next',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
+
+          // Arrow pointing DOWN towards target when placeBelow is false
+          if (targetRect != null && !placeBelow)
+            Padding(
+              padding: EdgeInsets.only(left: arrowLeft),
+              child: CustomPaint(
+                size: const Size(16, 9),
+                painter: _TrianglePainter(isPointingUp: false),
+              ),
+            ),
+        ],
       ),
     );
   }
+}
+
+/// Draws the crisp triangular arrow caret pointing at the target element.
+class _TrianglePainter extends CustomPainter {
+  final bool isPointingUp;
+
+  _TrianglePainter({required this.isPointingUp});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    final borderPaint = Paint()
+      ..color = const Color(0xFFE2E8F0)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final path = Path();
+    if (isPointingUp) {
+      path.moveTo(0, size.height);
+      path.lineTo(size.width / 2, 0);
+      path.lineTo(size.width, size.height);
+      path.close();
+    } else {
+      path.moveTo(0, 0);
+      path.lineTo(size.width / 2, size.height);
+      path.lineTo(size.width, 0);
+      path.close();
+    }
+
+    canvas.drawPath(path, paint);
+    canvas.drawPath(path, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrianglePainter oldDelegate) =>
+      oldDelegate.isPointingUp != isPointingUp;
 }
 
 /// Custom painter rendering the darkened backdrop with rounded cutout and pulsing halo.
@@ -452,21 +592,21 @@ class _SpotlightPainter extends CustomPainter {
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
 
     if (targetRect == null) {
-      // Just dark barrier without cutout
+      // Dark barrier without cutout when target is not available
       canvas.drawPath(
         fullScreenPath,
-        Paint()..color = const Color(0xDD0B132B), // ~87% opacity deep navy
+        Paint()..color = const Color(0x990F172A), // ~60% opacity deep slate
       );
       return;
     }
 
     final cutoutRRect = RRect.fromRectAndRadius(
       targetRect!,
-      const Radius.circular(16.0),
+      const Radius.circular(14.0),
     );
     final cutoutPath = Path()..addRRect(cutoutRRect);
 
-    // Compute inverted mask difference
+    // Compute inverted mask difference so target element shines through
     final barrierPath = Path.combine(
       PathOperation.difference,
       fullScreenPath,
@@ -475,19 +615,19 @@ class _SpotlightPainter extends CustomPainter {
 
     canvas.drawPath(
       barrierPath,
-      Paint()..color = const Color(0xDD0B132B),
+      Paint()..color = const Color(0x990F172A),
     );
 
     // 2. Animated Pulsing Halo Ring
-    final haloInflation = 3.0 + (pulseValue * 7.0);
-    final haloOpacity = (1.0 - pulseValue).clamp(0.0, 1.0) * 0.75;
+    final haloInflation = 3.0 + (pulseValue * 6.0);
+    final haloOpacity = (1.0 - pulseValue).clamp(0.0, 1.0) * 0.7;
     final haloRRect = RRect.fromRectAndRadius(
       targetRect!.inflate(haloInflation),
-      Radius.circular(16.0 + haloInflation),
+      Radius.circular(14.0 + haloInflation),
     );
 
     final haloPaint = Paint()
-      ..color = const Color(0xFF6366F1).withValues(alpha: haloOpacity)
+      ..color = const Color(0xFF3B82F6).withValues(alpha: haloOpacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5;
 
@@ -495,7 +635,7 @@ class _SpotlightPainter extends CustomPainter {
 
     // 3. Crisp Inner Focus Border
     final borderPaint = Paint()
-      ..color = const Color(0xFF818CF8)
+      ..color = const Color(0xFF2563EB)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
 
