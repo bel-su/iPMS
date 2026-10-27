@@ -11,7 +11,7 @@ import { SIDEBAR_COLLAPSED, SIDEBAR_COOKIE } from './components/sidebar-state';
 import { NotificationCenter } from './components/notification-center';
 import { SidebarToggle } from './components/sidebar-toggle';
 import { TopSearch } from './components/top-search';
-import { ProjectGuideTrigger } from './components/project-guide';
+import { ProductTour } from './components/product-tour';
 import { getCurrentUser, hasPermission, mayReadDocs } from './lib/iam-api';
 import { getMyProfile } from './lib/user-api';
 import { listWorkOrders } from './lib/work-order-api';
@@ -212,7 +212,12 @@ export async function Sidebar({ active }: { active: Section }) {
   ) : null;
 
   return (
-    <aside className={collapsed ? 'sidebar collapsed' : 'sidebar'}>
+    <aside
+      className={collapsed ? 'sidebar collapsed' : 'sidebar'}
+      data-user-home={home}
+      data-user-role={role}
+      data-user-roles={viewer.state === 'ready' ? viewer.data.roles.join(',') : ''}
+    >
       <div className="sidebar-header">
         <a className="brand" href="/" aria-label="Axiom home">
           <img className="brand-full" src="/brand/axiom-logo-horizontal.svg" alt="Axiom" />
@@ -223,7 +228,7 @@ export async function Sidebar({ active }: { active: Section }) {
         <SidebarToggle initiallyCollapsed={collapsed} />
       </div>
 
-      <nav aria-label="Primary navigation">
+      <nav aria-label="Primary navigation" data-tour="sidebar-nav">
         {financeHome ? financeGroup : (
           <>
             <NavItem section="overview" active={active} href="/" icon={<OverviewIcon />}>
@@ -324,8 +329,8 @@ export function TopActions({ children }: { children?: React.ReactNode }) {
     <div className="top-actions">
       <Suspense fallback={null}><TopSearch /></Suspense>
       {children}
-      <ProjectGuideTrigger />
       <NotificationCenter />
+      <ProductTour />
     </div>
   );
 }

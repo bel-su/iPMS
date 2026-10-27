@@ -9,6 +9,7 @@ import 'task_detail_screen.dart';
 import 'widgets/status_filter_bar.dart';
 import 'widgets/task_card.dart';
 import '../../../shared/layout/main_scaffold.dart';
+import '../../tour/presentation/mobile_product_tour.dart';
 
 class TaskListScreen extends ConsumerStatefulWidget {
   const TaskListScreen({super.key});
@@ -71,6 +72,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                       children: [
                         Expanded(
                           child: InkWell(
+                            key: TourTargetRegistry.profileHeaderKey,
                             onTap: () {
                               ref.read(navigationIndexProvider.notifier).setIndex(3);
                             },
@@ -125,6 +127,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                         const SizedBox(width: 8),
                         // Search Button on Right Side of Profile (Borderless)
                         IconButton.filledTonal(
+                          key: TourTargetRegistry.searchButtonKey,
                           style: IconButton.styleFrom(
                             backgroundColor: AppColors.searchFieldBackground,
                             shape: RoundedRectangleBorder(
@@ -242,6 +245,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
               // Horizontal Filter Bar
               SliverToBoxAdapter(
                 child: StatusFilterBar(
+                  key: TourTargetRegistry.statusFilterKey,
                   selectedStatus: selectedFilter,
                   onSelected: (val) {
                     ref.read(selectedStatusFilterProvider.notifier).setFilter(val);
@@ -294,6 +298,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 14),
                             child: TaskCard(
+                              key: index == 0 ? TourTargetRegistry.firstTaskCardKey : null,
                               task: task,
                               onTap: () {
                                 Navigator.push(
