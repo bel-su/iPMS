@@ -41,7 +41,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
       <section className="content">
         <header className="topbar">
           <div className="crumbs"><a href="/">Workspace</a><b>/</b><strong>Finance</strong></div>
-          <TopActions />
+          <TopActions role="finance" />
         </header>
         <div className="dashboard">
           <DecidedNotice id={search.decided} viewerId={user.id} />

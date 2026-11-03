@@ -324,13 +324,13 @@ export function initialsOf(fullName: string): string {
  * The right-hand end of the topbar. Houses the section search, any action
  * buttons passed in, and the interactive NotificationCenter bell and flyout panel.
  */
-export function TopActions({ children }: { children?: React.ReactNode }) {
+export function TopActions({ children, role }: { children?: React.ReactNode; role?: string }) {
   return (
     <div className="top-actions">
       <Suspense fallback={null}><TopSearch /></Suspense>
       {children}
       <NotificationCenter />
-      <ProductTour />
+      <ProductTour role={role} />
     </div>
   );
 }

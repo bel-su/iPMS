@@ -44,7 +44,7 @@ const ROLE_STEPS: Record<string, readonly TourStep[]> = {
     },
     {
       id: 'finance-queue',
-      selector: '.tabs, .subnav-pills, main header, .finance-view, main',
+      selector: '.finance-tabs, .panel, .dashboard .panel',
       title: 'Requests & Approvals',
       content: 'Review pending cash advances, verify site expenses against receipts, and disburse settlements.',
       placement: 'bottom',
@@ -81,7 +81,7 @@ const ROLE_STEPS: Record<string, readonly TourStep[]> = {
     },
     {
       id: 'qc-queue',
-      selector: '.ov-kpis, .task-list, .queue, main header, main',
+      selector: '.ov-kpis, .queue, .task-list, .panel',
       title: 'Quality Review Queue',
       content: 'Examine watermarked photos, verify GPS geofence compliance, and approve or return for rework.',
       placement: 'bottom',
@@ -118,7 +118,7 @@ const ROLE_STEPS: Record<string, readonly TourStep[]> = {
     },
     {
       id: 'manager-dashboard',
-      selector: '.ov-kpis, .metrics, .workspace-content, main header, main',
+      selector: '.ov-kpis, .metrics, .workspace-content, .panel',
       title: 'Operational Metrics',
       content: 'Monitor active cell site installations, completion rates, and daily field crew progress.',
       placement: 'bottom',
@@ -155,7 +155,7 @@ const ROLE_STEPS: Record<string, readonly TourStep[]> = {
     },
     {
       id: 'director-kpis',
-      selector: '.ov-kpis, .metrics, main header, main',
+      selector: '.ov-kpis, .metrics, .panel',
       title: 'Executive Dashboard',
       content: 'Analyze nationwide completion percentages, budget variances, and QC audit compliance rates.',
       placement: 'bottom',
@@ -192,7 +192,7 @@ const ROLE_STEPS: Record<string, readonly TourStep[]> = {
     },
     {
       id: 'admin-overview',
-      selector: '.ov-kpis, .metrics, main header, main',
+      selector: '.ov-kpis, .metrics, .panel',
       title: 'System Overview',
       content: 'Track active user sessions, permission distribution, and platform compliance health.',
       placement: 'bottom',
@@ -229,7 +229,7 @@ const ROLE_STEPS: Record<string, readonly TourStep[]> = {
     },
     {
       id: 'engineer-queue',
-      selector: '.ov-kpis, .tasks, main header, main',
+      selector: '.ov-kpis, .tasks, .panel',
       title: 'Active Dispatches',
       content: 'Review today\'s assigned tower tasks, execute inspection checklists, and verify site status.',
       placement: 'bottom',
@@ -291,7 +291,16 @@ export function ProductTour({
 }) {
   const [mounted, setMounted] = useState(false);
   const [isActive, setIsActive] = useState(false);
-  const [activeRole, setActiveRole] = useState('admin');
+  const [activeRole, setActiveRole] = useState(() => {
+    if (propRole) return resolveUserRole(propRole);
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.startsWith('/finance')) return 'finance';
+      if (path.startsWith('/quality')) return 'qc';
+      if (path.startsWith('/users')) return 'admin';
+    }
+    return 'admin';
+  });
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [popoverPos, setPopoverPos] = useState<{
