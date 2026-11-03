@@ -1,5 +1,5 @@
 /** Largest package we will build in memory; past this the user downloads photos one by one. */
-export const MAX_PACKAGE_BYTES = 250 * 1024 * 1024;
+export const MAX_PACKAGE_BYTES = 50 * 1024 * 1024;
 
 const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif' };
 

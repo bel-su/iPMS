@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { RequirePermission, type AuthzScope, type AuthzUser } from '@ipms/authz';
+import { RequirePermission, extractToken, type AuthzScope, type AuthzUser } from '@ipms/authz';
 import { ScopeOf } from '../http/scope.decorator.js';
 import { SiteRefsRequestSchema, AssignTaskSchema, CreateMilestoneSchema, CreateProjectSchema, CreateSiteSchema, CreateTaskSchema, CreateTaskTypeSchema, ListTasksQuerySchema, UpdateMilestoneSchema, UpdateProjectSchema, UpdateSiteSchema, UpdateTaskSchema, UpdateTaskTypeSchema, UuidSchema } from '@ipms/contracts';
 import { SiteImportCommitSchema } from '@ipms/contracts';
@@ -8,7 +8,7 @@ import { buildTemplate } from './import/template.js';
 import { SiteImportService } from './import/site-import.service.js';
 import { ProjectService } from './project.service.js';
 
-type Authed = { user: AuthzUser; headers: Record<string, string | undefined> };
+type Authed = { user: AuthzUser; headers: Record<string, string | string[] | undefined> };
 @Controller() export class ProjectController { constructor(private readonly service: ProjectService, private readonly imports: SiteImportService) {}
   @Get('dashboard') @RequirePermission('project.view') dashboard(@ScopeOf() scope: AuthzScope){ return this.service.dashboard(scope); }
   /** For the Project Director's home. */
@@ -34,8 +34,8 @@ type Authed = { user: AuthzUser; headers: Record<string, string | undefined> };
   @Post('projects/:id/milestones') @RequirePermission('milestone.create') milestone(@ScopeOf() scope: AuthzScope, @Param('id') id:string,@Body() body:unknown, @Req() req: { user: AuthzUser }){ return this.service.createMilestone(scope, UuidSchema.parse(id),CreateMilestoneSchema.parse(body), req.user.id); }
   @Post('projects/:id/tasks') @RequirePermission('task.create') task(@ScopeOf() scope: AuthzScope, @Param('id') id:string,@Body() body:unknown,@Req() req:{user:AuthzUser}){ return this.service.createTask(scope, UuidSchema.parse(id),CreateTaskSchema.parse(body),req.user.id); }
   @Post('projects/:id/archive') @RequirePermission('project.archive') archive(@ScopeOf() scope: AuthzScope, @Param('id') id:string, @Req() req: { user: AuthzUser }){ return this.service.archiveProject(scope, UuidSchema.parse(id), req.user.id); }
-  @Delete('projects/:id') @RequirePermission('project.delete') remove(@ScopeOf() scope: AuthzScope, @Param('id') id:string, @Req() req: Authed){ return this.service.deleteProject(scope, UuidSchema.parse(id), req.user.id, req.headers['authorization'] ?? ''); }
-  @Delete('sites/:id') @RequirePermission('site.delete') removeSite(@ScopeOf() scope: AuthzScope, @Param('id') id:string, @Req() req: Authed){ return this.service.deleteSite(scope, UuidSchema.parse(id), req.user.id, req.headers['authorization'] ?? ''); }
+  @Delete('projects/:id') @RequirePermission('project.delete') remove(@ScopeOf() scope: AuthzScope, @Param('id') id:string, @Req() req: Authed){ const token = extractToken(req); return this.service.deleteProject(scope, UuidSchema.parse(id), req.user.id, token ? `Bearer ${token}` : ''); }
+  @Delete('sites/:id') @RequirePermission('site.delete') removeSite(@ScopeOf() scope: AuthzScope, @Param('id') id:string, @Req() req: Authed){ const token = extractToken(req); return this.service.deleteSite(scope, UuidSchema.parse(id), req.user.id, token ? `Bearer ${token}` : ''); }
   @Delete('task-types/:id') @RequirePermission('task.update') removeTaskType(@ScopeOf() scope: AuthzScope, @Param('id') id:string, @Req() req: { user: AuthzUser }){ return this.service.deleteTaskType(scope, UuidSchema.parse(id), req.user.id); }
   @Delete('milestones/:id') @RequirePermission('milestone.update') removeMilestone(@ScopeOf() scope: AuthzScope, @Param('id') id:string, @Req() req: { user: AuthzUser }){ return this.service.deleteMilestone(scope, UuidSchema.parse(id), req.user.id); }
   @Delete('tasks/:id') @RequirePermission('task.delete') removeTask(@ScopeOf() scope: AuthzScope, @Param('id') id:string, @Req() req: { user: AuthzUser }){ return this.service.deleteTask(scope, UuidSchema.parse(id), req.user.id); }

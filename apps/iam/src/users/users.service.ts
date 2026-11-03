@@ -351,7 +351,6 @@ export class UsersService {
       const data: JsonObject = {};
       if (dto.email !== undefined) data['email'] = dto.email;
       if (dto.fullName !== undefined) data['fullName'] = dto.fullName;
-      if (dto.employeeCode !== undefined) data['employeeCode'] = dto.employeeCode;
 
       if (dto.email !== undefined && dto.email !== existing.email) {
         const clash = await tx.user.findUnique({ where: { email: dto.email } });
@@ -365,14 +364,12 @@ export class UsersService {
         const previousState: JsonObject = {};
         if (dto.email !== undefined) previousState['email'] = existing.email;
         if (dto.fullName !== undefined) previousState['fullName'] = existing.fullName;
-        if (dto.employeeCode !== undefined) previousState['employeeCode'] = existing.employeeCode;
 
         await this.audit(tx, id, 'user.self_updated', id, previousState, data);
         await this.emit(tx, SUBJECTS.IAM_USER_UPDATED, {
           userId: id,
           ...(dto.fullName !== undefined ? { fullName: dto.fullName } : {}),
           ...(dto.email !== undefined ? { email: dto.email } : {}),
-          ...(dto.employeeCode !== undefined ? { employeeCode: dto.employeeCode } : {}),
         }, id);
       }
 

@@ -16,6 +16,7 @@ class ItemResponse {
     required this.itemId,
     required this.result,
     this.photoMediaIds = const [],
+    this.mediaIds = const [],
     this.description,
   });
 
@@ -24,12 +25,14 @@ class ItemResponse {
   /// PASS, FAIL or NA.
   final String result;
   final List<String> photoMediaIds;
+  final List<String> mediaIds;
   final String? description;
 
   Map<String, dynamic> toJson() => {
         'itemId': itemId,
         'selfCheckResult': result,
-        'photoMediaIds': photoMediaIds,
+        'mediaIds': [...mediaIds, ...photoMediaIds.where((id) => !mediaIds.contains(id))],
+        'photoMediaIds': [...mediaIds, ...photoMediaIds.where((id) => !mediaIds.contains(id))],
         if (description != null && description!.isNotEmpty) 'selfCheckDescription': description,
       };
 }

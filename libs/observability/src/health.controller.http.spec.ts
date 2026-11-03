@@ -1,6 +1,5 @@
 import { Test } from '@nestjs/testing';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
-import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HealthController, registerReadinessCheck, resetReadinessChecks } from './health.controller.js';
 
@@ -27,31 +26,32 @@ describe('HealthController (HTTP)', () => {
   it('GET /health/live returns 200 even when dependencies are failing', async () => {
     registerReadinessCheck('db', async () => false);
 
-    const response = await request(app.getHttpServer()).get('/health/live');
+    const response = await app.inject({ method: 'GET', url: '/health/live' });
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: 'ok' });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.payload)).toEqual({ status: 'ok' });
   });
 
   it('GET /health/ready returns 200 with status ok when all checks pass', async () => {
     registerReadinessCheck('db', async () => true);
     registerReadinessCheck('nats', async () => true);
 
-    const response = await request(app.getHttpServer()).get('/health/ready');
+    const response = await app.inject({ method: 'GET', url: '/health/ready' });
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: 'ok', checks: { db: 'ok', nats: 'ok' } });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.payload)).toEqual({ status: 'ok', checks: { db: 'ok', nats: 'ok' } });
   });
 
   it('GET /health/ready returns 503 when a check returns false', async () => {
     registerReadinessCheck('db', async () => true);
     registerReadinessCheck('nats', async () => false);
 
-    const response = await request(app.getHttpServer()).get('/health/ready');
+    const response = await app.inject({ method: 'GET', url: '/health/ready' });
 
-    expect(response.status).toBe(503);
-    expect(response.body.status).toBe('error');
-    expect(response.body.checks).toEqual({ db: 'ok', nats: 'error' });
+    expect(response.statusCode).toBe(503);
+    const body = JSON.parse(response.payload);
+    expect(body.status).toBe('error');
+    expect(body.checks).toEqual({ db: 'ok', nats: 'error' });
   });
 
   it('GET /health/ready returns 503 when a check throws', async () => {
@@ -59,10 +59,11 @@ describe('HealthController (HTTP)', () => {
       throw new Error('connection refused');
     });
 
-    const response = await request(app.getHttpServer()).get('/health/ready');
+    const response = await app.inject({ method: 'GET', url: '/health/ready' });
 
-    expect(response.status).toBe(503);
-    expect(response.body.status).toBe('error');
-    expect(response.body.checks).toEqual({ db: 'error' });
+    expect(response.statusCode).toBe(503);
+    const body = JSON.parse(response.payload);
+    expect(body.status).toBe('error');
+    expect(body.checks).toEqual({ db: 'error' });
   });
 });

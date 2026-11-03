@@ -1,11 +1,11 @@
 import { Controller, Get, Param, Query, Req } from '@nestjs/common';
-import { RequirePermission, type AuthzUser } from '@ipms/authz';
+import { RequirePermission, extractToken, type AuthzUser } from '@ipms/authz';
 import { ListMediaQuerySchema, UuidSchema, ViewUrlQuerySchema } from '@ipms/contracts';
 import { required } from '../directory/lookup.js';
 import { ProjectClient } from '../directory/project.client.js';
 import { ViewService } from './view.service.js';
 
-type Authed = { user: AuthzUser; headers: Record<string, string | undefined> };
+type Authed = { user: AuthzUser; headers: Record<string, string | string[] | undefined> };
 
 @Controller('media')
 export class ViewController {
@@ -31,6 +31,7 @@ export class ViewController {
   }
 
   private async scope(req: Authed) {
-    return required(await this.project.scope(req.headers['authorization'] ?? ''), 'Access scope');
+    const token = extractToken(req);
+    return required(await this.project.scope(token ? `Bearer ${token}` : ''), 'Access scope');
   }
 }

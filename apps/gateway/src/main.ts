@@ -94,7 +94,7 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: (process.env['CORS_ORIGINS'] ?? 'http://localhost:3100').split(','),
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   });
 
   app.useGlobalFilters(new GlobalExceptionFilter('gateway'));

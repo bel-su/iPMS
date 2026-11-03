@@ -312,10 +312,10 @@ describe('UsersService.updateSelf', () => {
 
   it('records user.self_updated in the audit ledger', async () => {
     const { service, tx } = build(row({ id: ACTOR }));
-    await service.updateSelf(ACTOR, { employeeCode: 'EMP-999' });
+    await service.updateSelf(ACTOR, { fullName: 'Updated Self Name' });
     const audit = tx.outboxEvent.create.mock.calls[0]![0].data;
     expect(audit.payload.action).toBe('user.self_updated');
-    expect(audit.payload.newState).toEqual({ employeeCode: 'EMP-999' });
+    expect(audit.payload.newState).toEqual({ fullName: 'Updated Self Name' });
   });
 
   it('revokes tokens when email is changed', async () => {

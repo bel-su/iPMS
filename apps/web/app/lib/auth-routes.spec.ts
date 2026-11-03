@@ -115,6 +115,20 @@ describe('POST /api/auth/logout', () => {
     expect(response.headers.get('location')).toBe('http://localhost:3100/login');
   });
 
+  it('ignores untrusted x-forwarded-host to prevent open redirects', async () => {
+    cookieStore.get.mockReturnValue(undefined);
+    vi.stubGlobal('fetch', vi.fn());
+
+    const req = new Request('http://localhost:3100/api/auth/logout', {
+      method: 'POST',
+      headers: { 'x-forwarded-host': 'evil-attacker.com' },
+    });
+    const response = await logout(req);
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('http://localhost:3100/login');
+  });
+
   it('does not call the gateway when no token is held', async () => {
     cookieStore.get.mockReturnValue(undefined);
     const fetchMock = vi.fn();
