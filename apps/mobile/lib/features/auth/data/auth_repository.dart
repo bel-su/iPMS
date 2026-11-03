@@ -46,6 +46,10 @@ class AuthRepository {
 
       return await getCurrentUser(username: email.trim());
     } on DioException catch (e) {
+      if (ApiException.isConnectionIssue(e)) {
+        final cached = await tokenStorage.getCachedUser();
+        if (cached != null) return cached;
+      }
       if (e.response?.statusCode == 401) {
         throw const ApiException(message: 'Incorrect email or password.');
       }
@@ -79,6 +83,10 @@ class AuthRepository {
           profile = AuthUser.fromJson(profileResponse.data!);
         }
       } on DioException catch (e) {
+      if (ApiException.isConnectionIssue(e)) {
+        final cached = await tokenStorage.getCachedUser();
+        if (cached != null) return cached;
+      }
         // The profile only adds display details; identity and permissions are
         // what the app needs to work, so a failure here is not fatal.
         if (e.response?.statusCode == 401) rethrow;
@@ -87,7 +95,7 @@ class AuthRepository {
       final email = profile?.email.isNotEmpty == true
           ? profile!.email
           : (username != null && username.contains('@') ? username : '');
-      return AuthUser(
+      final user = AuthUser(
         id: identity.id,
         email: email,
         displayName: profile?.displayName ?? username,
@@ -96,7 +104,13 @@ class AuthRepository {
         permissions: identity.permissions,
         username: email.isEmpty ? username : null,
       );
+      await tokenStorage.saveUser(user);
+      return user;
     } on DioException catch (e) {
+      if (ApiException.isConnectionIssue(e)) {
+        final cached = await tokenStorage.getCachedUser();
+        if (cached != null) return cached;
+      }
       if (AppConfig.demoMode && ApiException.isConnectionIssue(e)) {
         return _fallbackLogin(username ?? 'engineer');
       }
@@ -119,6 +133,8 @@ class AuthRepository {
       try {
         return await getCurrentUser(username: cleanUsername);
       } on NetworkException {
+        final cached = await tokenStorage.getCachedUser();
+        if (cached != null) return cached;
         if (AppConfig.demoMode) return _fallbackLogin(cleanUsername);
         rethrow;
       } on ApiException {
@@ -150,6 +166,10 @@ class AuthRepository {
       );
       return await getCurrentUser(username: cleanUsername);
     } on DioException catch (e) {
+      if (ApiException.isConnectionIssue(e)) {
+        final cached = await tokenStorage.getCachedUser();
+        if (cached != null) return cached;
+      }
       if (AppConfig.demoMode && ApiException.isConnectionIssue(e)) {
         return _fallbackLogin(cleanUsername);
       }

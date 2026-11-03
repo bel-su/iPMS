@@ -34,9 +34,12 @@ class AuthInterceptor extends QueuedInterceptor {
   ) async {
     // Avoid attaching expired token to login or refresh endpoints
     if (!ApiEndpoints.isAuthEndpoint(options.path)) {
-      final token = await tokenStorage.getAccessToken();
-      if (token != null && token.isNotEmpty) {
-        options.headers['Authorization'] = 'Bearer $token';
+      // Respect caller-supplied Authorization headers (e.g. temporary password change tokens)
+      if (options.headers['Authorization'] == null) {
+        final token = await tokenStorage.getAccessToken();
+        if (token != null && token.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
       }
     }
 

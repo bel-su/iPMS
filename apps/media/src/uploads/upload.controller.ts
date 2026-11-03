@@ -1,11 +1,11 @@
 import { Body, Controller, Delete, HttpCode, Param, Post, Req } from '@nestjs/common';
-import { RequirePermission, type AuthzUser } from '@ipms/authz';
+import { RequirePermission, extractToken, type AuthzUser } from '@ipms/authz';
 import {
   CompleteUploadSchema, PartsRequestSchema, RegisterFinanceDocumentSchema, RegisterUploadSchema, UploadStatusRequestSchema, UuidSchema,
 } from '@ipms/contracts';
 import { UploadService } from './upload.service.js';
 
-type Authed = { user: AuthzUser; headers: Record<string, string | undefined> };
+type Authed = { user: AuthzUser; headers: Record<string, string | string[] | undefined> };
 
 /** The phone's upload protocol. Declared before `:id` routes so `status` is never read as an id. */
 @Controller('media')
@@ -19,7 +19,8 @@ export class UploadController {
    */
   @Post('finance/uploads') @RequirePermission('finance_request.create')
   registerFinance(@Body() body: unknown, @Req() req: Authed) {
-    return this.uploads.registerFinanceDocument(RegisterFinanceDocumentSchema.parse(body), req.user.id, req.headers['authorization'] ?? '');
+    const token = extractToken(req);
+    return this.uploads.registerFinanceDocument(RegisterFinanceDocumentSchema.parse(body), req.user.id, token ? `Bearer ${token}` : '');
   }
 
   @Post('finance/uploads/status') @HttpCode(200) @RequirePermission('finance_request.create')
@@ -44,7 +45,8 @@ export class UploadController {
 
   @Post('uploads') @RequirePermission('qc_evidence.upload')
   register(@Body() body: unknown, @Req() req: Authed) {
-    return this.uploads.register(RegisterUploadSchema.parse(body), req.user.id, req.headers['authorization'] ?? '');
+    const token = extractToken(req);
+    return this.uploads.register(RegisterUploadSchema.parse(body), req.user.id, token ? `Bearer ${token}` : '');
   }
 
   @Post('uploads/:id/parts') @HttpCode(200) @RequirePermission('qc_evidence.upload')

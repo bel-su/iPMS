@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
-import { RequirePermission, type AuthzUser } from '@ipms/authz';
+import { RequirePermission, extractToken, type AuthzUser } from '@ipms/authz';
 import {
   ApproveSchema, CashReturnSchema, CommentSchema, CreateRequestSchema, ListRequestsQuerySchema, OptionalCommentSchema,
   PayRequestSchema, UpdateRequestSchema, UuidSchema,
@@ -11,8 +11,11 @@ import { QueryService } from '../queries/query.service.js';
 import { ReminderService } from '../reminders/reminder.service.js';
 import { RequestService } from '../requests/request.service.js';
 
-type Authed = { user: AuthzUser; headers: Record<string, string | undefined> };
-const bearerOf = (req: Authed): string => req.headers['authorization'] ?? '';
+type Authed = { user: AuthzUser; headers: Record<string, string | string[] | undefined> };
+const bearerOf = (req: Authed): string => {
+  const token = extractToken(req);
+  return token ? `Bearer ${token}` : '';
+};
 
 /**
  * Requests, approvals and payments, reached through the gateway's

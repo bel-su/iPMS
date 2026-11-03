@@ -150,8 +150,27 @@ describe('check — project and site scope', () => {
     expect(d.reason).toBe('OUT_OF_PROJECT_SCOPE');
   });
 
-  it('denies a resource on an unscoped site', () => {
-    const d = check(req({ resource: { type: 'Task', id: 't-1', projectId: 'p-1', siteId: 's-9' } }));
+  it('allows access to any site under a project when user has project-wide scope', () => {
+    const d = check(req({
+      scope: scope({ projectIds: ['p-1'], siteIds: [] }),
+      resource: { type: 'Task', id: 't-1', projectId: 'p-1', siteId: 's-9' },
+    }));
+    expect(d.allowed).toBe(true);
+  });
+
+  it('allows access to a site when user has site-only scope without project scope', () => {
+    const d = check(req({
+      scope: scope({ projectIds: [], siteIds: ['s-1'] }),
+      resource: { type: 'Task', id: 't-1', projectId: 'p-9', siteId: 's-1' },
+    }));
+    expect(d.allowed).toBe(true);
+  });
+
+  it('denies a resource when actor has neither project nor site in scope', () => {
+    const d = check(req({
+      scope: scope({ projectIds: ['p-1'], siteIds: ['s-1'] }),
+      resource: { type: 'Task', id: 't-1', projectId: 'p-9', siteId: 's-9' },
+    }));
     expect(d.allowed).toBe(false);
     expect(d.reason).toBe('OUT_OF_SITE_SCOPE');
   });

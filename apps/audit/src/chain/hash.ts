@@ -39,7 +39,7 @@ export function computeChainHash(previousHash: string, body: AuditBody): string 
 }
 
 export function verifyChain(rows: AuditRow[]): VerifyResult {
-  let expectedPrevious = GENESIS_HASH;
+  let expectedPrevious = (rows.length > 0 && rows[0]!.sequence > 1) ? rows[0]!.previousHash : GENESIS_HASH;
   let expectedSequence = rows.length > 0 ? rows[0]!.sequence : 1;
 
   for (const row of rows) {

@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
+import '../../features/auth/domain/models/auth_user.dart';
 
 /// Secure enclave storage service strictly holding authentication tokens.
 /// No entity or server-side domain data is ever stored here.
@@ -16,6 +18,7 @@ class TokenStorage {
   static const String _accessTokenKey = 'ipms_access_token';
   static const String _refreshTokenKey = 'ipms_refresh_token';
   static const String _userIdKey = 'ipms_user_id';
+  static const String _cachedUserKey = 'ipms_cached_user';
   static const String _biometricEnabledKey = 'ipms_biometric_enabled';
   static const String _biometricUsernameKey = 'ipms_biometric_username';
   static const String _biometricRefreshTokenKey = 'ipms_biometric_refresh_token';
@@ -46,6 +49,23 @@ class TokenStorage {
         await _storage.write(key: _biometricRefreshTokenKey, value: refreshToken);
         await _storage.write(key: _biometricUserIdKey, value: owner);
       }
+    }
+  }
+
+  /// Saves the authenticated user's profile locally to preserve offline access.
+  Future<void> saveUser(AuthUser user) async {
+    await _storage.write(key: _cachedUserKey, value: jsonEncode(user.toJson()));
+  }
+
+  /// Retrieves the cached authenticated user when the device is offline.
+  Future<AuthUser?> getCachedUser() async {
+    final raw = await _storage.read(key: _cachedUserKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      return AuthUser.fromJson(json);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -153,6 +173,7 @@ class TokenStorage {
     await _storage.delete(key: _accessTokenKey);
     await _storage.delete(key: _refreshTokenKey);
     await _storage.delete(key: _userIdKey);
+    await _storage.delete(key: _cachedUserKey);
     if (purgeBiometrics) {
       await clearBiometric();
     }

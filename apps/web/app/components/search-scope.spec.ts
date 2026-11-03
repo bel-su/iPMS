@@ -11,6 +11,8 @@ describe('searchScope', () => {
     ['/quality/templates/t-1/draft', '/quality/templates', 'q'],
     ['/quality/work-orders', '/quality/work-orders', 'q'],
     ['/quality/work-orders/w-1', '/quality/work-orders', 'q'],
+    ['/finance', '/finance', 'q'],
+    ['/finance/requests/r-1', '/finance', 'q'],
   ])('%s searches %s by ?%s', (pathname, action, field) => {
     expect(searchScope(pathname)).toMatchObject({ action, field });
   });
@@ -25,5 +27,9 @@ describe('searchScope', () => {
 
   it('keeps the template tab and category so a search stays inside the tab being viewed', () => {
     expect(searchScope('/quality/templates').keep).toEqual(['tab', 'category']);
+  });
+
+  it('keeps the finance tab and filters so a search stays inside the viewed tab', () => {
+    expect(searchScope('/finance').keep).toEqual(['view', 'status', 'kind']);
   });
 });

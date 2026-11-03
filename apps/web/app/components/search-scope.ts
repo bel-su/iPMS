@@ -23,6 +23,7 @@ const SCOPES: readonly { prefix: string; scope: SearchScope }[] = [
   { prefix: '/quality/templates', scope: { action: '/quality/templates', field: 'q', placeholder: 'Search checklists…', keep: ['tab', 'category'] } },
   { prefix: '/users', scope: { action: '/users', field: 'search', placeholder: 'Search users…', keep: ['status', 'role'] } },
   { prefix: '/projects', scope: { action: '/projects', field: 'q', placeholder: 'Search projects…', keep: [] } },
+  { prefix: '/finance', scope: { action: '/finance', field: 'q', placeholder: 'Search finance requests…', keep: ['view', 'status', 'kind'] } },
 ];
 
 export function searchScope(pathname: string): SearchScope {

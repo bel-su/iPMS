@@ -1,14 +1,17 @@
 import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
-import { RequirePermission, type AuthzUser } from '@ipms/authz';
+import { RequirePermission, extractToken, type AuthzUser } from '@ipms/authz';
 import {
   CancelWorkOrderSchema, CreateWorkOrdersSchema, ListWorkOrdersQuerySchema, UpdateWorkOrderSchema, UuidSchema,
 } from '@ipms/contracts';
 import { ProjectDirectoryClient, required } from './project-directory.client.js';
 import { WorkOrderService, type WorkOrderScope } from './work-order.service.js';
 
-type Authed = { user: AuthzUser; headers: Record<string, string | undefined> };
+type Authed = { user: AuthzUser; headers: Record<string, string | string[] | undefined> };
 
-const bearerOf = (req: Authed): string => req.headers['authorization'] ?? '';
+const bearerOf = (req: Authed): string => {
+  const token = extractToken(req);
+  return token ? `Bearer ${token}` : '';
+};
 
 /**
  * The work order queue and its lifecycle, reached through the gateway's

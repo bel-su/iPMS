@@ -23,6 +23,7 @@ services:
     restart: unless-stopped
 
   postgres-audit:
+    profiles: ["api-web", "full"]
     image: postgres:17-alpine
     env_file:
       - ./env/audit-db.env
@@ -38,6 +39,7 @@ services:
     restart: unless-stopped
 
   postgres-project:
+    profiles: ["api-web", "full"]
     image: postgres:17-alpine
     env_file:
       - ./env/project-db.env
@@ -53,6 +55,7 @@ services:
     restart: unless-stopped
 
   postgres-qc:
+    profiles: ["api-mobile", "api-web", "full"]
     image: postgres:17-alpine
     env_file:
       - ./env/qc-db.env
@@ -68,6 +71,7 @@ services:
     restart: unless-stopped
 
   postgres-media:
+    profiles: ["api-mobile", "api-web", "full"]
     image: postgres:17-alpine
     env_file:
       - ./env/media-db.env
@@ -83,6 +87,7 @@ services:
     restart: unless-stopped
 
   postgres-notification:
+    profiles: ["api-mobile", "api-web", "full"]
     image: postgres:17-alpine
     env_file:
       - ./env/notification-db.env
@@ -98,6 +103,7 @@ services:
     restart: unless-stopped
 
   postgres-docs:
+    profiles: ["api-web", "full"]
     image: postgres:17-alpine
     env_file:
       - ./env/docs-db.env
@@ -113,6 +119,7 @@ services:
     restart: unless-stopped
 
   postgres-finance:
+    profiles: ["api-web", "full"]
     image: postgres:17-alpine
     env_file:
       - ./env/finance-db.env
@@ -229,6 +236,7 @@ services:
       start_period: 20s
 
   audit-migrate:
+    profiles: ["api-web", "full"]
     <<: *migrate-defaults
     build:
       context: ..
@@ -241,6 +249,7 @@ services:
       postgres-audit: { condition: service_healthy }
 
   audit:
+    profiles: ["api-web", "full"]
     <<: *service-defaults
     build:
       context: ..
@@ -261,6 +270,7 @@ services:
       start_period: 20s
 
   project-migrate:
+    profiles: ["api-web", "full"]
     <<: *migrate-defaults
     build:
       context: ..
@@ -273,9 +283,10 @@ services:
       postgres-project: { condition: service_healthy }
       # Project's migrations drop the work orders qc-migrate copies out of
       # them, so they must not run until that copy has finished.
-      qc-migrate:       { condition: service_completed_successfully }
+      qc-migrate:       { condition: service_completed_successfully, required: false }
 
   project:
+    profiles: ["api-web", "full"]
     <<: *service-defaults
     build:
       context: ..
@@ -290,6 +301,7 @@ services:
       project-migrate:  { condition: service_completed_successfully }
 
   qc-migrate:
+    profiles: ["api-mobile", "api-web", "full"]
     <<: *migrate-defaults
     build:
       context: ..
@@ -303,9 +315,10 @@ services:
     command: ["sh", "-c", "pnpm exec prisma migrate deploy && pnpm exec tsx prisma/import-project-work-orders.ts"]
     depends_on:
       postgres-qc:      { condition: service_healthy }
-      postgres-project: { condition: service_healthy }
+      postgres-project: { condition: service_healthy, required: false }
 
   qc:
+    profiles: ["api-mobile", "api-web", "full"]
     <<: *service-defaults
     build:
       context: ..
@@ -317,9 +330,10 @@ services:
       postgres-qc: { condition: service_healthy }
       nats:        { condition: service_healthy }
       redis:       { condition: service_healthy }
-      qc-migrate:  { condition: service_completed_successfully }
+      qc-migrate:       { condition: service_completed_successfully, required: false }
 
   media-migrate:
+    profiles: ["api-mobile", "api-web", "full"]
     <<: *migrate-defaults
     build:
       context: ..
@@ -332,6 +346,7 @@ services:
       postgres-media: { condition: service_healthy }
 
   media:
+    profiles: ["api-mobile", "api-web", "full"]
     <<: *service-defaults
     build:
       context: ..
@@ -355,6 +370,7 @@ services:
       start_period: 20s
 
   notification-migrate:
+    profiles: ["api-mobile", "api-web", "full"]
     <<: *migrate-defaults
     build:
       context: ..
@@ -372,6 +388,7 @@ services:
   # backoff for about 30 s, then the event is dropped (no dead-letter store yet),
   # so start iam promptly after notification.
   notification:
+    profiles: ["api-mobile", "api-web", "full"]
     <<: *service-defaults
     build:
       context: ..
@@ -394,6 +411,7 @@ services:
       start_period: 20s
 
   docs-migrate:
+    profiles: ["api-web", "full"]
     <<: *migrate-defaults
     build:
       context: ..
@@ -408,6 +426,7 @@ services:
   # Postgres only: docs has no EventBus and no Redis client, so it waits on
   # neither and its env file carries no NATS_URL or REDIS_URL.
   docs:
+    profiles: ["api-web", "full"]
     <<: *service-defaults
     build:
       context: ..
@@ -426,6 +445,7 @@ services:
       start_period: 20s
 
   finance-migrate:
+    profiles: ["api-web", "full"]
     <<: *migrate-defaults
     build:
       context: ..
@@ -438,6 +458,7 @@ services:
       postgres-finance: { condition: service_healthy }
 
   finance:
+    profiles: ["api-web", "full"]
     <<: *service-defaults
     build:
       context: ..
@@ -471,15 +492,16 @@ services:
       nats:         { condition: service_healthy }
       redis:        { condition: service_healthy }
       iam:          { condition: service_healthy }
-      audit:        { condition: service_healthy }
-      project:      { condition: service_started }
-      qc:           { condition: service_started }
-      media:        { condition: service_healthy }
-      notification: { condition: service_healthy }
-      docs:         { condition: service_healthy }
-      finance:      { condition: service_healthy }
+      audit:        { condition: service_healthy, required: false }
+      project:      { condition: service_started, required: false }
+      qc:           { condition: service_started, required: false }
+      media:        { condition: service_healthy, required: false }
+      notification: { condition: service_healthy, required: false }
+      docs:         { condition: service_healthy, required: false }
+      finance:      { condition: service_healthy, required: false }
 
   web:
+    profiles: ["api-web", "full"]
     restart: unless-stopped
     build:
       context: ..
