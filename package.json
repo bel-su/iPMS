@@ -22,11 +22,16 @@
     "nx": "23.2.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.71.1",
+    "vite": "8.3.3",
     "vitest": "4.1.11"
   },
   "pnpm": {
     "overrides": {
-      "next": ">=16.3.8",
+      "next": ">=16.4.1",
+      "follow-redirects": ">=1.16.2",
+      "vite": ">=8.3.3",
+      "zod": ">=4.6.6",
+      "undici": ">=8.12.2",
       "postcss": ">=8.5.18",
       "sharp": ">=0.35.5",
       "deepmerge-ts": ">=8.0.0",
