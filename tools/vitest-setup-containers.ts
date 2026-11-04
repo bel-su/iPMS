@@ -8,7 +8,7 @@
  * Respects an explicit DOCKER_HOST if the caller already set one.
  */
 import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 
 interface Candidate {
@@ -22,6 +22,11 @@ const CANDIDATES: Candidate[] = [
   { socket: join(homedir(), '.docker', 'run', 'docker.sock'), disableRyuk: false },
   { socket: '/var/run/docker.sock', disableRyuk: false },
 ];
+
+if (platform() === 'win32' && !process.env['TESTCONTAINERS_RYUK_DISABLED']) {
+  // On Windows, Ryuk's Linux container cannot bind-mount the Windows named pipe.
+  process.env['TESTCONTAINERS_RYUK_DISABLED'] = 'true';
+}
 
 if (!process.env['DOCKER_HOST']) {
   const found = CANDIDATES.find((c) => existsSync(c.socket));
