@@ -318,6 +318,7 @@ export class UsersService {
       if (dto.email !== undefined && dto.email !== existing.email) {
         const clash = await tx.user.findUnique({ where: { email: dto.email } });
         if (clash) throw new BadRequestException(`Email ${dto.email} is already in use`);
+        await this.revokeTokens(tx, id);
       }
 
       await tx.user.update({ where: { id }, data: data as never });
@@ -335,7 +336,7 @@ export class UsersService {
         ...(dto.employeeCode !== undefined ? { employeeCode: dto.employeeCode } : {}),
       }, actorId);
 
-      // No token revocation: a profile edit changes no authority.
+      // Revokes tokens only when email changes; name/code edits change no authority.
       const updated = await tx.user.findUniqueOrThrow({ where: { id }, select: USER_SELECT });
       return toResponse(updated as UserRow);
     });
@@ -350,11 +351,11 @@ export class UsersService {
       const data: JsonObject = {};
       if (dto.email !== undefined) data['email'] = dto.email;
       if (dto.fullName !== undefined) data['fullName'] = dto.fullName;
-      if (dto.employeeCode !== undefined) data['employeeCode'] = dto.employeeCode;
 
       if (dto.email !== undefined && dto.email !== existing.email) {
         const clash = await tx.user.findUnique({ where: { email: dto.email } });
         if (clash) throw new BadRequestException(`Email ${dto.email} is already in use`);
+        await this.revokeTokens(tx, id);
       }
 
       if (Object.keys(data).length > 0) {
@@ -363,14 +364,12 @@ export class UsersService {
         const previousState: JsonObject = {};
         if (dto.email !== undefined) previousState['email'] = existing.email;
         if (dto.fullName !== undefined) previousState['fullName'] = existing.fullName;
-        if (dto.employeeCode !== undefined) previousState['employeeCode'] = existing.employeeCode;
 
         await this.audit(tx, id, 'user.self_updated', id, previousState, data);
         await this.emit(tx, SUBJECTS.IAM_USER_UPDATED, {
           userId: id,
           ...(dto.fullName !== undefined ? { fullName: dto.fullName } : {}),
           ...(dto.email !== undefined ? { email: dto.email } : {}),
-          ...(dto.employeeCode !== undefined ? { employeeCode: dto.employeeCode } : {}),
         }, id);
       }
 

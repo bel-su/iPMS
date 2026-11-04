@@ -243,7 +243,8 @@ class WatermarkService {
     }
 
     final timestampId = DateTime.now().millisecondsSinceEpoch;
-    final outputFile = File('${evidenceDir.path}/evidence_${metadata.siteCode}_$timestampId.jpg');
+    final safeSiteCode = metadata.siteCode.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+    final outputFile = File('${evidenceDir.path}/evidence_${safeSiteCode}_$timestampId.jpg');
     await outputFile.writeAsBytes(jpegBytes, flush: true);
 
     return outputFile;

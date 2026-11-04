@@ -38,10 +38,12 @@ class AuthNotifier extends AsyncNotifier<AuthUser?> {
     try {
       return await repo.getCurrentUser();
     } on NetworkException {
-      // Offline at launch says nothing about the session: keep the tokens so
-      // signing in again (or biometrics) can restore it once back online.
+      final cached = await repo.tokenStorage.getCachedUser();
+      if (cached != null) return cached;
       return null;
     } catch (_) {
+      final cached = await repo.tokenStorage.getCachedUser();
+      if (cached != null) return cached;
       await repo.logout();
       return null;
     }

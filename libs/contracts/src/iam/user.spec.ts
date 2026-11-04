@@ -98,17 +98,24 @@ describe('UpdateSelfProfileSchema', () => {
     const res = UpdateSelfProfileSchema.parse({
       fullName: '  Jane Doe  ',
       email: ' Jane@IPMS.local ',
-      employeeCode: ' EMP-042 ',
-      phone: ' +977-9800000000 ',
-      preferredLocale: 'en',
     });
     expect(res).toEqual({
       fullName: 'Jane Doe',
       email: 'jane@ipms.local',
+    });
+  });
+
+  it('strips unbacked and privileged fields such as employeeCode, phone, and preferredLocale', () => {
+    const res = UpdateSelfProfileSchema.parse({
+      fullName: 'Jane Doe',
       employeeCode: 'EMP-042',
       phone: '+977-9800000000',
       preferredLocale: 'en',
     });
+    expect(res).toEqual({ fullName: 'Jane Doe' });
+    expect(res).not.toHaveProperty('employeeCode');
+    expect(res).not.toHaveProperty('phone');
+    expect(res).not.toHaveProperty('preferredLocale');
   });
 
   it('strips unauthorized fields such as roles, permissions, or password', () => {

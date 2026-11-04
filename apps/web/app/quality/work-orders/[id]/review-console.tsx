@@ -130,7 +130,7 @@ export function ReviewConsole({
         <input type="hidden" name="submissionId" value={submission.id} />
         <input type="hidden" name="projectId" value={projectId} />
         <input type="hidden" name="workOrderId" value={workOrderId} />
-        <input type="hidden" name="decision" value={decision} />
+
         <input type="hidden" name="itemReviews" value={JSON.stringify(payloadReviews)} />
 
         <div className="review-items-list">
@@ -243,6 +243,8 @@ export function ReviewConsole({
             {canReject ? (
               <button
                 type="submit"
+                name="decision"
+                value="REJECT_REWORK"
                 className={`danger-button${decision === 'REJECT_REWORK' ? ' active-target' : ''}`}
                 onClick={() => setDecision('REJECT_REWORK')}
                 disabled={isPending}
@@ -254,6 +256,8 @@ export function ReviewConsole({
             {canApprove ? (
               <button
                 type="submit"
+                name="decision"
+                value="APPROVE"
                 className="primary-button qc-approve-btn"
                 onClick={() => setDecision('APPROVE')}
                 disabled={isPending || hasRejectedItem}

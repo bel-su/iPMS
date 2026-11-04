@@ -82,9 +82,6 @@ export type UpdateUserDto = z.infer<typeof UpdateUserSchema>;
 export const UpdateSelfProfileSchema = z.object({
   fullName: z.string().trim().min(1).max(200).optional(),
   email: EmailSchema.optional(),
-  employeeCode: z.string().trim().min(1).max(50).nullable().optional(),
-  phone: z.string().trim().min(7).max(20).nullable().optional(),
-  preferredLocale: z.enum(['en', 'ne']).optional(),
 }).strip();
 export type UpdateSelfProfileDto = z.infer<typeof UpdateSelfProfileSchema>;
 

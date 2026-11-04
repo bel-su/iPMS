@@ -1,12 +1,12 @@
 import { Controller, Get, Query, Req, Res } from '@nestjs/common';
-import { RequirePermission, type AuthzUser } from '@ipms/authz';
+import { RequirePermission, extractToken, type AuthzUser } from '@ipms/authz';
 import { ReportQuerySchema } from '@ipms/contracts';
 import type { FastifyReply } from 'fastify';
 import { ProjectDirectoryClient, required } from '../directory/project-directory.client.js';
 import { ReportService } from '../queries/report.service.js';
 import { buildSpendWorkbook } from '../queries/report.xlsx.js';
 
-type Authed = { user: AuthzUser; headers: Record<string, string | undefined> };
+type Authed = { user: AuthzUser; headers: Record<string, string | string[] | undefined> };
 
 @Controller('finance/reports')
 export class ReportController {
@@ -16,7 +16,8 @@ export class ReportController {
   @Get('project-spend') @RequirePermission('finance_request.view_all')
   async spend(@Query() query: unknown, @Req() req: Authed, @Res({ passthrough: true }) reply: FastifyReply) {
     const parsed = ReportQuerySchema.parse(query);
-    const scope = required(await this.projects.scope(req.headers['authorization'] ?? ''), 'Scope');
+    const token = extractToken(req);
+    const scope = required(await this.projects.scope(token ? `Bearer ${token}` : ''), 'Scope');
     const rows = await this.reports.spend(req.user, scope, parsed);
     if (parsed.format === 'json') return rows;
     reply

@@ -14,6 +14,7 @@ import { TopSearch } from './components/top-search';
 import { ProjectGuideTrigger } from './components/project-guide';
 import { APPROVAL_PERMISSIONS } from './finance/model';
 import { listRequests } from './lib/finance-api';
+import { ProductTour } from './components/product-tour';
 import { getCurrentUser, hasPermission, mayReadDocs } from './lib/iam-api';
 import { getMyProfile } from './lib/user-api';
 import { listWorkOrders } from './lib/work-order-api';
@@ -227,7 +228,12 @@ export async function Sidebar({ active }: { active: Section }) {
   ) : null;
 
   return (
-    <aside className={collapsed ? 'sidebar collapsed' : 'sidebar'}>
+    <aside
+      className={collapsed ? 'sidebar collapsed' : 'sidebar'}
+      data-user-home={home}
+      data-user-role={role}
+      data-user-roles={viewer.state === 'ready' ? viewer.data.roles.join(',') : ''}
+    >
       <div className="sidebar-header">
         <a className="brand" href="/" aria-label="Axiom home">
           <img className="brand-full" src="/brand/axiom-logo-horizontal.svg" alt="Axiom" />
@@ -238,7 +244,7 @@ export async function Sidebar({ active }: { active: Section }) {
         <SidebarToggle initiallyCollapsed={collapsed} />
       </div>
 
-      <nav aria-label="Primary navigation">
+      <nav aria-label="Primary navigation" data-tour="sidebar-nav">
         {financeHome ? financeGroup : (
           <>
             <NavItem section="overview" active={active} href="/" icon={<OverviewIcon />}>
@@ -334,13 +340,13 @@ export function initialsOf(fullName: string): string {
  * The right-hand end of the topbar. Houses the section search, any action
  * buttons passed in, and the interactive NotificationCenter bell and flyout panel.
  */
-export function TopActions({ children }: { children?: React.ReactNode }) {
+export function TopActions({ children, role }: { children?: React.ReactNode; role?: string }) {
   return (
     <div className="top-actions">
       <Suspense fallback={null}><TopSearch /></Suspense>
       {children}
-      <ProjectGuideTrigger />
       <NotificationCenter />
+      <ProductTour role={role} />
     </div>
   );
 }

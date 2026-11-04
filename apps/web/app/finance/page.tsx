@@ -67,7 +67,7 @@ async function MyRequests({ mayRaise, search }: { mayRaise: boolean; search: Raw
       <section className="content">
         <header className="topbar">
           <div className="crumbs"><a href="/">Workspace</a><b>/</b><strong>Finance</strong></div>
-          <TopActions />
+          <TopActions role="finance" />
         </header>
         <div className="dashboard">
           <div className="toolbar">

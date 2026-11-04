@@ -58,20 +58,23 @@ export function check(req: AuthzRequest): AuthzDecision {
     return { allowed: true, reason: 'ALLOWED', checks };
   }
 
+  const inProject = resource.projectId !== undefined && req.scope.projectIds.includes(resource.projectId);
+  const inSite = resource.siteId !== undefined && req.scope.siteIds.includes(resource.siteId);
+
   // 4. Project scope
   if (!req.scope.global && resource.projectId !== undefined) {
-    if (!req.scope.projectIds.includes(resource.projectId)) {
-      return deny('OUT_OF_PROJECT_SCOPE', 'project_scope', `No access to project ${resource.projectId}`);
+    if (!inProject && !inSite) {
+      return deny(resource.siteId !== undefined ? 'OUT_OF_SITE_SCOPE' : 'OUT_OF_PROJECT_SCOPE', resource.siteId !== undefined ? 'site_scope' : 'project_scope', resource.siteId !== undefined ? `No access to site ${resource.siteId}` : `No access to project ${resource.projectId}`);
     }
   }
-  pass('project_scope', req.scope.global ? 'global scope' : 'project in scope');
+  pass('project_scope', req.scope.global ? 'global scope' : (inProject ? 'project in scope' : (inSite ? 'site in scope satisfies project' : 'resource has no project')));
 
   // 5. Site scope
   if (!req.scope.global && resource.siteId !== undefined) {
-    if (!req.scope.siteIds.includes(resource.siteId)) {
+    if (!inSite && !inProject) {
       return deny('OUT_OF_SITE_SCOPE', 'site_scope', `No access to site ${resource.siteId}`);
     }
-    pass('site_scope', 'site in scope');
+    pass('site_scope', inSite ? 'site in scope' : 'project in scope covers site');
   } else if (!req.scope.global) {
     pass('site_scope', 'resource has no site');
   } else {
