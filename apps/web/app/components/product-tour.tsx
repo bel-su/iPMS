@@ -285,9 +285,9 @@ function resolveUserRole(explicitRole?: string): string {
 export function ProductTour({
   role: propRole,
 }: {
-  role?: string;
-  roles?: string[];
-  permissions?: string[];
+  role?: string | undefined;
+  roles?: string[] | undefined;
+  permissions?: string[] | undefined;
 }) {
   const [mounted, setMounted] = useState(false);
   const [isActive, setIsActive] = useState(false);

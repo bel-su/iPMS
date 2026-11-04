@@ -22,7 +22,7 @@
     "@ipms/contracts": "workspace:*",
     "@nestjs/common": "12.0.3",
     "prom-client": "15.1.3",
-    "zod": "4.6.5"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@nestjs/testing": "12.0.3",
